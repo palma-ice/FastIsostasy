@@ -4,8 +4,8 @@ module isostasy
     ! the crust "floats" at an elevation that depends on its thickness and density.
     ! -- https://en.wikipedia.org/wiki/Isostasy
 
-    use nml 
-
+    ! Note: currently routine `isos_par_load` has dependency on the nml.f90 module 
+    
     implicit none 
 
     ! Internal constants
@@ -95,7 +95,8 @@ contains
         real(wp) :: filter_scaling
         real(wp) :: D_lith_const
 
-        ! Load parameters
+
+        ! First, load parameters from parameter file `filename`
         call isos_par_load(isos%par,filename)
         
 
@@ -331,6 +332,7 @@ contains
                     ! Local lithosphere, relaxing asthenosphere (LLRA)
 
                     ! Local lithosphere (LL)
+                    ! (update every time because it is cheap)
                     call calc_litho_local(isos%now%w1,isos%now%q1,isos%now%z_bed,H_ice,z_sl)
 
                     ! Relaxing asthenosphere (RA)
@@ -410,6 +412,8 @@ contains
     end subroutine isos_end
 
     subroutine isos_par_load(par,filename)
+
+        use nml 
 
         implicit none
 
