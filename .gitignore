@@ -1,0 +1,5 @@
+.DS_Store
+lib/include/*.o
+lib/include/*.mod
+lib/bin/*.x
+output/test-isostasy/bedtest.nc
