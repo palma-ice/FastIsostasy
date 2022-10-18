@@ -3,7 +3,6 @@
     dt_step         = 10.0                  ! [yr] Max. timestep to recalculate bedrock uplift and rate of change
     dt_lith         = 50.0                  ! [yr] Min. timestep to recalculate equilibrium lithospheric displacement
     He_lith         = 100.0                 ! [km] Effective elastic thickness lithosphere
-    D_lith          = 9.87e24               ! [N-m] Flexural rigidity 
     tau             = 200.0                 ! [yr] Relaxation time 
     
 /

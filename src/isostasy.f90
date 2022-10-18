@@ -33,31 +33,29 @@ module isostasy
         integer            :: method            ! Type of isostasy to use
         real(wp)           :: dt_lith           ! [yr] Timestep to recalculate equilibrium lithospheric displacement
         real(wp)           :: dt_step           ! [yr] Timestep to recalculate bedrock uplift and rate
-        real(wp)           :: tau               ! [yr] Asthenospheric relaxation constant
         real(wp)           :: He_lith           ! [km] Effective elastic thickness of lithosphere
-        real(wp)           :: D_lith            ! [N-m] Lithosphere flexural rigidity
+        real(wp)           :: tau               ! [yr] Asthenospheric relaxation constant
         
         ! Internal parameters 
-        real(wp) :: L_w         ! [m] flexural length scale
-        integer  :: nr          ! [-] Radius of neighborhood for convolution, in number of grid points        
-        real(wp) :: time_lith
-        real(wp) :: time_step 
+        real(wp) :: L_w             ! [m] Lithosphere flexural length scale (for method=2)
+        integer  :: nr              ! [-] Radius of neighborhood for convolution, in number of grid points        
+        real(wp) :: time_lith       ! [yr] Current model time of last update of equilibrium lithospheric displacement
+        real(wp) :: time_step       ! [yr] Current model time of last update of bedrock uplift 
 
     end type 
 
     type isos_state_class 
         
-        real(wp), allocatable :: z_bed(:,:)         ! Bedrock elevation         [m]
-        real(wp), allocatable :: dzbdt(:,:)         ! Rate of bedrock uplift    [m/a]
-        real(wp), allocatable :: z_bed_ref(:,:)     ! Reference (unweighted) bedrock 
-
-        real(wp), allocatable :: kei(:,:)           ! Kelvin function filter values 
-        real(wp), allocatable :: G0(:,:)            ! Green's function values
-
         real(wp), allocatable :: tau(:,:)           ! [yr] Asthenospheric relaxation timescale field
         real(wp), allocatable :: He_lith(:,:)       ! [m]  Effective elastic thickness of the lithosphere
         real(wp), allocatable :: D_lith(:,:)        ! [N-m] Lithosphere flexural rigidity
         
+        real(wp), allocatable :: kei(:,:)           ! Kelvin function filter values 
+        real(wp), allocatable :: G0(:,:)            ! Green's function values
+        
+        real(wp), allocatable :: z_bed(:,:)         ! Bedrock elevation         [m]
+        real(wp), allocatable :: dzbdt(:,:)         ! Rate of bedrock uplift    [m/a]
+        real(wp), allocatable :: z_bed_ref(:,:)     ! Reference (unweighted) bedrock 
         real(wp), allocatable :: q0(:,:)            ! Reference load
         real(wp), allocatable :: w0(:,:)            ! Reference equilibrium displacement
         real(wp), allocatable :: q1(:,:)            ! Current load          
@@ -95,39 +93,101 @@ contains
         ! Local variables
         real(wp) :: radius_fac
         real(wp) :: filter_scaling
+        real(wp) :: D_lith_const
 
         ! Load parameters
         call isos_par_load(isos%par,filename)
         
-        ! Modify the relative radius to use for the regional filter
-        ! depending on whether we want to include the forbulge at
-        ! large radii. Large radius makes the code run slower though too. 
-        ! Set filter_scaling to < 1.0 to adjust for values of 
-        ! radius_fac <~ 5.0 
 
-        ! Larger radius, no filter scaling needed
-        ! radius_fac      = 6.0 
-        ! filter_scaling  = 1.0 
+        select case(isos%par%method)
 
-        ! Smaller radius, filter scaling to improve accuracy
-        radius_fac      = 4.0 
-        filter_scaling  = 0.91 
+            case(2)
+                ! ELRA method is being used, which requires a constant
+                ! value of L_w, D_Lith and thus He_lith everywhere 
+                
+                ! Calculate the flexural rigidity based on the 
+                ! effective elastic thickness of the lithosphere (He_lith),
+                ! Young's modulus and Poisson's ratio. See Coulon et al. (2021) Eq. 5 & 6.
+                D_lith_const = (E*1e9) * (isos%par%He_lith*1e3)**3 / (12.0*(1.0-nu**2))
 
-        ! Calculate the flexural length scale
-        ! (Coulon et al, 2021, Eq. in text after Eq. 3)
-        ! Note: will be on the order of 100km
-        isos%par%L_w = (isos%par%D_lith / (rho_a*g))**0.25 
+                ! Calculate the flexural length scale
+                ! (Coulon et al, 2021, Eq. in text after Eq. 3)
+                ! Note: will be on the order of 100km
+                isos%par%L_w = (D_lith_const / (rho_a*g))**0.25 
 
-        ! Calculate radius of grid points to use for regional elastic plate filter
-        ! See Greve and Blatter (2009), Chpt 8, page 192 for methodology 
-        ! and Le Muer and Huybrechts (1996). It seems that this value
-        ! should be 5-6x radius of relative stiffness to capture the forebuldge
-        ! further out from the depression near the center. 
-        ! Note: previous implementation stopped at 400km, hard coded. 
-        isos%par%nr = int(radius_fac*isos%par%L_w/dx)+1
+                ! Modify the relative radius to use for the regional filter
+                ! depending on whether we want to include the forbulge at
+                ! large radii. Large radius makes the code run slower though too. 
+                ! Set filter_scaling to < 1.0 to adjust for values of 
+                ! radius_fac <~ 5.0 
+
+                ! Larger radius, no filter scaling needed
+                ! radius_fac      = 6.0 
+                ! filter_scaling  = 1.0 
+
+                ! Smaller radius, filter scaling to improve accuracy
+                radius_fac      = 4.0 
+                filter_scaling  = 0.91 
+
+                ! Calculate radius of grid points to use for regional elastic plate filter
+                ! See Greve and Blatter (2009), Chpt 8, page 192 for methodology 
+                ! and Le Muer and Huybrechts (1996). It seems that this value
+                ! should be 5-6x radius of relative stiffness to capture the forebuldge
+                ! further out from the depression near the center. 
+                ! Note: previous implementation stopped at 400km, hard coded. 
+                isos%par%nr = int(radius_fac*isos%par%L_w/dx)+1
+                
+
+                ! Now, initialize isos variables 
+                call isos_allocate(isos%now,nx,ny,nr=isos%par%nr)
+            
+
+                ! Calculate the Kelvin function filter 
+                call calc_kei_filter_2D(isos%now%kei,L_w=isos%par%L_w,dx=dx,dy=dx)
+
+                ! Apply scaling to adjust magnitude of filter for radius of filter cutoff
+                isos%now%kei = filter_scaling*isos%now%kei
+
+                ! Calculate the reference Green's function values
+                call calc_greens_function_scaling(isos%now%G0,isos%now%kei, &
+                                                isos%par%L_w,D_lith_const,dx=dx,dy=dx)
+
+                ! Populate 2D D_lith field for aesethics too
+                isos%now%D_lith = D_lith_const 
+
+                write(*,*) "isos_init:: summary"
+                write(*,*) "    He_lith (km): ", isos%par%He_lith 
+                write(*,*) "    D_lith (N m): ", D_lith_const
+                write(*,*) "    L_w (m):      ", isos%par%L_w 
+                write(*,*) "    nr:           ", isos%par%nr
+                
+                write(*,*) "    range(kei): ", minval(isos%now%kei),    maxval(isos%now%kei)
+                write(*,*) "    range(G0):  ", minval(isos%now%G0),     maxval(isos%now%G0)
+
+            case DEFAULT 
+
+                ! Set elastic length scale to zero (not used)
+                isos%par%L_w = 0.0 
+
+                ! Set a small number of points for radius to avoid allocating
+                ! any large, unused arrays
+                isos%par%nr = 1 
+
+                ! Now, initialize isos variables 
+                call isos_allocate(isos%now,nx,ny,nr=isos%par%nr)
+                
+                ! Set regional filter fields to zero (not used)
+                isos%now%kei = 0.0 
+                isos%now%G0  = 0.0 
+
+        end select
         
-        ! Initialize isos variables 
-        call isos_allocate(isos%now,nx,ny,nr=isos%par%nr)
+        ! Set He_lith and tau to constant fields initially.
+        ! If these will be spatially varying fields, they should
+        ! be defined after calling `isos_init` and before calling
+        ! `isos_init_state`. 
+        isos%now%He_lith    = isos%par%He_lith      ! [m]
+        isos%now%tau        = isos%par%tau          ! [yr]
         
         ! Intially ensure all variables are zero 
         isos%now%z_bed_ref  = 0.0
@@ -139,25 +199,9 @@ contains
         
         ! Set time to very large value in the future 
         isos%par%time_lith = 1e10 
-        isos%par%time_step = 1e10 
-
-        ! Calculate the Kelvin function filter 
-        call calc_kei_filter_2D(isos%now%kei,L_w=isos%par%L_w,dx=dx,dy=dx)
-
-        ! Apply scaling to adjust magnitude of filter for radius of filter cutoff
-        isos%now%kei = filter_scaling*isos%now%kei
-
-        ! Calculate the reference Green's function values
-        call calc_greens_function_scaling(isos%now%G0,isos%now%kei, &
-                                        isos%par%L_w,isos%par%D_lith,dx=dx,dy=dx)
-
-        ! Store initial values of parameters as constant fields
-        isos%now%He_lith    = isos%par%He_lith      ! [m]
-        isos%now%D_lith     = isos%par%D_lith       ! [N m]
-        isos%now%tau        = isos%par%tau          ! [yr]
+        isos%par%time_step = 1e10
         
-        !write(*,*) "isos_init:: range(kei): ", minval(isos%now%kei),    maxval(isos%now%kei)
-        !write(*,*) "isos_init:: range(G0):  ", minval(isos%now%G0),     maxval(isos%now%G0)
+        write(*,*) "isos_init:: complete." 
 
         return 
 
@@ -176,27 +220,45 @@ contains
         real(wp), intent(IN) :: z_sl_ref(:,:)         ! [m] Reference sea level (associated with reference z_bed)
         real(wp), intent(IN) :: time                  ! [a] Initial time 
         
+
         ! Store initial bedrock field 
         isos%now%z_bed = z_bed 
         
         ! Store reference bedrock field
         isos%now%z_bed_ref = z_bed_ref 
-        isos%now%dzbdt    = 0.0 
+        isos%now%dzbdt     = 0.0 
 
 
         select case(isos%par%method)
 
             case(0,1) 
                 ! 0: Steady-state lithospheric depression 
-                ! 1: LLRA - Local lithosphere, relaxing Asthenosphere
+                ! 1: LLRA - Local lithosphere, relaxing asthenosphere
 
+                ! Local lithosphere (LL)
                 call calc_litho_local(isos%now%w0,isos%now%q0,z_bed_ref,H_ice_ref,z_sl_ref)
                 
             case(2)
-                ! 2: ELRA - Elastic lithosphere, relaxing Asthenosphere
+                ! 2: ELRA - Elastic lithosphere, relaxing asthenosphere
 
-                ! Local lithosphere (LL)
+                ! Elastic lithosphere
                 call calc_litho_regional(isos%now%w0,isos%now%q0,z_bed_ref,H_ice_ref,z_sl_ref,isos%now%G0)
+
+            case(3)
+                ! 2: EGIA - 2D Elastic lithosphere, relaxing asthenosphere - to do!
+
+                ! Re-calculate the flexural rigidity based on the spatially variable
+                ! effective elastic thickness of the lithosphere (He_lith),
+                ! Young's modulus and Poisson's ratio. See Coulon et al. (2021) Eq. 5 & 6.
+                ! Note: this 2D field is only needed for the EGIA model (method=3) below. 
+                isos%now%D_lith = (E*1e9) * (isos%now%He_lith*1e3)**3 / (12.0*(1.0-nu**2))
+
+
+                ! Elastic lithosphere
+                !call calc_litho_regional(isos%now%w0,isos%now%q0,z_bed_ref,H_ice_ref,z_sl_ref,isos%now%G0)
+                
+                write(*,*) "isos_init_state:: Error: method=3 not implemented yet."
+                stop 
 
         end select 
 
@@ -210,10 +272,12 @@ contains
         call isos_update(isos,H_ice,z_sl,time)
 
         write(*,*) "isos_init_state:: "
-        write(*,*) "  Initial time:  ", isos%par%time_step 
-        write(*,*) "  range(w0):     ", minval(isos%now%w0), maxval(isos%now%w0)
-        write(*,*) "  range(w1):     ", minval(isos%now%w1), maxval(isos%now%w1)
-        write(*,*) "  range(z_bed):  ", minval(isos%now%z_bed), maxval(isos%now%z_bed)
+        write(*,*) "  Initial time:   ", isos%par%time_step 
+        write(*,*) "  range(He_lith): ", minval(isos%now%He_lith), maxval(isos%now%He_lith)
+        write(*,*) "  range(tau):     ", minval(isos%now%tau),     maxval(isos%now%tau)
+        write(*,*) "  range(w0):      ", minval(isos%now%w0),      maxval(isos%now%w0)
+        write(*,*) "  range(w1):      ", minval(isos%now%w1),      maxval(isos%now%w1)
+        write(*,*) "  range(z_bed):   ", minval(isos%now%z_bed),   maxval(isos%now%z_bed)
         
         return 
 
@@ -254,10 +318,9 @@ contains
                 update_equil = .FALSE. 
             end if 
 
-            ! Step 1: diagnose rate of bedrock uplift
+            ! Step 1: diagnose equilibrium displacement and rate of bedrock uplift
             select case(isos%par%method)
 
-            
                 case(0)
                     ! Steady-state lithosphere
 
@@ -277,7 +340,7 @@ contains
                 case(2)
                     ! Elastic lithosphere, relaxing asthenosphere (ELRA)
                     
-                    ! Regional elastic lithosphere (EL)
+                    ! Elastic lithosphere (EL)
                     if (update_equil) then 
                         call calc_litho_regional(isos%now%w1,isos%now%q1,isos%now%z_bed,H_ice,z_sl,isos%now%G0)
                     end if 
@@ -289,9 +352,13 @@ contains
                 case(3) 
                     ! Elementary GIA model (spatially varying ELRA with geoid - to do!)
 
-                    ! Regional elastic lithosphere (EL)
+                    ! 2D elastic lithosphere (2DEL)
                     if (update_equil) then
-                        call calc_litho_regional(isos%now%w1,isos%now%q1,isos%now%z_bed,H_ice,z_sl,isos%now%G0)
+                        !call calc_litho_regional(isos%now%w1,isos%now%q1,isos%now%z_bed,H_ice,z_sl,isos%now%G0)
+
+                        write(*,*) "isos_update:: Error: method=3 not implemented yet."
+                        stop 
+
                     end if 
 
                     ! Relaxing asthenosphere (RA)
@@ -353,7 +420,6 @@ contains
         call nml_read(filename,"isostasy","dt_lith",        par%dt_lith)
         call nml_read(filename,"isostasy","dt_step",        par%dt_step)
         call nml_read(filename,"isostasy","He_lith",        par%He_lith)
-        call nml_read(filename,"isostasy","D_lith",         par%D_lith)
         call nml_read(filename,"isostasy","tau",            par%tau)
         
         return
@@ -376,6 +442,9 @@ contains
         call isos_deallocate(now)
 
         ! Allocate arrays
+        allocate(now%tau(nx,ny))
+        allocate(now%He_lith(nx,ny))
+        allocate(now%D_lith(nx,ny))
 
         allocate(now%kei(nfilt,nfilt))
         allocate(now%G0(nfilt,nfilt))
@@ -383,12 +452,6 @@ contains
         allocate(now%z_bed(nx,ny))
         allocate(now%dzbdt(nx,ny))
         allocate(now%z_bed_ref(nx,ny))
-        
-        
-        allocate(now%tau(nx,ny))
-        allocate(now%He_lith(nx,ny))
-        allocate(now%D_lith(nx,ny))
-
         allocate(now%q0(nx,ny))
         allocate(now%w0(nx,ny))
         allocate(now%q1(nx,ny))
@@ -404,17 +467,16 @@ contains
 
         type(isos_state_class), intent(INOUT) :: now 
 
+        if (allocated(now%tau))         deallocate(now%tau)
+        if (allocated(now%He_lith))     deallocate(now%He_lith)
+        if (allocated(now%D_lith))      deallocate(now%D_lith)
+        
         if (allocated(now%kei))         deallocate(now%kei)
         if (allocated(now%G0))          deallocate(now%G0)
         
         if (allocated(now%z_bed))       deallocate(now%z_bed)
         if (allocated(now%dzbdt))       deallocate(now%dzbdt)
         if (allocated(now%z_bed_ref))   deallocate(now%z_bed_ref)
-        
-        if (allocated(now%tau))         deallocate(now%tau)
-        if (allocated(now%He_lith))     deallocate(now%He_lith)
-        if (allocated(now%D_lith))      deallocate(now%D_lith)
-        
         if (allocated(now%q0))          deallocate(now%q0)
         if (allocated(now%w0))          deallocate(now%w0)
         if (allocated(now%q1))          deallocate(now%q1)
