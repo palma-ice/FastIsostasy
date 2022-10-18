@@ -8,7 +8,7 @@ So far, the implementations include:
 2. Elastic lithosphere, relaxing asthenosphere (ELRA)
 3. Elementary GIA model (EGIA) - work in progress!
 
-## Initial configuration
+## Initial configuration and running the program
 
 1. Define a configuration file for your system and compiler within the folder `config`. Use a previously existing config file as a template. 
 
@@ -33,3 +33,6 @@ make test_isostasy
 ```
 
 The output directory is hard-coded to `output/test-isostasy` for now. When the program runs successfully, the model output will be saved in the file `bedtest.nc` in the output directory. To play with different parameters, modify them in the default parameter file `par/test_isostasy.nml`. 
+
+
+That's it!
