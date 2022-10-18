@@ -1,4 +1,5 @@
 .DS_Store
+Makefile
 lib/include/*.o
 lib/include/*.mod
 lib/bin/*.x
