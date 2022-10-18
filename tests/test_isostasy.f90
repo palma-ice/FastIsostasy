@@ -18,6 +18,8 @@ program test_isostasy
     character(len=512) :: path_par
     character(len=512) :: file_out 
 
+    character(len=56)  :: experiment 
+
     real(wp) :: time 
     real(wp) :: time_init 
     real(wp) :: time_end 
@@ -54,19 +56,24 @@ program test_isostasy
     write(*,*) "path_par: ", trim(path_par)
     write(*,*) "file_out: ", trim(file_out)
     
+    ! === Define experiment to be run ====
+
+    experiment = "constant_thickness"
+    !experiment = "variable_tau"
+    !experiment = "point_load"
+    
+    write(*,*) "experiment = ", trim(experiment)
+
     ! === Define simulation time ========
 
     time_init = 0.0
     time_end  = 2e3  
     dtt       = 200.0 
 
-    nt = ceiling((time_end-time_init)/dtt) + 1 
-
     write(*,*) "time_init = ", time_init 
     write(*,*) "time_end  = ", time_end 
     write(*,*) "dtt       = ", dtt 
-    write(*,*) "nt        = ", nt 
-    
+
     ! === Define grid information ============
 
     dx = 20.0e3
@@ -107,33 +114,65 @@ program test_isostasy
     z_sl_ref    = 0.0 
     
     z_bed       = 0.0 
-    H_ice       = 1000.0  
+    H_ice       = 0.0  
     z_sl        = 0.0 
     
     write(*,*) "Initial fields defined."
 
-    ! Initialize bedrock model 
+
+    ! Initialize bedrock model (allocate fields)
     call isos_init(isos1,path_par,nx,ny,dx)
 
-    if (.FALSE.) then 
-        ! Spatially variable tau
-        mask(1:int(nx/3.0),:) = 0.0 
-        mask(int(nx/3.0)+1:2*int(nx/3.0),:) = 1.0 
-        mask(2*int(nx/3.0)+1:nx,:) = 2.0 
-        !mask(10:12,10:12) = 2.0
-        call isos_set_field(isos1%now%tau,[1e2,1e3,3e3],[0.0_wp,1.0_wp,2.0_wp],mask,dx,sigma=150e3)
-    end if 
 
-    if (.FALSE.) then 
-        H_ice = 0.0 
-        H_ice(int((nx-1)/2),int((ny-1)/2)) = 1000.0 
-    end if 
+    ! Define ice thickness field based on experiment being run...
+    
+    select case(trim(experiment))
+
+        case("constant_thickness")
+            ! Set ice thickness to a constant value everywhere
+
+            H_ice = 1000.0
+
+        case("variable_tau")
+            ! Set ice thickness to a constant value everywhere,
+            ! with a spatially variable field of tau
+
+            H_ice = 1000.0
+
+            ! Define a mask with three different regions, which will
+            ! correspond to different values of tau
+            mask(1:int(nx/3.0),:) = 0.0 
+            mask(int(nx/3.0)+1:2*int(nx/3.0),:) = 1.0 
+            mask(2*int(nx/3.0)+1:nx,:) = 2.0 
+
+            ! Define tau field using the mask
+            call isos_set_field(isos1%now%tau,[1e2,1e3,3e3],[0.0_wp,1.0_wp,2.0_wp],mask,dx,sigma=150e3)
+        
+        case("point_load")
+            ! Define ice thickness only in one grid point 
+
+            H_ice = 0.0 
+            H_ice(int((nx-1)/2),int((ny-1)/2)) = 1000.0 
+
+        case DEFAULT
+
+            write(*,*) "Error: experiment name not recognized."
+            write(*,*) "experiment = ", trim(experiment)
+            stop 
+
+    end select
+
 
     ! Inititalize state
     call isos_init_state(isos1,z_bed,H_ice,z_sl,z_bed_ref,H_ice_ref,z_sl_ref,time=time_init)
 
+
     ! Initialize writing output
     call isos_write_init(isos1,xc,yc,file_out,time_init)
+
+
+    ! Determine total number of iterations to run
+    nt = ceiling((time_end-time_init)/dtt) + 1 
 
     ! Advance isostasy model
     do n = 1, nt 
