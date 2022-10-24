@@ -6,6 +6,8 @@ module isostasy
 
     ! Note: currently routine `isos_par_load` has dependency on the nml.f90 module 
     
+    use, intrinsic :: iso_fortran_env, only : input_unit, output_unit, error_unit
+    
     implicit none 
 
     ! Internal constants
@@ -280,6 +282,15 @@ contains
         write(*,*) "  range(w1):      ", minval(isos%now%w1),      maxval(isos%now%w1)
         write(*,*) "  range(z_bed):   ", minval(isos%now%z_bed),   maxval(isos%now%z_bed)
         
+        ! Make sure tau does not contain zero values, if so
+        ! output an error for diagnostics. Don't kill the program
+        ! so that external program can still write output as needed. 
+        if (minval(isos%now%tau) .le. 0.0) then 
+            write(error_unit,*) "isos_init_state:: Error: tau initialized with zero values present. &
+            &This will lead to the model crashing."
+            !stop 
+        end if 
+
         return 
 
     end subroutine isos_init_state
