@@ -27,7 +27,10 @@ program test_isostasy
     integer  :: n, nt 
 
     integer  :: i, j, nx, ny 
-    real(wp) :: xmin, xmax, dx 
+    real(wp) :: xmin, xmax, dx
+!mmr------------------------------------------------------------------------------------------------------------------------            
+    real(wp) :: xcntr, ycntr              
+!mmr------------------------------------------------------------------------------------------------------------------------            
     real(wp), allocatable :: xc(:)
     real(wp), allocatable :: yc(:)
 
@@ -39,7 +42,11 @@ program test_isostasy
     real(wp), allocatable :: H_ice(:,:) 
     real(wp), allocatable :: z_sl(:,:) 
     
-    real(wp), allocatable :: mask(:,:) 
+    real(wp), allocatable :: mask(:,:)
+!mmr----------------------------------------------------------------
+    real(wp), allocatable :: dist2c(:,:)  
+    logical :: calc_analytical 
+!mmr----------------------------------------------------------------
 
     type(isos_class) :: isos1
 
@@ -58,17 +65,24 @@ program test_isostasy
     
     ! === Define experiment to be run ====
 
-    experiment = "constant_thickness"
+    !experiment = "constant_thickness"
     !experiment = "variable_tau"
     !experiment = "point_load"
+!mmr----------------------------------------------------------------            
+    experiment = "disk_load"
+    
+    ! === Define whether to calculate analytical solution (only available for VA disk) ====
+    
+    calc_analytical = .true.
+!mmr----------------------------------------------------------------                
     
     write(*,*) "experiment = ", trim(experiment)
 
     ! === Define simulation time ========
 
     time_init = 0.0
-    time_end  = 2e3  
-    dtt       = 200.0 
+    time_end  = 30e3    !mmr  
+    dtt       = 200.0   !mmr  200.0 
 
     write(*,*) "time_init = ", time_init 
     write(*,*) "time_end  = ", time_end 
@@ -106,7 +120,9 @@ program test_isostasy
     allocate(z_bed(nx,ny))
     allocate(H_ice(nx,ny))
     allocate(z_sl(nx,ny))
-    
+!mmr----------------------------------------------------------------    
+    allocate(dist2c(nx,ny)) !mmr Alex  - this should be calculated only once and probably here
+!mmr----------------------------------------------------------------    
     allocate(mask(nx,ny)) 
 
     z_bed_ref   = 0.0 
@@ -121,9 +137,11 @@ program test_isostasy
 
 
     ! Initialize bedrock model (allocate fields)
-    call isos_init(isos1,path_par,nx,ny,dx)
-
-
+!mmr----------------------------------------------------------------
+!mmr     call isos_init(isos1,path_par,nx,ny,dx)    
+    call isos_init(isos1,path_par,nx,ny,dx,calc_analytical) 
+!mmr----------------------------------------------------------------
+    
     ! Define ice thickness field based on experiment being run...
     
     select case(trim(experiment))
@@ -135,7 +153,7 @@ program test_isostasy
 
         case("variable_tau")
             ! Set ice thickness to a constant value everywhere,
-            ! with a spatially variable field of tau
+           ! with a spatially variable field of tau
 
             H_ice = 1000.0
 
@@ -147,13 +165,35 @@ program test_isostasy
 
             ! Define tau field using the mask
             call isos_set_field(isos1%now%tau,[1e2,1e3,3e3],[0.0_wp,1.0_wp,2.0_wp],mask,dx,sigma=150e3)
-        
+
         case("point_load")
             ! Define ice thickness only in one grid point 
 
             H_ice = 0.0 
             H_ice(int((nx-1)/2),int((ny-1)/2)) = 1000.0 
 
+!mmr----------------------------------------------------------------
+         case("disk_load")
+            ! Define ice thickness only in a circle of radius 1000 km and thickness 1000 m
+
+            H_ice = 0.
+            xcntr = (xmax+xmin)/2.
+            ycntr = xcntr
+            do i = 1, nx
+               do j = 1, ny
+                  if ( (xc(i)-xcntr)**2 + (yc(j)-ycntr)**2  .le. (1000.e3)**2 ) H_ice(i,j) = 1000.0 
+               enddo
+            enddo
+
+!mmr Alex  - this should be calculated only once and probably here -  pass it to isostasy?
+!             do i = 1, nx
+!                do j = 1, ny
+!                   dist2c(i,j) = sqrt((xc(i)-xcntr)**2 + (yc(j)-ycntr)**2)  
+!                   if ( dist2c(i,j)  .le. (1000.e3)) H_ice(i,j) = 1000.0    ![m]
+!                enddo
+!             enddo            
+!
+!mmr----------------------------------------------------------------            
         case DEFAULT
 
             write(*,*) "Error: experiment name not recognized."
@@ -162,15 +202,15 @@ program test_isostasy
 
     end select
 
-
     ! Inititalize state
-    call isos_init_state(isos1,z_bed,H_ice,z_sl,z_bed_ref,H_ice_ref,z_sl_ref,time=time_init)
-
-
+!mmr----------------------------------------------------------------                
+!mmr    call isos_init_state(isos1,z_bed,H_ice,z_sl,z_bed_ref,H_ice_ref,z_sl_ref,time=time_init)
+    call isos_init_state(isos1,z_bed,H_ice,z_sl,z_bed_ref,H_ice_ref,z_sl_ref,time=time_init,calc_analytical=calc_analytical) 
+!mmr----------------------------------------------------------------            
     ! Initialize writing output
     call isos_write_init(isos1,xc,yc,file_out,time_init)
 
-
+    
     ! Determine total number of iterations to run
     nt = ceiling((time_end-time_init)/dtt) + 1 
 
@@ -181,7 +221,7 @@ program test_isostasy
         time = time_init + (n-1)*dtt 
 
         ! Update bedrock
-        call isos_update(isos1,H_ice,z_sl,time)
+        call isos_update(isos1,H_ice,z_sl,time,calc_analytical) !         call isos_update(isos1,H_ice,z_sl,time)
 
         ! Write to file 
         call isos_write_step(isos1,file_out,time,H_ice,z_sl)
@@ -258,7 +298,7 @@ contains
 
         ! Update the time step
         call nc_write(filename,"time",time,dim1="time",start=[n],count=[1],ncid=ncid)
-
+        
         ! Write variables
 
         call nc_write(filename,"H_ice",H_ice,units="m",long_name="Ice thickness", &
@@ -266,10 +306,21 @@ contains
         call nc_write(filename,"z_sl",z_sl,units="m",long_name="Sea level elevation", &
               dim1="xc",dim2="yc",dim3="time",start=[1,1,n],ncid=ncid)
         call nc_write(filename,"z_bed",isos%now%z_bed,units="m",long_name="Bedrock elevation", &
-                        dim1="xc",dim2="yc",dim3="time",start=[1,1,n],ncid=ncid) 
+             dim1="xc",dim2="yc",dim3="time",start=[1,1,n],ncid=ncid) 
         call nc_write(filename,"dzbdt",isos%now%dzbdt,units="m/yr",long_name="Bedrock elevation change", &
-                        dim1="xc",dim2="yc",dim3="time",start=[1,1,n],ncid=ncid) 
-
+             dim1="xc",dim2="yc",dim3="time",start=[1,1,n],ncid=ncid)
+!mmr------------------------------------------------------------------------------------------------------------------------        
+        call nc_write(filename,"q_load",isos%now%q1,units="N/m2",long_name="Load", &                                        
+             dim1="xc",dim2="yc",dim3="time",start=[1,1,n],ncid=ncid)                                            
+        call nc_write(filename,"w_VA",-isos%now%w2,units="m",long_name="Load", &                                        
+             dim1="xc",dim2="yc",dim3="time",start=[1,1,n],ncid=ncid)                                            
+        call nc_write(filename,"z_bed_EL",-isos%now%w1,units="m",long_name="Displacement (for ELVA only EL)", &
+             dim1="xc",dim2="yc",dim3="time",start=[1,1,n],ncid=ncid)                                           
+        call nc_write(filename,"z_bed_analyt",isos%now%w2_ana,units=" ",long_name="Analytical displacement (for VA disk)", &        
+             dim1="xc",dim2="yc",dim3="time",start=[1,1,n],ncid=ncid)                                                  
+        call nc_write(filename,"err_z_bed",isos%now%z_bed - isos%now%w2_ana,units=" ",long_name="Error in VA bedrock elevation", & 
+             dim1="xc",dim2="yc",dim3="time",start=[1,1,n],ncid=ncid)                                                  
+!mmr------------------------------------------------------------------------------------------------------------------------        
         ! Close the netcdf file
         call nc_close(ncid)
 

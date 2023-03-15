@@ -1,3 +1,4 @@
+
 module isostasy 
     ! Isostasy (Greek ísos "equal", stásis "standstill") is the state of 
     ! gravitational equilibrium between Earth's crust and mantle such that 
@@ -7,7 +8,7 @@ module isostasy
     ! Note: currently routine `isos_par_load` has dependency on the nml.f90 module 
     
     use, intrinsic :: iso_fortran_env, only : input_unit, output_unit, error_unit
-    
+
     implicit none 
 
     ! Internal constants
@@ -24,10 +25,11 @@ module isostasy
     real(wp), parameter :: rho_sw   = 1028.0        ! [kg/m^3] 
     real(wp), parameter :: rho_w    = 1000.0        ! [kg/m^3] 
     real(wp), parameter :: rho_a    = 3300.0        ! [kg/m^3] 3370 used by Coulon et al (2021)
-
-    real(wp), parameter :: nu       = 0.25          ! [-]   Poisson's ratio, Coulon et al (2021) 
-    real(wp), parameter :: E        = 100.0         ! [GPa] Young's modulus, Coulon et al (2021) 
-    
+!mmr----------------------------------------------------------------
+    real(wp), parameter :: nu       = 0.5   !0.25   ! [-]   Poisson's ratio: 0.25 for Coulon et al (2021) | 0.5 for Bueler et al (2007) 
+    real(wp), parameter :: E        = 66.0  !100.0  ! [GPa] Young's modulus | 100 for Coulon et al (2021) | 66  for Bueler et al (2007) 
+    real(wp), parameter :: eta      = 1.e21         ! [Pa s] Asthenosphere's viscosity, Bueler et al (2007)
+!mmr----------------------------------------------------------------    
     real(wp), parameter :: r_earth  = 6.378e6       ! [m]  Earth's radius, Coulon et al (2021) 
     real(wp), parameter :: m_earth  = 5.972e24      ! [kg] Earth's mass,   Coulon et al (2021) 
     
@@ -39,11 +41,19 @@ module isostasy
         real(wp)           :: tau               ! [yr] Asthenospheric relaxation constant
         
         ! Internal parameters 
-        real(wp) :: L_w             ! [m] Lithosphere flexural length scale (for method=2)
-        integer  :: nr              ! [-] Radius of neighborhood for convolution, in number of grid points        
-        real(wp) :: time_lith       ! [yr] Current model time of last update of equilibrium lithospheric displacement
-        real(wp) :: time_step       ! [yr] Current model time of last update of bedrock uplift 
+        real(wp) :: L_w                       ! [m] Lithosphere flexural length scale (for method=2)
+        integer  :: nr                        ! [-] Radius of neighborhood for convolution, in number of grid points        
+        real(wp) :: time_lith                 ! [yr] Current model time of last update of equilibrium lithospheric displacement
+        real(wp) :: time_step                 ! [yr] Current model time of last update of bedrock uplift
+!mmr----------------------------------------------------------------
+        real(wp) :: mu                        ! [1/m] 2pi/L                                         
+        real(wp) :: dx                        ! [m] Horizontal resolution                           
 
+        ! Parameters for analytical ELVA disk solution - Alex - class apart?                              
+        real(wp) :: kappa_min = 0.  ! [] Minimum kappa for gaussian quadrature       
+        real(wp) :: kappa_max = 0.1 ! [] Maximum kappa for gaussian quadrature       
+        real(wp) :: dk = 1.e-3      ! [] Step in kappa for gaussian quadrature       
+!mmr----------------------------------------------------------------
     end type 
 
     type isos_state_class 
@@ -54,56 +64,131 @@ module isostasy
         
         real(wp), allocatable :: kei(:,:)           ! Kelvin function filter values 
         real(wp), allocatable :: G0(:,:)            ! Green's function values
-        
+       
         real(wp), allocatable :: z_bed(:,:)         ! Bedrock elevation         [m]
         real(wp), allocatable :: dzbdt(:,:)         ! Rate of bedrock uplift    [m/a]
         real(wp), allocatable :: z_bed_ref(:,:)     ! Reference (unweighted) bedrock 
         real(wp), allocatable :: q0(:,:)            ! Reference load
         real(wp), allocatable :: w0(:,:)            ! Reference equilibrium displacement
         real(wp), allocatable :: q1(:,:)            ! Current load          
-        real(wp), allocatable :: w1(:,:)            ! Current equilibrium displacement          
-
+        real(wp), allocatable :: w1(:,:)            ! Current equilibrium displacement
+!mmr----------------------------------------------------------------
+!mmr Alex -  class apart?   (this is for the ELVA numerical solution)             
+        real(wp), allocatable :: kappa(:,:)         ! sqrt(p^2 + q^2) as in Bueler et al 2007                      
+        real(wp), allocatable :: beta(:,:)          ! beta as in Bueler et al 2007                                 
+        real(wp), allocatable :: w2(:,:)            ! Current viscous equilibrium displacement
         
-    end type 
+! mmr Alex  - class apart? (this is for tge ELVA disk analytical solution)      
+        real(wp), allocatable    :: w2_ana(:,:)        ! Current analytical viscous equilibrium displacement                               
+        real(wp), allocatable    :: kappa_mod(:)       ! module of kappa (for analytical disk-load solution)                               
+        real(wp), allocatable    :: dist2c(:,:)        ! distance of individual points to disk center (for analytical disk-load solution)  
+        real(wp), allocatable    :: r(:)               ! radial distance to disk center (for analytical disk-load solution)                
+        integer(wp), allocatable :: lr(:,:)         ! index for remapping (for analytical disk-load solution)                           
+!mmr----------------------------------------------------------------
+    end type isos_state_class
 
     type isos_class
         type(isos_param_class) :: par
-        type(isos_state_class) :: now 
-
+        type(isos_state_class) :: now      
     end type
 
+    type isos_analytical_elva_disk_load_class 
+       integer  :: ifunc   = 0                      ! choice of function f(x) to integrate (integrand of analytical solution, in case there are several) 
+       integer  :: n_evals = 0                      ! number of function evaluations
+       integer  :: method  = 6                      ! integration method (#points in gaussian quadrature)
+       procedure(func_1d),pointer :: fun => null()  ! function f(x) to be integrated (at given time t)
+       procedure(gauss_func),pointer :: g => null() ! the gauss quadrature formula to use
+       real(wp) :: a      = 0._wp                   ! lower limit of integration
+       real(wp) :: b      = 0._wp                   ! upper limit of integration (may be less than a)
+       real(wp) :: tol    = 0._wp                   ! the requested relative error tolerance.
+       real(wp) :: val    = 0._wp                   ! the value of x, only used for multiple integration to pass to the inner integrals
+       real(wp) :: r      = 0._wp                   ! distance of disk center at which function f(x) is evaluated
+       real(wp) :: time   = 0._wp                   ! time at which function is f(x) evaluated
+       real(wp) :: r0     = 0._wp                   ! [m] 
+       real(wp) :: h0     = 0._wp                   ! [m] 
+       real(wp) :: D_lith = 0.e+24                  ! [N m]   
+       real(wp) :: eta    = 0.e+21                  ! [Pa s]
+
+
+        contains
+
+        private
+
+        procedure :: dgauss_generic                                    ! core integration routine. refactored from
+                                                                       ! SLATEC with selectable quadrature method
+        procedure,public :: initialize => initialize_integration_class ! to set up the class
+        procedure,public :: integrate  => integrate_1d                 ! to integrate function `fun`
+        
+    end type isos_analytical_elva_disk_load_class
+     
+     abstract interface
+        
+        function func_1d(me,x) result(f)
+          ! 1d user function f(x)
+          import :: wp,isos_analytical_elva_disk_load_class
+          implicit none
+          class(isos_analytical_elva_disk_load_class),intent(inout) :: me
+          real(wp), intent(in)                      :: x
+          real(wp)                                  :: f
+        end function func_1d
+
+         function gauss_func(me, x, h) result(f)
+            ! gauss quadrature formula
+            import :: wp,isos_analytical_elva_disk_load_class
+            implicit none
+            class(isos_analytical_elva_disk_load_class),intent(inout)  :: me
+            real(wp), intent(in)                    :: x
+            real(wp), intent(in)                    :: h
+            real(wp)                                :: f
+        end function gauss_func
+       
+     end interface
+
+     type(isos_analytical_elva_disk_load_class) :: ana        ! object containing all info relative to function to be integrated for analytical solution
+       
     private
     public :: isos_class 
     public :: isos_init
     public :: isos_init_state 
     public :: isos_update 
     public :: isos_end  
-
     public :: isos_set_field
 
-contains 
+    public :: isos_analytical_elva_disk_load_class 
 
-    subroutine isos_init(isos,filename,nx,ny,dx)
+   
+  contains
+    
+!mmr----------------------------------------------------------------    
+!mmr     subroutine isos_init(isos,filename,nx,ny,dx)
+    subroutine isos_init(isos,filename,nx,ny,dx,calc_analytical)
+!mmr----------------------------------------------------------------    
 
         implicit none 
 
         type(isos_class), intent(OUT) :: isos 
         character(len=*), intent(IN)  :: filename 
         integer,  intent(IN) :: nx, ny 
-        real(wp), intent(IN) :: dx 
-
+        real(wp), intent(IN) :: dx
+!mmr----------------------------------------------------------------    
+        logical, intent(IN) :: calc_analytical 
+!mmr----------------------------------------------------------------    
         ! Local variables
         real(wp) :: radius_fac
         real(wp) :: filter_scaling
         real(wp) :: D_lith_const
+!mmr----------------------------------------------------------------    
+        real(wp) :: r0      
+        real(wp) :: h0      
+        real(wp) :: eta    
+!mmr----------------------------------------------------------------    
 
-
+        
         ! First, load parameters from parameter file `filename`
         call isos_par_load(isos%par,filename)
         
 
         select case(isos%par%method)
-
             case(2)
                 ! ELRA method is being used, which requires a constant
                 ! value of L_w, D_Lith and thus He_lith everywhere 
@@ -167,7 +252,106 @@ contains
                 write(*,*) "    range(kei): ", minval(isos%now%kei),    maxval(isos%now%kei)
                 write(*,*) "    range(G0):  ", minval(isos%now%G0),     maxval(isos%now%G0)
 
-            case DEFAULT 
+!mmr----------------------------------------------------------------
+            case(4) 
+                ! ELRA/ELVA method is being used, which require a constant 
+                ! value of L_w, D_Lith and thus He_lith everywhere         
+                
+                ! Calculate the flexural rigidity based on the 
+                ! effective elastic thickness of the lithosphere (He_lith),
+                ! Young's modulus and Poisson's ratio. See Coulon et al. (2021) Eq. 5 & 6.
+                D_lith_const = (E*1e9) * (isos%par%He_lith*1e3)**3 / (12.0*(1.0-nu**2))
+
+               ! Calculate the flexural length scale
+                ! (Coulon et al, 2021, Eq. in text after Eq. 3)
+                ! Note: will be on the order of 100km
+                isos%par%L_w = (D_lith_const / (rho_a*g))**0.25 
+
+                ! Modify the relative radius to use for the regional filter
+                ! depending on whether we want to include the forbulge at
+                ! large radii. Large radius makes the code run slower though too. 
+                ! Set filter_scaling to < 1.0 to adjust for values of 
+                ! radius_fac <~ 5.0 
+
+                ! Larger radius, no filter scaling needed
+                ! radius_fac      = 6.0 
+                ! filter_scaling  = 1.0 
+
+                ! Smaller radius, filter scaling to improve accuracy
+                radius_fac      = 4.0 
+                filter_scaling  = 0.91 
+
+                ! Calculate radius of grid points to use for regional elastic plate filter
+                ! See Greve and Blatter (2009), Chpt 8, page 192 for methodology 
+                ! and Le Muer and Huybrechts (1996). It seems that this value
+                ! should be 5-6x radius of relative stiffness to capture the forebuldge
+                ! further out from the depression near the center. 
+                ! Note: previous implementation stopped at 400km, hard coded. 
+                isos%par%nr = int(radius_fac*isos%par%L_w/dx)+1
+                
+
+                ! Now, initialize isos variables 
+                call isos_allocate(isos%now,nx,ny,nr=isos%par%nr)
+            
+
+                ! Calculate the Kelvin function filter 
+                call calc_kei_filter_2D(isos%now%kei,L_w=isos%par%L_w,dx=dx,dy=dx)
+
+                ! Apply scaling to adjust magnitude of filter for radius of filter cutoff
+                isos%now%kei = filter_scaling*isos%now%kei
+                
+!mmr recheck - Elastic solution is different in Bueler et al. 2007, need to recalculate Green's coefficients
+                
+                ! Calculate the reference Green's function values
+                call calc_greens_function_scaling(isos%now%G0,isos%now%kei, &
+                                                isos%par%L_w,D_lith_const,dx=dx,dy=dx)
+
+                ! Populate 2D D_lith field for aesethics too
+                isos%now%D_lith = D_lith_const
+
+                ! Store horizonal resolution
+                isos%par%dx = dx
+                
+                ! Calculate parameters needed for elastic lithosphere viscous asthenosphere (ELVA)                                        
+                ! solution as in Bueler et al 2007 (eq 11)                                                                                
+!
+                call calc_asthenosphere_viscous_params(nx,ny,isos%par%dx,isos%now%D_lith,isos%par%mu,isos%now%kappa,isos%now%beta)        
+
+                if (calc_analytical) then   
+                   call calc_analytical_asthenosphere_viscous_disk_params(nx,ny,isos%par%dx,isos%par%kappa_min,isos%par%kappa_max,isos%par%dk,&
+                        isos%now%kappa_mod,isos%now%dist2c,isos%now%r,isos%now%lr)                                    
+
+                   r0     = 1000.0e3 ! [m] recheck - include into routine?
+                   h0     = 1000.0   ! [m] 
+                   eta    = 1.e+21   ! [Pa s]
+
+                endif
+
+                write(*,*) "isos_init:: summary"
+                write(*,*) "    He_lith (km): ", isos%par%He_lith 
+                write(*,*) "    D_lith (N m): ", D_lith_const
+                write(*,*) "    L_w (m):      ", isos%par%L_w 
+                write(*,*) "    nr:           ", isos%par%nr
+                
+                write(*,*) "    range(kei): ", minval(isos%now%kei),   maxval(isos%now%kei)
+                write(*,*) "    range(G0):  ", minval(isos%now%G0),  maxval(isos%now%G0)
+
+                write(*,*) "    mu (1/m):  ", isos%par%mu                                                       
+                write(*,*) "    dx (m):    ", isos%par%dx                                                       
+                write(*,*) "    kappa_min: ", isos%par%kappa_min                                                
+                write(*,*) "    kappa_max: ", isos%par%kappa_max                                                
+                write(*,*) "    dk ( ):    ", isos%par%dk                                                       
+
+                write(*,*) "    range(kappa): ", minval(isos%now%kappa),  maxval(isos%now%kappa)                
+                write(*,*) "    range(beta): ", minval(isos%now%beta),  maxval(isos%now%beta)                   
+
+                if (calc_analytical) then                
+                   write(*,*) "    range(kappa_mod): ", minval(isos%now%kappa_mod),  maxval(isos%now%kappa_mod)    
+                   call initialize_analytical_integrand(ana,r0,h0,D_lith_const,eta)
+                endif           
+!mmr----------------------------------------------------------------
+            
+             case DEFAULT 
 
                 ! Set elastic length scale to zero (not used)
                 isos%par%L_w = 0.0 
@@ -181,16 +365,27 @@ contains
                 
                 ! Set regional filter fields to zero (not used)
                 isos%now%kei = 0.0 
-                isos%now%G0  = 0.0 
+                isos%now%G0  = 0.0
+                
+!mmr----------------------------------------------------------------
+!mmr - Alex, these should go within case = 4 but isos is initialized just after                
+                ! Set kappa to zero (only used for ELVA)                
+                isos%now%kappa = 0.0                                    
+                ! Set mu to zero (only used for ELVA)                   
+                isos%par%mu = 0.0                                       
+                ! Initializw (only used for ELVA)                   
+                isos%par%dx = dx
+!mmr----------------------------------------------------------------
 
-        end select
-        
-        ! Set He_lith and tau to constant fields initially.
+             end select
+
+         ! Set He_lith and tau to constant fields initially.
         ! If these will be spatially varying fields, they should
         ! be defined after calling `isos_init` and before calling
         ! `isos_init_state`. 
         isos%now%He_lith    = isos%par%He_lith      ! [m]
         isos%now%tau        = isos%par%tau          ! [yr]
+
         
         ! Intially ensure all variables are zero 
         isos%now%z_bed_ref  = 0.0
@@ -198,19 +393,22 @@ contains
         isos%now%dzbdt      = 0.0 
 
         isos%now%w0         = 0.0   
-        isos%now%w1         = 0.0   
-        
+        isos%now%w1         = 0.0
+!mmr----------------------------------------------------------------        
+        isos%now%w2         = 0.0 
+        isos%now%w2_ana     = 0.0 
+!mmr----------------------------------------------------------------        
         ! Set time to very large value in the future 
         isos%par%time_lith = 1e10 
         isos%par%time_step = 1e10
         
         write(*,*) "isos_init:: complete." 
-
+        
         return 
 
     end subroutine isos_init
 
-    subroutine isos_init_state(isos,z_bed,H_ice,z_sl,z_bed_ref,H_ice_ref,z_sl_ref,time)
+    subroutine isos_init_state(isos,z_bed,H_ice,z_sl,z_bed_ref,H_ice_ref,z_sl_ref,time,calc_analytical)
 
         implicit none 
 
@@ -222,8 +420,9 @@ contains
         real(wp), intent(IN) :: H_ice_ref(:,:)        ! [m] Reference ice thickness (associated with reference z_bed)
         real(wp), intent(IN) :: z_sl_ref(:,:)         ! [m] Reference sea level (associated with reference z_bed)
         real(wp), intent(IN) :: time                  ! [a] Initial time 
-        
-
+!mmr----------------------------------------------------------------
+        logical :: calc_analytical
+!mmr----------------------------------------------------------------        
         ! Store initial bedrock field 
         isos%now%z_bed = z_bed 
         
@@ -231,7 +430,7 @@ contains
         isos%now%z_bed_ref = z_bed_ref 
         isos%now%dzbdt     = 0.0 
 
-
+        
         select case(isos%par%method)
 
             case(0,1) 
@@ -248,7 +447,7 @@ contains
                 call calc_litho_regional(isos%now%w0,isos%now%q0,z_bed_ref,H_ice_ref,z_sl_ref,isos%now%G0)
 
             case(3)
-                ! 2: EGIA - 2D Elastic lithosphere, relaxing asthenosphere - to do!
+                ! 3: EGIA - 2D Elastic lithosphere, relaxing asthenosphere - to do!
 
                 ! Re-calculate the flexural rigidity based on the spatially variable
                 ! effective elastic thickness of the lithosphere (He_lith),
@@ -261,9 +460,28 @@ contains
                 !call calc_litho_regional(isos%now%w0,isos%now%q0,z_bed_ref,H_ice_ref,z_sl_ref,isos%now%G0)
                 
                 write(*,*) "isos_init_state:: Error: method=3 not implemented yet."
-                stop 
+                stop
+                
+!mmr----------------------------------------------------------------                
+            case(4) 
+                ! ELVA - viscous half-space asthenosphere overlain by                                       
+                ! elastic plate lithosphere with uniform constants                                          
 
-        end select 
+               ! Elastic lithosphere (EL)
+
+!mmr recheck - Alex - ignored for the moment, need to recalculate Green's coefficients (solution is different in Bueler et al 2007)
+               
+!mmr               call calc_litho_regional(isos%now%w0,isos%now%q0,z_bed_ref,H_ice_ref,z_sl_ref,isos%now%G0)
+!mmr               call calc_litho_local(isos%now%w0,isos%now%q0,z_bed_ref,H_ice_ref,z_sl_ref)  !mmr
+                                             
+                ! Viscous (half-space) asthenosphere (VA)                                                   
+
+!mmr recheck - calculate plans here forth and back?
+
+!mmr               call make_fft_plans(isos%now%q0,plan_fwd,plan_bck) 
+!mmr----------------------------------------------------------------               
+               
+         end select 
 
         ! Define initial time of isostasy model 
         ! (set time_lith earlier, so that it is definitely updated on the first timestep)
@@ -272,8 +490,10 @@ contains
 
         ! Call isos_update to diagnose rate of change
         ! (no change to z_bed will be applied since isos%par%time==time)
-        call isos_update(isos,H_ice,z_sl,time)
-
+!mmr----------------------------------------------------------------
+!mmr         call isos_update(isos,H_ice,z_sl,time)
+        call isos_update(isos,H_ice,z_sl,time,calc_analytical) 
+!mmr----------------------------------------------------------------               
         write(*,*) "isos_init_state:: "
         write(*,*) "  Initial time:   ", isos%par%time_step 
         write(*,*) "  range(He_lith): ", minval(isos%now%He_lith), maxval(isos%now%He_lith)
@@ -281,7 +501,11 @@ contains
         write(*,*) "  range(w0):      ", minval(isos%now%w0),      maxval(isos%now%w0)
         write(*,*) "  range(w1):      ", minval(isos%now%w1),      maxval(isos%now%w1)
         write(*,*) "  range(z_bed):   ", minval(isos%now%z_bed),   maxval(isos%now%z_bed)
-        
+!mmr----------------------------------------------------------------         
+        write(*,*) "  range(w2):      ", minval(isos%now%w2),      maxval(isos%now%w2)      
+        write(*,*) "  range(w2_ana):  ", minval(isos%now%w2_ana),  maxval(isos%now%w2_ana)  
+!mmr----------------------------------------------------------------
+
         ! Make sure tau does not contain zero values, if so
         ! output an error for diagnostics. Don't kill the program
         ! so that external program can still write output as needed. 
@@ -295,26 +519,34 @@ contains
 
     end subroutine isos_init_state
 
-    subroutine isos_update(isos,H_ice,z_sl,time)
-
+!mmr----------------------------------------------------------------
+!mmr     subroutine isos_update(isos,H_ice,z_sl,time)
+    subroutine isos_update(isos,H_ice,z_sl,time,calc_analytical) 
+!mmr----------------------------------------------------------------
         implicit none 
 
         type(isos_class), intent(INOUT) :: isos 
         real(wp), intent(IN) :: H_ice(:,:)        ! [m] Current ice thickness 
         real(wp), intent(IN) :: z_sl(:,:)         ! [m] Current sea level 
-        real(wp), intent(IN) :: time              ! [a] Current time 
-
+        real(wp), intent(IN) :: time              ! [a] Current time  
+!mmr----------------------------------------------------------------
+        logical, intent(IN)   :: calc_analytical
+!mmr----------------------------------------------------------------
         ! Local variables 
         real(wp) :: dt, dt_now  
         integer  :: n, nstep 
-        logical  :: update_equil 
-
+        logical  :: update_equil
+!mmr----------------------------------------------------------------
+! mmr Alex - introduced update analytical solution to reduce computational time
+        logical  :: update_analytical 
+!mmr----------------------------------------------------------------       
+        
         ! Step 0: determine current timestep and number of iterations
         dt = time - isos%par%time_step 
 
         ! Get maximum number of iterations needed to reach desired time
         nstep = ceiling( (time - isos%par%time_step) / isos%par%dt_step )
-        nstep = max(nstep,1) 
+        nstep = max(nstep,1)
 
         ! Loop over iterations until maximum time is reached
         do n = 1, nstep 
@@ -324,12 +556,22 @@ contains
 
             ! Only update equilibrium displacement height (w1) if 
             ! enough time has passed (to save on computations)
-            if ( (isos%par%time_step+dt_now) - isos%par%time_lith .ge. isos%par%dt_lith) then 
+            if ( (isos%par%time_step+dt_now) - isos%par%time_lith .ge. isos%par%dt_lith) then
                 update_equil = .TRUE. 
             else 
                 update_equil = .FALSE. 
             end if 
 
+!mmr----------------------------------------------------------------
+           ! Only update analytical displacement height (w_ana) if 
+           ! enough time has passed (to save on computations)
+             if ( (isos%par%time_step+dt_now) .ge. time) then 
+                 update_analytical = .TRUE.                   
+             else                                             
+                 update_analytical = .FALSE.                  
+             end if 
+!mmr----------------------------------------------------------------
+            
             ! Step 1: diagnose equilibrium displacement and rate of bedrock uplift
             select case(isos%par%method)
 
@@ -367,8 +609,8 @@ contains
 
                     ! 2D elastic lithosphere (2DEL)
                     if (update_equil) then
-                        !call calc_litho_regional(isos%now%w1,isos%now%q1,isos%now%z_bed,H_ice,z_sl,isos%now%G0)
-
+                       !call calc_litho_regional(isos%now%w1,isos%now%q1,isos%now%z_bed,H_ice,z_sl,isos%now%G0)
+ 
                         write(*,*) "isos_update:: Error: method=3 not implemented yet."
                         stop 
 
@@ -378,7 +620,36 @@ contains
                     call calc_asthenosphere_relax(isos%now%dzbdt,isos%now%z_bed,isos%now%z_bed_ref, &
                                                     w_b=isos%now%w1-isos%now%w0,tau=isos%now%tau)
 
-            end select 
+!mmr----------------------------------------------------------------
+                 case(4) 
+                    ! ELVA - viscous half-space asthenosphere overlain by                                                   
+                    ! elastic plate lithosphere with uniform constants                                                      
+                    
+                    ! Elastic lithosphere (EL)                                                                              
+                    if (update_equil) then                                                                              
+
+!mmr recheck - Alex - ignored for the moment, need to recalculate Green's coefficients (solution is different in Bueler et al 2007)
+                       
+!mmr                    call calc_litho_regional(isos%now%w1,isos%now%q1,isos%now%z_bed,H_ice,z_sl,isos%now%G0)              
+!mmr                    call calc_litho_local(isos%now%w1,isos%now%q1,isos%now%z_bed,H_ice,z_sl)                         
+
+                    end if
+                    
+                    ! Viscous (half-space) asthenosphere                                                                             
+
+                    isos%now%q1 = rho_ice*g*H_ice !mmr recheck - imposing load here because there's no EL component
+
+                    call calc_asthenosphere_viscous(isos%now%dzbdt,isos%now%q1,isos%now%w2,    &                            
+                          dt_now,isos%par%mu,isos%now%kappa,isos%now%beta)                                                  
+
+!mmr Alex  - introduced to reduce computational time in analytical solution
+                    if (calc_analytical .and. update_analytical) then                                                       
+                       call calc_analytical_asthenosphere_viscous_disk(ana,isos%par%dx,   &                                 
+                            isos%par%time_step + dt_now, &                                   !mmr  Alex - this is not very clean (from me)
+                            isos%now%kappa_mod,isos%now%dist2c,isos%now%r,isos%now%lr,isos%now%w2_ana)  
+                     endif
+!mmr----------------------------------------------------------------
+                 end select
 
             if (update_equil) then 
                 ! Update current time_lith value 
@@ -386,16 +657,16 @@ contains
             end if 
 
             ! Step 2: update bedrock elevation and current model time
-            if (dt_now .gt. 0.0) then 
+            if (dt_now .gt. 0.0) then
 
-                isos%now%z_bed = isos%now%z_bed + isos%now%dzbdt*dt_now
+               isos%now%z_bed = isos%now%z_bed + isos%now%dzbdt*dt_now !mmr recheck -  contains only viscous component 
+               
+               isos%par%time_step = isos%par%time_step + dt_now
+               
+            end if
 
-                isos%par%time_step = isos%par%time_step + dt_now  
-
-            end if 
-            
             ! Write a summary to check timestepping
-            !write(*,*) "isos: ", n, time, dt_now, isos%par%time_step, isos%par%time_lith
+            !write(*,*) "isos: ", n, time, dt_now, isos%par%time_step, isos%par%time_lith, update_analytical
 
             if ( abs(time-isos%par%time_step) .lt. 1e-5) then 
                 ! Desired time has reached, exit the loop 
@@ -403,7 +674,7 @@ contains
                 exit 
             end if 
 
-        end do 
+         end do
 
         return 
 
@@ -463,7 +734,10 @@ contains
 
         allocate(now%kei(nfilt,nfilt))
         allocate(now%G0(nfilt,nfilt))
-        
+!mmr----------------------------------------------------------------        
+        allocate(now%kappa(nx,ny)) 
+        allocate(now%beta(nx,ny))  
+!mmr----------------------------------------------------------------                
         allocate(now%z_bed(nx,ny))
         allocate(now%dzbdt(nx,ny))
         allocate(now%z_bed_ref(nx,ny))
@@ -471,7 +745,10 @@ contains
         allocate(now%w0(nx,ny))
         allocate(now%q1(nx,ny))
         allocate(now%w1(nx,ny))
-        
+!mmr----------------------------------------------------------------        
+        allocate(now%w2(nx,ny))     
+        allocate(now%w2_ana(nx,ny)) 
+!mmr----------------------------------------------------------------                 
         return 
 
     end subroutine isos_allocate
@@ -488,7 +765,10 @@ contains
         
         if (allocated(now%kei))         deallocate(now%kei)
         if (allocated(now%G0))          deallocate(now%G0)
-        
+!mmr----------------------------------------------------------------        
+        if (allocated(now%kappa))       deallocate(now%kappa) 
+        if (allocated(now%beta))        deallocate(now%beta)  
+!mmr----------------------------------------------------------------                
         if (allocated(now%z_bed))       deallocate(now%z_bed)
         if (allocated(now%dzbdt))       deallocate(now%dzbdt)
         if (allocated(now%z_bed_ref))   deallocate(now%z_bed_ref)
@@ -496,7 +776,10 @@ contains
         if (allocated(now%w0))          deallocate(now%w0)
         if (allocated(now%q1))          deallocate(now%q1)
         if (allocated(now%w1))          deallocate(now%w1)
-        
+!mmr----------------------------------------------------------------        
+        if (allocated(now%w2))          deallocate(now%w2)     
+        if (allocated(now%w2_ana))      deallocate(now%w2_ana) 
+!mmr----------------------------------------------------------------                
         return 
 
     end subroutine isos_deallocate
@@ -2115,4 +2398,1281 @@ end if
 
     end subroutine load_kei_values_file
 
+!mmr----------------------------------------------------------------
+!mmr all below is new 
+
+
+! mmr ========================================================
+!
+! mmr Functions related to the ELVA
+!
+! mmr ========================================================
+
+ 
+    subroutine calc_asthenosphere_viscous_params(nx,ny,dx,D_lith,mu,kappa,beta) 
+       
+      integer(kind=4), intent(IN)              :: nx, ny
+      real(wp), intent(IN)                     :: dx
+      real(wp), intent(IN)                     :: D_lith(:,:)
+
+      real(wp), intent(OUT)                     :: mu      
+      real(wp), allocatable, intent(OUT)        :: kappa(:,:), beta(:,:) 
+      
+      real(wp)                                  :: xd, yd
+      integer(kind=4)                           :: i, j, ip, iq, ic, jc 
+      
+      allocate(kappa(nx,ny))
+      allocate(beta(nx,ny))
+
+      mu = 2.*pi/((nx-1)*dx)
+      
+      kappa = 0.0
+      
+      ic = (nx-1)/2 + 1  !mmr Alex - I have already calculated these in test_isostasy, I don't like to recalculate it here
+      jc = (ny-1)/2 + 1
+
+      do i = 1, nx
+            if (i.le.ic) then 
+            ip = i-1
+         else
+            ip = nx-i+1
+         endif
+         do j = 1, ny
+               if (j.le.jc) then
+               iq = j-1  
+            else
+               iq = ny-j+1
+            endif
+            kappa(i,j)  = (ip*ip + iq*iq)**0.5
+            beta(i,j)   = rho_a*g + D_lith(i,j)*(mu**4)*kappa(i,j)**4
+         enddo
+      enddo
+
+         return
+      
+    end subroutine calc_asthenosphere_viscous_params
+
+ 
+    subroutine calc_asthenosphere_viscous(dzbdt,q,w,dt,mu,kappa,beta)
+        ! Calculate rate of change of vertical bedrock height
+        ! from a viscous half-space asthenosphere.
+        ! Contains viscous component only.
+
+      use, intrinsic :: iso_c_binding
+      implicit none
+      include 'fftw3.f03'
+
+ 
+      integer(kind=4), parameter :: nd = 2
+      
+      real(wp), intent(OUT)   :: dzbdt(:,:)
+      real(wp), intent(IN)    :: q(:,:)
+      real(wp), intent(INOUT) :: w(:,:)
+      real(wp), intent(IN)    :: dt
+      real(wp), intent(IN)    :: mu
+      real(wp), intent(IN)    :: kappa(:,:)
+      real(wp), intent(IN)    :: beta(:,:)     
+
+      
+      real(wp), allocatable   :: w0(:,:)
+      real(wp), allocatable   :: q_hat(:,:)
+      real(wp), allocatable   :: w_hat(:,:)
+
+      real(c_double), allocatable :: data_in(:,:), data_inbis(:,:)
+      complex(c_double_complex), allocatable :: data_out(:,:)
+
+      complex(dp), allocatable   :: q_hat_c(:,:)
+      complex(dp), allocatable   :: w_hat_c(:,:)
+
+      real(wp), allocatable   :: w_hat_c_re(:,:), w_hat_c_im(:,:)      
+
+      real(wp)                :: dt_sec
+      integer (kind = 4)      :: l, m, i, j
+
+      logical  :: fft_r2r, fft_c2c
+
+
+      dt_sec = dt * 3600*24*365 ! [s] 
+
+     
+      l = size(q,1)
+      m = size(q,2)
+
+      
+      allocate(w0(l,m))
+      allocate(q_hat(l,m))
+      allocate(w_hat(l,m))
+      allocate(q_hat_c(l,m/2+1)) 
+      allocate(w_hat_c(l,m/2+1))
+
+      allocate(w_hat_c_re(l,m/2+1))
+      allocate(w_hat_c_im(l,m/2+1))
+
+
+      
+      
+      !  Initialize 
+      
+      w0 = w
+      
+      q_hat    = 0.0
+      w_hat    = 0.0
+      w_hat_c  = 0.0
+      dzbdt    = 0.0
+      
+      fft_r2r = .true.
+      fft_c2c = .false.
+      
+      if (fft_r2r) then
+
+         ! fft of load
+         ! 
+
+         call calc_fft_forward_r2r(q,q_hat)
+
+         ! fft of displacement
+
+         call calc_fft_forward_r2r(w,w_hat)
+
+         ! displacement fft at timestep n+1    
+
+         if (dt.gt.0)  w_hat = ( ( 2.*eta*mu*kappa - (dt_sec/2.)*beta)*w_hat + dt_sec*q_hat)/(2*eta*mu*kappa + (dt_sec/2.)*beta)
+
+         ! Inverse fft to obtain displacement at n+1
+
+         call calc_fft_backward_r2r(w_hat,w)
+
+      else if (fft_c2c) then
+
+         ! fft of load
+
+         call calc_fft_forward_c2c(q,q_hat)
+
+         ! fft of displacement
+
+         call calc_fft_forward_c2c(w,w_hat)
+
+         ! displacement fft at timestep n+1    
+
+         if (dt.gt.0)  w_hat = ( ( 2.*eta*mu*kappa - (dt_sec/2.)*beta)*w_hat + dt_sec*q_hat)/(2*eta*mu*kappa + (dt_sec/2.)*beta)
+
+         ! Inverse fft to obtain displacement at n+1
+
+         call calc_fft_backward_c2c(w_hat,w)
+
+      else  
+
+         write(*,*) 'Error, you have to choose an option to calculate the FFTs'
+         call abort()
+      endif
+         
+    ! Impose boundary conditions 
+
+      w  = w - 0.25*(w(1,1)+w(l,m)+w(1,m)+w(l,1)) 
+
+      ! Rate of viscous asthenosphere uplift
+
+      if (dt.gt.0.)  dzbdt = -(w-w0)/dt
+
+
+      deallocate(w0)
+      deallocate(q_hat)
+      deallocate(w_hat)
+      deallocate(q_hat_c)
+      deallocate(w_hat_c)
+
+      return
+
+    end subroutine calc_asthenosphere_viscous
+
+    subroutine make_fft_plans(in,plan_fwd,plan_bck) 
+ 
+      use, intrinsic :: iso_c_binding
+      implicit none 
+      include 'fftw3.f03' 
+      
+      real(wp), intent(IN)       :: in(:,:)
+      type(c_ptr), intent(OUT)   :: plan_fwd, plan_bck
+      complex (dp), allocatable  :: in_aux(:,:)
+      complex (dp), allocatable  :: out_aux(:,:)
+      integer (kind = 4)         :: l, m
+
+      
+      l    = size(in,1)
+      m    = size(in,2)
+
+      if(l.ne.m) then
+         print*,'Dimensions do not match, stopping now'
+         call abort()
+      endif
+
+      in_aux = in
+
+! r2r      
+      plan_fwd = fftw_plan_dft_2d(l,m,in_aux,out_aux,-1,FFTW_ESTIMATE)
+      plan_bck = fftw_plan_dft_2d(l,m,out_aux,in_aux,+1,FFTW_ESTIMATE)
+
+      return
+
+    end subroutine make_fft_plans
+
+
+   subroutine calc_fft_forward_r2r(in,out)
+
+      use, intrinsic :: iso_c_binding
+      implicit none 
+      include 'fftw3.f03'  
+
+      real(wp), intent(IN)       :: in(:,:)
+      real(wp), intent(OUT)      :: out(:,:)
+      
+      real(wp), allocatable      :: rec(:,:)
+      real(dp), allocatable      :: in_aux(:,:)
+      real(dp), allocatable      :: out_aux(:,:) 
+      real(dp), allocatable      :: rec_aux(:,:)
+      real(dp)                   :: dx, cc
+      type(c_ptr)                :: plan
+      integer(kind=4)            :: m,n
+      logical                    :: print_check
+      
+
+      m = size(in,1)
+      n = size(in,2)
+
+      print_check = .false.
+
+      allocate(in_aux(m,n))
+      allocate(out_aux(m,n))
+      allocate(rec(m,n))
+      allocate(rec_aux(m,n))
+
+
+! http://www.fftw.org/fftw3_doc/The-Discrete-Hartley-Transform.html
+      
+!      The discrete Hartley transform (DHT) is an invertible linear
+!      transform closely related to the DFT. In the DFT, one
+!      multiplies each input by cos - i * sin (a complex exponential),
+!      whereas in the DHT each input is multiplied by simply cos +
+!      sin. Thus, the DHT transforms n real numbers to n real numbers,
+!      and has the convenient property of being its own inverse. In
+!      FFTW, a DHT (of any positive n) can be specified by an r2r kind
+!      of FFTW_DHT.
+
+!      Like the DFT, in FFTW the DHT is unnormalized, so computing a
+!      DHT of size n followed by another DHT of the same size will
+!      result in the original array multiplied by n.
+
+!      The DHT was originally proposed as a more efficient alternative
+!      to the DFT for real data, but it was subsequently shown that a
+!      specialized DFT (such as FFTW’s r2hc or r2c transforms) could
+!      be just as fast. In FFTW, the DHT is actually computed by
+!      post-processing an r2hc transform, so there is ordinarily no
+!      reason to prefer it from a performance perspective.5 However,
+!      we have heard rumors that the DHT might be the most appropriate
+!      transform in its own right for certain applications, and we
+!      would be very interested to hear from anyone who finds it
+!      useful.
+
+
+      in_aux = in 
+      plan = fftw_plan_r2r_2d(m,n,in_aux,out_aux,FFTW_DHT,FFTW_DHT,FFTW_ESTIMATE)
+
+      call fftw_execute_r2r(plan, in_aux, out_aux)
+!mmr      call fftw_destroy_plan(plan)
+      out = real(out_aux/sqrt(m*n*1.))
+
+      if (print_check) then
+         call r4mat_print_some ( m, n, in, n/2-2, m/2-2, n/2+2, m/2+2, '  Part of the original data:' )
+         plan =  fftw_plan_r2r_2d(m,n,out_aux,rec_aux,FFTW_DHT,FFTW_DHT,FFTW_ESTIMATE)
+         call fftw_execute_r2r(plan, out_aux, rec_aux)
+         rec_aux = rec_aux/(m*n)
+         rec = real(rec_aux,wp) 
+         call fftw_destroy_plan(plan)
+         call r4mat_print_some (m, n, rec, n/2-2, m/2-2, n/2+2, m/2+2, '  Part of the recovered data:' )
+      endif
+
+      deallocate(in_aux)
+      deallocate(out_aux)
+      deallocate(rec)
+      deallocate(rec_aux)
+      
+      return
+      
+    end subroutine calc_fft_forward_r2r
+
+    subroutine calc_fft_backward_r2r(in,out)
+
+      use, intrinsic :: iso_c_binding
+      implicit none 
+      include 'fftw3.f03'  
+
+      real(wp), intent(IN)       :: in(:,:)
+      real(wp), intent(OUT)      :: out(:,:)
+
+      real(wp), allocatable      :: rec(:,:)
+      real(dp), allocatable      :: in_aux(:,:)
+      real(dp), allocatable      :: out_aux(:,:) 
+      real(dp), allocatable      :: rec_aux(:,:)
+      real(dp)                   :: dx, cc
+      type(c_ptr)                :: plan
+      integer(kind=4)            :: m,n
+      logical                    :: print_check
+
+      m = size(in,1)
+      n = size(in,2)
+
+
+      allocate(in_aux(m,n))
+      allocate(out_aux(m,n))
+      allocate(rec(m,n))
+      allocate(rec_aux(m,n))
+
+
+      in_aux = in
+      plan = fftw_plan_r2r_2d(m,n,in_aux,out_aux,FFTW_DHT,FFTW_DHT,FFTW_ESTIMATE)
+
+      call fftw_execute_r2r(plan, in_aux, out_aux)
+!mmr      call fftw_destroy_plan(plan)
+      out = real(out_aux/sqrt(m*n*1.)) 
+
+      if (print_check) then
+         call r4mat_print_some ( m, n, in, n/2-2, m/2-2, n/2+2, m/2+2, '  Part of the original data:' )
+         plan =  fftw_plan_r2r_2d(m,n,out_aux,rec_aux,FFTW_DHT,FFTW_DHT,FFTW_ESTIMATE)
+         call fftw_execute_r2r(plan, out_aux, rec_aux)
+         rec_aux = rec_aux/(m*n)
+         rec = real(rec_aux,wp) 
+         call fftw_destroy_plan(plan)
+         call r4mat_print_some ( m, n, rec, n/2-2, m/2-2, n/2+2, m/2+2, '  Part of the recovered data:' )
+      endif
+
+      deallocate(in_aux)
+      deallocate(out_aux)
+      deallocate(rec)
+      deallocate(rec_aux)
+
+      return
+      
+    end subroutine calc_fft_backward_r2r
+
+    
+    ! http://www.fftw.org/fftw3_doc/Real_002ddata-DFTs.html
+    ! FFTW computes an unnormalized transform: computing an r2c
+    ! followed by a c2r transform (or vice versa) will result in the
+    ! original data multiplied by the size of the transform (the
+    ! product of the logical dimensions). An r2c transform produces
+    ! the same output as a FFTW_FORWARD complex DFT of the same input,
+    ! and a c2r transform is correspondingly equivalent to
+    ! FFTW_BACKWARD.
+    
+ 
+    subroutine calc_fft_forward_c2c(in,out)
+
+      use, intrinsic :: iso_c_binding
+      implicit none 
+      include 'fftw3.f03'  
+
+      real(wp), intent(IN)       :: in(:,:)
+      real(wp), intent(OUT)      :: out(:,:)
+
+      real(wp), allocatable      :: rec(:,:)
+      complex(dp), allocatable   :: in_aux(:,:)   
+      complex(dp), allocatable   :: out_aux(:,:)     
+      real(dp), allocatable      :: rec_aux(:,:)
+      real(dp)                   :: dx, cc
+      type(c_ptr)                :: plan
+      integer(kind=4)            :: m, n
+
+      m = size(in,1)
+      n = size(in,2)
+
+      
+      allocate(in_aux(m,n))
+      allocate(out_aux(m,n))
+      allocate(rec(m,n))
+      allocate(rec_aux(m,n))
+
+
+      in_aux = in
+      plan = fftw_plan_dft_2d(m,n,in_aux,out_aux,-1,FFTW_ESTIMATE)
+
+      call fftw_execute_dft(plan, in_aux, out_aux)                 
+      call fftw_destroy_plan(plan)
+      out = real(out_aux/sqrt(m*n*1.)) 
+
+
+      deallocate(in_aux)
+      deallocate(out_aux)
+      deallocate(rec)
+      deallocate(rec_aux)
+
+      return
+      
+    end subroutine calc_fft_forward_c2c
+
+    subroutine calc_fft_backward_c2c(in,out)
+
+      use, intrinsic :: iso_c_binding
+      implicit none 
+      include 'fftw3.f03'  
+
+      real(wp), intent(IN)       :: in(:,:)
+      real(wp), intent(OUT)      :: out(:,:)
+
+      real(wp), allocatable      :: rec(:,:)
+      complex(dp), allocatable   :: in_aux(:,:)   
+      complex(dp), allocatable   :: out_aux(:,:)     
+      real(dp), allocatable      :: rec_aux(:,:)
+      real(dp)                   :: dx, cc
+      type(c_ptr)                :: plan
+      integer(kind=4)            :: m, n
+
+      m = size(in,1)
+      n = size(in,2)
+
+
+      allocate(in_aux(m,n))
+      allocate(out_aux(m,n))
+      allocate(rec(m,n))
+      allocate(rec_aux(m,n))
+
+
+      in_aux = in
+      plan = fftw_plan_dft_2d(m,n,in_aux,out_aux,1,FFTW_ESTIMATE)
+
+      call fftw_execute_dft(plan, in_aux, out_aux)                 
+      call fftw_destroy_plan(plan)
+      out = real(out_aux/sqrt(m*n*1.)) 
+
+
+      deallocate(in_aux)
+      deallocate(out_aux)
+      deallocate(rec)
+      deallocate(rec_aux)
+
+      return
+
+    end subroutine calc_fft_backward_c2c
+
+
+!=========================================================
+!
+! Routines for analytical ELVA disk
+!
+!=========================================================
+
+    
+    subroutine calc_analytical_asthenosphere_viscous_disk_params(nx,ny,dx,kappa_min,kappa_max,dk,kappa_mod,dist2c,r,lr)  
+       
+      integer(kind=4), intent(IN)              :: nx, ny
+      real(wp), intent(IN)                     :: dx
+      real(wp), intent(IN)                     :: kappa_min, kappa_max, dk
+
+      real(wp), allocatable, intent(OUT)        :: kappa_mod(:), dist2c(:,:), r(:) 
+      integer(kind=4), allocatable, intent(OUT) :: lr(:,:)
+      
+      integer(kind=4), allocatable              :: n(:,:)
+      real(wp)                                  :: xd, yd
+      integer(kind=4)                           :: i, j, ip, iq, ic, jc, k, nk, l, nl
+
+
+      nk = int((kappa_max-kappa_min)/dk)
+      
+      nl = int(nx*sqrt(2.)/2) + 2
+      
+      
+      allocate(kappa_mod(nk+1))
+      allocate(dist2c(nx,ny))
+      allocate(r(nl))
+      allocate(lr(nx,ny))
+      allocate(n(nx,ny))
+      
+      do k = 1, nk+1
+         kappa_mod(k) = kappa_min + dk * (k-1)
+      enddo
+
+      
+      ic = (nx-1)/2 + 1  !mmr Alex - I have already calculated these in test_isostasy, I don't like to recalculate it here
+      jc = (ny-1)/2 + 1
+
+      do i = 1, nx
+         do j = 1, ny
+            xd = dx*(i-ic)
+            yd = dx*(j-jc)
+            dist2c(i,j) = sqrt(xd**2 + yd**2)  !mmr Alex - I have already calculated it in test_isostasy, I don't like to recalculate it here
+         enddo
+      enddo
+
+               
+      ! remap to (nx * xy) grid (w = w(r,t) so all points with same r have same w; this reduces computational time)
+      
+
+      do l = 1, nl 
+         r(l) =  dx * (l-1)
+      enddo
+     
+         do i = 1, nx 
+            do j = 1, ny
+               n(i,j) = 0       
+               do l = 1, nl-1
+                  if (dist2c(i,j).ge.r(l) .and. dist2c(i,j) .lt. r(l+1) ) then
+                     lr(i,j) = l 
+                     n(i,j) = n(i,j) + 1
+                  endif
+               enddo
+               if (n(i,j).ne.1) then
+                  print*,'==> error in radial distance allocation', n(i,j), i, j
+                  stop
+               endif
+            enddo
+         enddo
+
+         deallocate(n)
+         
+         return
+      
+       end subroutine calc_analytical_asthenosphere_viscous_disk_params
+       
+    subroutine calc_analytical_asthenosphere_viscous_disk(me,dx,t,kappa_mod,dist2c,r,lr,w) 
+
+      ! Calculate analytical solution for displacement for the asthenosphere viscous disk 
+      ! u(r,t) as in Bueler et al (2007), eq. 17
+      ! remap into original (nx * ny) grid
+      
+      implicit none
+
+      class(isos_analytical_elva_disk_load_class), intent(INOUT) :: me
+
+      real(wp),parameter :: tol       = 1.e-3  ! error tolerance
+      
+      real(wp), intent(IN)          :: dx, t
+      real(wp), intent(IN)          :: kappa_mod(:), dist2c(:,:), r(:)
+      integer(kind=4), intent(IN)   :: lr(:,:)
+      real(wp), intent(OUT)         :: w(:,:)
+
+      real(wp), allocatable         :: wr(:)
+      integer(kind=4), allocatable  :: n(:,:)
+      
+      real(wp)                      :: ans
+      real(wp)                      :: err
+      integer                       :: method    ! quadrature method to use for x
+      integer                       :: ierr      ! error code
+      
+      integer(kind=4)               :: i, j, k, l, nx, ny, nk, nl
+      
+      nx = size(w,1)
+      ny = size(w,2)
+      nk = size(kappa_mod)-1
+      nl = size(r)
+
+      allocate(wr(nl)) 
+      allocate(n(nx,ny))
+
+      method       = me%method  ! 6-point gaussian quadrature     
+      me%time      = t          ! [hours] 
+      me%n_evals   = 0
+      
+      w =  0.0
+      wr = 0.0
+      
+      do l = 1, nl ! number of points neccessary to cover whole domain radially (ca. diagonal)
+         
+         me%r = r(l)
+
+         do k = 1, nk
+
+      ! sets parameters but most notably integration limits      
+
+            call initialize_integration_class(me, fx=analytical_integrand, xl=kappa_mod(k), xu=kappa_mod(k+1), tolx=tol, methodx=method)
+
+            !reset number of function evaluations:
+
+            me%n_evals = 0
+
+            !integrate the function over specified interval
+
+            call integrate_1d (me, ans, ierr, err) 
+
+            wr(l)  = wr(l) + ans
+
+         enddo ! nk 
+      enddo ! nl
+
+      do i = 1, nx
+         do j = 1, ny
+            w(i,j) = wr(lr(i,j))  
+         enddo
+      enddo
+      
+      w  = w - 0.25*(w(1,1)+w(nx,ny)+w(1,ny)+w(nx,1)) 
+
+      deallocate(n)
+
+         return
+         
+  end subroutine calc_analytical_asthenosphere_viscous_disk
+
+    subroutine initialize_integration_class(me,fx,xl,xu,tolx,methodx)
+
+    implicit none
+
+    class(isos_analytical_elva_disk_load_class),intent(inout)  :: me
+
+    procedure(func_1d)    :: fx       !! 1d function: f(x)
+    real(wp),intent(in)   :: xl       !! x integration lower bound
+    real(wp),intent(in)   :: xu       !! x integration upper bound
+    real(wp),intent(in)   :: tolx     !! error tolerance for dx integration
+    integer,intent(in)    :: methodx  !! quadrature method to use for x
+
+    ! select quadrature rule (only g6 implemented; for others cut and paste)
+    select case (methodx)
+    case(6);  me%g => g6
+       !    case(8);  me%g => g8  
+       !    case(10); me%g => g10
+       !    case(12); me%g => g12
+       !    case(14); me%g => g14
+    case default
+       error stop 'invalid quadrature method in initialize_integration_class'
+    end select
+
+    me%fun  => fx         !function f(x) to integrate
+    me%tol  = tolx        !tolerance
+    me%a    = xl          !lower bound
+    me%b    = xu          !upper bound
+    me%method = methodx   !method
+
+    return
+    
+    end subroutine initialize_integration_class
+
+    subroutine initialize_analytical_integrand(me,r0,h0,D_lith,eta) 
+
+    implicit none
+
+    class(isos_analytical_elva_disk_load_class),intent(out)  :: me
+    real(wp), intent(in)   ::  h0, r0, D_lith, eta 
+
+    me%r0         = r0
+    me%h0         = h0
+    me%D_lith     = D_lith
+    me%eta        = eta
+    
+    return
+
+    end subroutine initialize_analytical_integrand
+
+  function analytical_integrand(me,x) result(f)
+
+    implicit none
+
+    class(isos_analytical_elva_disk_load_class),intent(inout)  :: me
+    real(wp), intent(in)  :: x ! (kappa)
+    real(wp)              :: f
+    real(wp) beta, h0, r0, eta, D_lith, t_sec, r_eq_zero
+
+    r0     = me%r0
+    h0     = me%h0
+    D_lith = me%D_lith
+    eta    = me%eta
+    t_sec  = me%time*365*24*3600
+    
+    beta = rho_a*g + D_lith*(x**4)
+
+    r_eq_zero = 0.
+    
+    f   =  rho_ice*g*h0*r0*( exp(-beta*t_sec/(2*eta*x)) - 1.) * bessel_j1(x*r0) *  bessel_j0(x*me%r) / beta
+
+    ! asymptotic solution (t --> infty ) 
+    !    f   =  rho_ice*g*h0*r0*( - 1.) * bessel_j1(x*r0) *  bessel_j0(x*me%r) / beta
+
+    !number of function evaluations
+    me%n_evals = me%n_evals + 1          
+
+  end function analytical_integrand
+
+
+  subroutine integrate_1d (me, ans, ierr, err)
+    ! 1d integral by Jacob Williams.
+
+    implicit none
+
+    class(isos_analytical_elva_disk_load_class),intent(inout)  :: me
+    real(wp),intent(out)  :: ans
+    integer,intent(out)   :: ierr
+    real(wp),intent(out)  :: err
+
+
+    !call the low-level routine 
+    call me%dgauss_generic(me%a, me%b, me%tol, ans, ierr, err)
+
+    return
+    
+  end subroutine integrate_1d
+
+!===========================================================
+!
+!  Routines for Gaussian quadrature
+!
+! ==========================================================
+  
+!  Integrate a real function of one variable over a finite
+!  interval using the specified adaptive algorithm.
+!  Intended primarily for high accuracy
+!  integration or integration of smooth functions.
+!
+!### License
+!  * SLATEC is public domain software: http://www.netlib.org/slatec/guide
+!
+!### See also
+!  * Original sourcecode from: http://www.netlib.org/slatec/src/dgaus8.f
+!
+!### Author
+!  * Jones, R. E., (SNLA) -- Original SLATEC code.
+!  * Jacob Williams : 1/20/2020 : refactored to modern Fortran and generalized.
+!
+!@note This function is recursive.
+!      [It can call itself indirectly during double integration]
+
+
+  recursive subroutine dgauss_generic (me, lb, ub, error_tol, ans, ierr, err)
+
+    implicit none
+
+    class(isos_analytical_elva_disk_load_class),intent(inout)  :: me
+
+    real(wp),intent(in)   :: lb         !! lower bound of the integration
+    real(wp),intent(in)   :: ub         !! upper bound of the integration
+    real(wp),intent(in)   :: error_tol  !! is a requested pseudorelative error tolerance.  normally
+                                        !! pick a value of abs(error_tol) so that
+                                        !! dtol < abs(error_tol) <= 1.0e-3 where dtol is the larger
+                                        !! of 1.0e-18 and the real(wp) unit roundoff d1mach(4).
+                                        !! ans will normally have no more error than abs(error_tol)
+                                        !! times the integral of the absolute value of fun(x).  usually,
+                                        !! smaller values of error_tol yield more accuracy and require
+                                        !! more function evaluations.
+    real(wp),intent(out)  :: ans        !! computed value of integral
+    integer,intent(out)   :: ierr       !! status code:
+                                        !!
+                                        !!  * normal codes:
+                                        !!    * 1 : `ans` most likely meets requested error tolerance,
+                                        !!      or `lb=ub`.
+                                        !!    * -1 : `lb` and `ub` are too nearly equal to allow normal
+                                        !!      integration. `ans` is set to zero.
+                                        !!  * abnormal code:
+                                        !!    * 2 : `ans` probably does not meet requested error tolerance.
+    real(wp),intent(out)  :: err        !! an estimate of the absolute error in `ans`.
+                                        !! the estimated error is solely for information to the user and
+                                        !! should not be used as a correction to the computed integral.
+
+    real(wp),parameter  :: sq2      = sqrt(2._wp)
+    real(wp),parameter  :: ln2      = log(2._wp)
+    integer,parameter   :: nlmn     = 1                    !! ??
+    integer,parameter   :: kmx      = 5000                 !! ??
+    integer,parameter   :: kml      = 6                    !! ??
+    real(wp),parameter  :: magic    = 0.30102000_wp        !! ??
+    integer,parameter   :: iwork    = 60                   !! size of the work arrays. ?? Why 60 ??
+    real(wp),parameter  :: bb       = radix(1_wp)          !! machine constant
+    real(wp),parameter  :: d1mach4  = bb**(1-digits(1_wp)) !! machine constant
+    real(wp),parameter  :: d1mach5  = log10(bb)            !! machine constant
+
+    integer                   :: k,l,lmn,lmx,mxl,nbits,nib,nlmx
+    real(wp)                  :: ae,anib,area,c,ee,ef,eps,est,gl,glr,tol
+    real(wp),dimension(iwork) :: aa,hh,vl,gr
+    integer,dimension(iwork)  :: lr
+
+    ans = 0_wp
+    ierr = 1
+    err = 0_wp
+    if (lb == ub) return
+    aa = 0_wp
+    hh = 0_wp
+    vl = 0_wp
+    gr = 0_wp
+    lr = 0
+    k = digits(1._wp)
+    anib = d1mach5*k/magic
+    nbits = anib
+    nlmx = min(60,(nbits*5)/8)         ! ... is this the same 60 as iwork???
+    lmx = nlmx
+    lmn = nlmn
+    if (ub /= 0_wp) then
+        if (sign(1._wp,ub)*lb > 0_wp) then
+            c = abs(1._wp-lb/ub)
+            if (c <= 0.1_wp) then
+                if (c <= 0_wp) return
+                anib = 0.5_wp - log(c)/ln2
+                nib = anib
+                lmx = min(nlmx,nbits-nib-7)
+                if (lmx < 1) then
+                    ! lb and ub are too nearly equal to allow
+                    ! normal integration [ans is set to zero]
+                    ierr = -1
+                    return
+                end if
+                lmn = min(lmn,lmx)
+            end if
+        end if
+    end if
+    tol = max(abs(error_tol),2._wp**(5-nbits))/2._wp
+    if (error_tol == 0_wp) tol = sqrt(d1mach4)
+    eps = tol
+    hh(1) = (ub-lb)/4. 
+    aa(1) = lb
+    lr(1) = 1
+    l = 1
+    est = me%g(aa(l)+2._wp*hh(l),2._wp*hh(l))
+    k = 8
+    area = abs(est)
+    ef = 0.5 !one_half
+    mxl = 0
+
+    !compute refined estimates, estimate the error, etc.
+    main : do
+
+        gl = me%g(aa(l)+hh(l),hh(l))
+        gr(l) = me%g(aa(l)+3._wp*hh(l),hh(l))
+        k = k + 16
+        area = area + (abs(gl)+abs(gr(l))-abs(est))
+        glr = gl + gr(l)
+        ee = abs(est-glr)*ef
+        ae = max(eps*area,tol*abs(glr))
+        if (ee-ae > 0_wp) then
+            !consider the left half of this level
+            if (k > kmx) lmx = kml
+            if (l >= lmx) then
+                mxl = 1
+            else
+                l = l + 1
+                eps = eps*0.5_wp
+                ef = ef/sq2
+                hh(l) = hh(l-1)*0.5_wp
+                lr(l) = -1
+                aa(l) = aa(l-1)
+                est = gl
+                cycle main
+            end if
+        end if
+
+        err = err + (est-glr)
+        if (lr(l) > 0) then
+            !return one level
+            ans = glr
+            do
+                if (l <= 1) exit main ! finished
+                l = l - 1
+                eps = eps*2._wp
+                ef = ef*sq2
+                if (lr(l) <= 0) then
+                    vl(l) = vl(l+1) + ans
+                    est = gr(l-1)
+                    lr(l) = 1
+                    aa(l) = aa(l) + 4._wp*hh(l)
+                    cycle main
+                end if
+                ans = vl(l+1) + ans
+            end do
+        else
+            !proceed to right half at this level
+            vl(l) = glr
+            est = gr(l-1)
+            lr(l) = 1
+            aa(l) = aa(l) + 4._wp*hh(l)
+            cycle main
+        end if
+
+    end do main
+
+    if ((mxl/=0) .and. (abs(err)>2._wp*tol*area)) ierr = 2 ! ans is probably insufficiently accurate
+
+    return
+    
+    end subroutine dgauss_generic
+
+!
+!  6-point method.
+!
+!### See also
+!  * Coefficients from:
+!    http://processingjs.nihongoresources.com/bezierinfo/legendre-gauss-values.php  
+
+    function g6(me,x,h) result(f)
+
+      implicit none
+
+      class(isos_analytical_elva_disk_load_class),intent(inout)  :: me
+      real(wp), intent(in)                    :: x
+      real(wp), intent(in)                    :: h
+      real(wp)                                :: f
+
+      !> abscissae:
+      real(wp),dimension(3),parameter ::  a = [   0.6612093864662645136613995950199053470064485643&
+                                                &951700708145267058521834966071431009442864037464&
+                                                &614564298883716392751466795573467722253804381723&
+                                                &198010093367423918538864300079016299442625145884&
+                                                &9024557188219703863032236201173523213570221879361&
+                                                &8906974301231555871064213101639896769013566165126&
+                                                &1150514997832_wp,&
+                                                &0.2386191860831969086305017216807119354186106301&
+                                                &400213501813951645742749342756398422492244272573&
+                                                &491316090722230970106872029554530350772051352628&
+                                                &872175189982985139866216812636229030578298770859&
+                                                &440976999298617585739469216136216592222334626416&
+                                                &400139367778945327871453246721518889993399000945&
+                                                &408150514997832_wp,&
+                                                &0.9324695142031520278123015544939946091347657377&
+                                                &122898248725496165266135008442001962762887399219&
+                                                &259850478636797265728341065879713795116384041921&
+                                                &786180750210169211578452038930846310372961174632&
+                                                &524612619760497437974074226320896716211721783852&
+                                                &305051047442772222093863676553669179038880252326&
+                                                &771150514997832_wp ]
+    !> weights:
+    real(wp),dimension(3),parameter ::  w = [   0.36076157304813860756983351383771611166152189274&
+                                                &674548228973924023714003783726171832096220198881&
+                                                &934794311720914037079858987989027836432107077678&
+                                                &721140858189221145027225257577711260007323688285&
+                                                &916316028951118005174081368554707448247248610118&
+                                                &325993144981721640242558677752676819993095031068&
+                                                &73150514997832_wp,&
+                                                0.46791393457269104738987034398955099481165560576&
+                                                &921053531162531996391420162039812703111009258479&
+                                                &198230476626878975479710092836255417350295459356&
+                                                &355927338665933648259263825590180302812735635025&
+                                                &362417046193182590009975698709590053347408007463&
+                                                &437682443180817320636917410341626176534629278889&
+                                                &17150514997832_wp,&
+                                                0.17132449237917034504029614217273289352682250148&
+                                                &404398239863543979894576054234015464792770542638&
+                                                &866975211652206987440430919174716746217597462964&
+                                                &922931803144845206713510916832108437179940676688&
+                                                &721266924855699404815942932735702498405343382418&
+                                                &236324411837461039120523911904421970357029774978&
+                                                &12150514997832_wp ]
+
+    f = h * ( w(1)*( me%fun(x-a(1)*h) + me%fun(x+a(1)*h) ) + &
+              w(2)*( me%fun(x-a(2)*h) + me%fun(x+a(2)*h) ) + &
+              w(3)*( me%fun(x-a(3)*h) + me%fun(x+a(3)*h) ) )
+
+    return
+    
+  end function g6
+
+!mmr----------------------------------------------------------------
+    
 end module isostasy
+
+
+
+
+subroutine r4mat_print ( m, n, a, title )
+
+!*****************************************************************************80
+!
+!! R4MAT_PRINT prints an R4MAT.
+!
+!  Discussion:
+!
+!    An R4MAT is an array of R8 values.
+!
+!  Licensing:
+!
+!    This code is distributed under the GNU LGPL license.
+!
+!  Modified:
+!
+!    12 September 2004
+!
+!  Author:
+!
+!    John Burkardt
+!
+!  Parameters:
+!
+!    Input, integer ( kind = 4 ) M, the number of rows in A.
+!
+!    Input, integer ( kind = 4 ) N, the number of columns in A.
+!
+!    Input, real ( kind = 4 ) A(M,N), the matrix.
+!
+!    Input, character ( len = * ) TITLE, a title.
+!
+  implicit none
+
+  integer ( kind = 4 ) m
+  integer ( kind = 4 ) n
+
+  real ( kind = 4 ) a(m,n)
+  character ( len = * )  title
+
+  call r4mat_print_some ( m, n, a, 1, 1, m, n, title )
+
+  return
+end subroutine r4mat_print
+
+subroutine r4mat_print_some ( m, n, a, ilo, jlo, ihi, jhi, title )
+
+!*****************************************************************************80
+!
+!! R4MAT_PRINT_SOME prints some of an R4MAT.
+!
+!  Discussion:
+!
+!    An R4MAT is an array of R4 values.
+!
+!  Licensing:
+!
+!    This code is distributed under the GNU LGPL license.
+!
+!  Modified:
+!
+!    10 September 2009
+!
+!  Author:
+!
+!    John Burkardt
+!
+!  Parameters:
+!
+!    Input, integer ( kind = 4 ) M, N, the number of rows and columns.
+!
+!    Input, real ( kind = 4 ) A(M,N), an M by N matrix to be printed.
+!
+!    Input, integer ( kind = 4 ) ILO, JLO, the first row and column to print.
+!
+!    Input, integer ( kind = 4 ) IHI, JHI, the last row and column to print.
+!
+!    Input, character ( len = * ) TITLE, a title.
+!
+  implicit none
+
+  integer ( kind = 4 ), parameter :: incx = 5
+  integer ( kind = 4 ) m
+  integer ( kind = 4 ) n
+
+  real ( kind = 4 ) a(m,n)
+  character ( len = 14 ) ctemp(incx)
+  integer ( kind = 4 ) i
+  integer ( kind = 4 ) i2hi
+  integer ( kind = 4 ) i2lo
+  integer ( kind = 4 ) ihi
+  integer ( kind = 4 ) ilo
+  integer ( kind = 4 ) inc
+  integer ( kind = 4 ) j
+  integer ( kind = 4 ) j2
+  integer ( kind = 4 ) j2hi
+  integer ( kind = 4 ) j2lo
+  integer ( kind = 4 ) jhi
+  integer ( kind = 4 ) jlo
+  character ( len = * ) title
+
+  write ( *, '(a)' ) ' '
+  write ( *, '(a)' ) trim ( title )
+
+  if ( m <= 0 .or. n <= 0 ) then
+    write ( *, '(a)' ) ' '
+    write ( *, '(a)' ) '  (None)'
+    return
+  end if
+
+  do j2lo = max ( jlo, 1 ), min ( jhi, n ), incx
+
+    j2hi = j2lo + incx - 1
+    j2hi = min ( j2hi, n )
+    j2hi = min ( j2hi, jhi )
+
+    inc = j2hi + 1 - j2lo
+
+    write ( *, '(a)' ) ' '
+
+    do j = j2lo, j2hi
+      j2 = j + 1 - j2lo
+      write ( ctemp(j2), '(i8,6x)' ) j
+    end do
+
+    write ( *, '(''  Col   '',5a14)' ) ctemp(1:inc)
+    write ( *, '(a)' ) '  Row'
+    write ( *, '(a)' ) ' '
+
+    i2lo = max ( ilo, 1 )
+    i2hi = min ( ihi, m )
+
+    do i = i2lo, i2hi
+
+      do j2 = 1, inc
+
+        j = j2lo - 1 + j2
+
+        if ( a(i,j) == real ( int ( a(i,j) ), kind = 4 ) ) then
+          write ( ctemp(j2), '(f8.0,6x)' ) a(i,j)
+        else
+          write ( ctemp(j2), '(g14.6)' ) a(i,j)
+        end if
+
+      end do
+
+      write ( *, '(i5,a,5a14)' ) i, ':', ( ctemp(j), j = 1, inc )
+
+    end do
+
+  end do
+
+  return
+end subroutine r4mat_print_some
+
+
+
+
+subroutine r8mat_print ( m, n, a, title )
+
+!*****************************************************************************80
+!
+!! R4MAT_PRINT prints an R4MAT.
+!
+!  Discussion:
+!
+!    An R4MAT is an array of R8 values.
+!
+!  Licensing:
+!
+!    This code is distributed under the GNU LGPL license.
+!
+!  Modified:
+!
+!    12 September 2004
+!
+!  Author:
+!
+!    John Burkardt
+!
+!  Parameters:
+!
+!    Input, integer ( kind = 4 ) M, the number of rows in A.
+!
+!    Input, integer ( kind = 4 ) N, the number of columns in A.
+!
+!    Input, real ( kind = 4 ) A(M,N), the matrix.
+!
+!    Input, character ( len = * ) TITLE, a title.
+!
+  implicit none
+
+  integer ( kind = 4 ) m
+  integer ( kind = 4 ) n
+
+  real ( kind = 8 ) a(m,n)
+  character ( len = * )  title
+
+  call r8mat_print_some ( m, n, a, 1, 1, m, n, title )
+
+  return
+end subroutine r8mat_print
+
+subroutine r8mat_print_some ( m, n, a, ilo, jlo, ihi, jhi, title )
+
+!*****************************************************************************80
+!
+!! R4MAT_PRINT_SOME prints some of an R4MAT.
+!
+!  Discussion:
+!
+!    An R4MAT is an array of R4 values.
+!
+!  Licensing:
+!
+!    This code is distributed under the GNU LGPL license.
+!
+!  Modified:
+!
+!    10 September 2009
+!
+!  Author:
+!
+!    John Burkardt
+!
+!  Parameters:
+!
+!    Input, integer ( kind = 4 ) M, N, the number of rows and columns.
+!
+!    Input, real ( kind = 4 ) A(M,N), an M by N matrix to be printed.
+!
+!    Input, integer ( kind = 4 ) ILO, JLO, the first row and column to print.
+!
+!    Input, integer ( kind = 4 ) IHI, JHI, the last row and column to print.
+!
+!    Input, character ( len = * ) TITLE, a title.
+!
+  implicit none
+
+  integer ( kind = 4 ), parameter :: incx = 5
+  integer ( kind = 4 ) m
+  integer ( kind = 4 ) n
+
+  real ( kind = 8 ) a(m,n)
+  character ( len = 14 ) ctemp(incx)
+  integer ( kind = 4 ) i
+  integer ( kind = 4 ) i2hi
+  integer ( kind = 4 ) i2lo
+  integer ( kind = 4 ) ihi
+  integer ( kind = 4 ) ilo
+  integer ( kind = 4 ) inc
+  integer ( kind = 4 ) j
+  integer ( kind = 4 ) j2
+  integer ( kind = 4 ) j2hi
+  integer ( kind = 4 ) j2lo
+  integer ( kind = 4 ) jhi
+  integer ( kind = 4 ) jlo
+  character ( len = * ) title
+
+  write ( *, '(a)' ) ' '
+  write ( *, '(a)' ) trim ( title )
+
+  if ( m <= 0 .or. n <= 0 ) then
+    write ( *, '(a)' ) ' '
+    write ( *, '(a)' ) '  (None)'
+    return
+  end if
+
+  do j2lo = max ( jlo, 1 ), min ( jhi, n ), incx
+
+    j2hi = j2lo + incx - 1
+    j2hi = min ( j2hi, n )
+    j2hi = min ( j2hi, jhi )
+
+    inc = j2hi + 1 - j2lo
+
+    write ( *, '(a)' ) ' '
+
+    do j = j2lo, j2hi
+      j2 = j + 1 - j2lo
+      write ( ctemp(j2), '(i8,6x)' ) j
+    end do
+
+    write ( *, '(''  Col   '',5a14)' ) ctemp(1:inc)
+    write ( *, '(a)' ) '  Row'
+    write ( *, '(a)' ) ' '
+
+    i2lo = max ( ilo, 1 )
+    i2hi = min ( ihi, m )
+
+    do i = i2lo, i2hi
+
+      do j2 = 1, inc
+
+        j = j2lo - 1 + j2
+
+        if ( a(i,j) == real ( int ( a(i,j) ), kind = 4 ) ) then
+          write ( ctemp(j2), '(f8.0,6x)' ) a(i,j)
+        else
+          write ( ctemp(j2), '(g14.6)' ) a(i,j)
+        end if
+
+      end do
+
+      write ( *, '(i5,a,5a14)' ) i, ':', ( ctemp(j), j = 1, inc )
+
+    end do
+
+  end do
+
+  return
+end subroutine r8mat_print_some
+
