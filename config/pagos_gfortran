@@ -1,8 +1,10 @@
 FC = mpif90
 #FC = gfortran 
 
-INC_NC  = -I/opt/local/include
-LIB_NC  = -L/opt/local/lib -lnetcdff -L/opt/local/lib -Wl,-headerpad_max_install_names -Wl,-syslibroot,/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.14.sdk -arch x86_64 -lnetcdf -lnetcdf
+NC_CROOT=/usr/local/Cellar/netcdf/4.9.0
+NC_FROOT=/usr/local/Cellar/netcdf-fortran/4.6.0
+INC_NC  = -I${NC_FROOT}/include
+LIB_NC  = -L${NC_FROOT}/lib -lnetcdff -L${NC_CROOT}/lib -lnetcdf 
 
 #LISROOT = /Users/robinson/apps/lis/lis
 #INC_LIS = -I${LISROOT}/include 
@@ -10,6 +12,9 @@ LIB_NC  = -L/opt/local/lib -lnetcdff -L/opt/local/lib -Wl,-headerpad_max_install
 LISROOT = 
 INC_LIS = 
 LIB_LIS = 
+
+INC_FFTW = 
+LIB_FFTW = -L/usr/local/Cellar/fftw/3.3.10_1/lib -lfftw3 -lm
 
 FFLAGS  = -ffree-line-length-none -I$(objdir) -J$(objdir)
 
@@ -24,7 +29,7 @@ ifeq ($(parallel), 1)
 
 endif 
 
-LFLAGS  = $(LIB_NC) $(LIB_LIS)
+LFLAGS  = $(LIB_NC) $(LIB_LIS) $(LIB_FFTW)
 
 DFLAGS_NODEBUG = -O2
 DFLAGS_DEBUG   = -w -g -p -ggdb -ffpe-trap=invalid,zero,overflow,underflow -fbacktrace -fcheck=all
