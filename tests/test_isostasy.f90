@@ -3,6 +3,7 @@ program test_isostasy
     use ncio
     !use yelmo 
     use isostasy 
+    use isostasy_benchmarks
 
     implicit none
 
@@ -13,6 +14,10 @@ program test_isostasy
     ! Choose the precision of the library (sp,dp)
     integer,  parameter :: wp = sp 
 
+    
+    real(wp), parameter :: rho_ice  = 910.0         ! [kg/m^3]
+    real(wp), parameter :: rho_a    = 3300.0        ! [kg/m^3] 3370 used by Coulon et al (2021)
+    real(wp), parameter :: g  = 9.81                ! [m/s^2]
 
     character(len=512) :: outfldr
     character(len=512) :: path_par
@@ -23,7 +28,8 @@ program test_isostasy
     real(wp) :: time 
     real(wp) :: time_init 
     real(wp) :: time_end 
-    real(wp) :: dtt 
+    real(wp) :: dtt
+    real(wp) :: dt_out 
     integer  :: n, nt 
 
     integer  :: i, j, nx, ny 
@@ -44,7 +50,7 @@ program test_isostasy
     
     real(wp), allocatable :: mask(:,:)
 !mmr----------------------------------------------------------------
-    real(wp), allocatable :: dist2c(:,:)  
+    real(wp), allocatable :: z_bed_bench(:,:) 
     logical :: calc_analytical 
 !mmr----------------------------------------------------------------
 
@@ -83,10 +89,12 @@ program test_isostasy
     time_init = 0.0
     time_end  = 1e3     !mmr  
     dtt       = 200.0   !mmr  200.0 
+    dt_out    = 200.0 
 
     write(*,*) "time_init = ", time_init 
     write(*,*) "time_end  = ", time_end 
     write(*,*) "dtt       = ", dtt 
+    write(*,*) "dt_out    = ", dt_out 
 
     ! === Define grid information ============
 
@@ -120,9 +128,9 @@ program test_isostasy
     allocate(z_bed(nx,ny))
     allocate(H_ice(nx,ny))
     allocate(z_sl(nx,ny))
-!mmr----------------------------------------------------------------    
-    allocate(dist2c(nx,ny)) !mmr Alex  - this should be calculated only once and probably here
-!mmr----------------------------------------------------------------    
+    
+    allocate(z_bed_bench(nx,ny))
+
     allocate(mask(nx,ny)) 
 
     z_bed_ref   = 0.0 
@@ -133,14 +141,13 @@ program test_isostasy
     H_ice       = 0.0  
     z_sl        = 0.0 
     
+    z_bed_bench = z_bed 
+
     write(*,*) "Initial fields defined."
 
 
-    ! Initialize bedrock model (allocate fields)
-!mmr----------------------------------------------------------------
-!mmr     call isos_init(isos1,path_par,nx,ny,dx)    
-    call isos_init(isos1,path_par,nx,ny,dx,calc_analytical) 
-!mmr----------------------------------------------------------------
+    ! Initialize bedrock model (allocate fields)  
+    call isos_init(isos1,path_par,nx,ny,dx) 
     
     ! Define ice thickness field based on experiment being run...
     
@@ -179,21 +186,13 @@ program test_isostasy
             H_ice = 0.
             xcntr = (xmax+xmin)/2.
             ycntr = xcntr
-            do i = 1, nx
-               do j = 1, ny
-                  if ( (xc(i)-xcntr)**2 + (yc(j)-ycntr)**2  .le. (1000.e3)**2 ) H_ice(i,j) = 1000.0 
-               enddo
-            enddo
 
-!mmr Alex  - this should be calculated only once and probably here -  pass it to isostasy?
-!             do i = 1, nx
-!                do j = 1, ny
-!                   dist2c(i,j) = sqrt((xc(i)-xcntr)**2 + (yc(j)-ycntr)**2)  
-!                   if ( dist2c(i,j)  .le. (1000.e3)) H_ice(i,j) = 1000.0    ![m]
-!                enddo
-!             enddo            
-!
-!mmr----------------------------------------------------------------            
+            do j = 1, ny
+            do i = 1, nx
+                if ( (xc(i)-xcntr)**2 + (yc(j)-ycntr)**2  .le. (1000.e3)**2 ) H_ice(i,j) = 1000.0 
+            end do
+            end do
+       
         case DEFAULT
 
             write(*,*) "Error: experiment name not recognized."
@@ -203,10 +202,8 @@ program test_isostasy
     end select
 
     ! Inititalize state
-!mmr----------------------------------------------------------------                
-!mmr    call isos_init_state(isos1,z_bed,H_ice,z_sl,z_bed_ref,H_ice_ref,z_sl_ref,time=time_init)
-    call isos_init_state(isos1,z_bed,H_ice,z_sl,z_bed_ref,H_ice_ref,z_sl_ref,time=time_init,calc_analytical=calc_analytical) 
-!mmr----------------------------------------------------------------            
+    call isos_init_state(isos1,z_bed,H_ice,z_sl,z_bed_ref,H_ice_ref,z_sl_ref,time=time_init) 
+
     ! Initialize writing output
     call isos_write_init(isos1,xc,yc,file_out,time_init)
 
@@ -223,8 +220,16 @@ program test_isostasy
         ! Update bedrock
         call isos_update(isos1,H_ice,z_sl,time,calc_analytical) !         call isos_update(isos1,H_ice,z_sl,time)
 
-        ! Write to file 
-        call isos_write_step(isos1,file_out,time,H_ice,z_sl)
+        if (mod(time,dt_out) .eq. 0.0) then
+            ! Write output for this timestep
+
+            ! Calculate analytical solution to elva_disk
+            call isosbench_elva_disk(z_bed_bench,isos1%par%dx,isos1%now%D_lith(1,1),rho_ice,rho_a,g,time)
+
+            ! Write to file 
+            call isos_write_step(isos1,file_out,time,H_ice,z_sl,z_bed_bench)
+
+        end if 
 
         write(*,*) "time = ", time 
 
@@ -274,7 +279,7 @@ contains
 
     end subroutine isos_write_init
 
-    subroutine isos_write_step(isos,filename,time,H_ice,z_sl)
+    subroutine isos_write_step(isos,filename,time,H_ice,z_sl,z_bed_bench)
 
         implicit none 
         
@@ -283,6 +288,7 @@ contains
         real(wp),         intent(IN) :: time
         real(wp),         intent(IN) :: H_ice(:,:) 
         real(wp),         intent(IN) :: z_sl(:,:) 
+        real(wp),         intent(IN), optional :: z_bed_bench(:,:)
 
         ! Local variables
         integer  :: ncid, n
@@ -316,11 +322,19 @@ contains
              dim1="xc",dim2="yc",dim3="time",start=[1,1,n],ncid=ncid)                                            
         call nc_write(filename,"z_bed_EL",-isos%now%w1,units="m",long_name="Displacement (for ELVA only EL)", &
              dim1="xc",dim2="yc",dim3="time",start=[1,1,n],ncid=ncid)                                           
-        call nc_write(filename,"z_bed_analyt",isos%now%w2_ana,units=" ",long_name="Analytical displacement (for VA disk)", &        
-             dim1="xc",dim2="yc",dim3="time",start=[1,1,n],ncid=ncid)                                                  
-        call nc_write(filename,"err_z_bed",isos%now%z_bed - isos%now%w2_ana,units=" ",long_name="Error in VA bedrock elevation", & 
-             dim1="xc",dim2="yc",dim3="time",start=[1,1,n],ncid=ncid)                                                  
-!mmr------------------------------------------------------------------------------------------------------------------------        
+                                                        
+!mmr------------------------------------------------------------------------------------------------------------------------    
+
+        if (present(z_bed_bench)) then 
+            ! Compare with benchmark solution 
+
+            call nc_write(filename,"z_bed_bench",z_bed_bench,units="m",long_name="Benchmark bedrock elevation", &        
+                dim1="xc",dim2="yc",dim3="time",start=[1,1,n],ncid=ncid)                                                  
+            call nc_write(filename,"err_z_bed",isos%now%z_bed - z_bed_bench,units="m",long_name="Error in bedrock elevation", & 
+                dim1="xc",dim2="yc",dim3="time",start=[1,1,n],ncid=ncid)  
+
+        end if 
+
         ! Close the netcdf file
         call nc_close(ncid)
 
