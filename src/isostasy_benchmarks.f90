@@ -109,7 +109,7 @@ contains
         nx = size(z_bed,1)
         ny = size(z_bed,2) 
 
-        call calc_analytical_asthenosphere_viscous_disk_params(kappa_mod,dist2c,r, &
+        call calc_analytical_viscous_disk_params(kappa_mod,dist2c,r, &
                                                         lr,kappa_min,kappa_max,dk,nx,ny,dx)                                    
     
         r0     = 1000.0e3 ! [m] recheck - include into routine?
@@ -121,7 +121,7 @@ contains
         
         ! Updating ===========
 
-        call calc_analytical_asthenosphere_viscous_disk(ana,z_bed,kappa_mod,dist2c,r,lr,dx,time)  
+        call calc_analytical_viscous_disk(ana,z_bed,kappa_mod,dist2c,r,lr,dx,time)  
 
         write(*,*) "benchmark elva_disk: ", time, minval(z_bed), maxval(z_bed)
 
@@ -139,7 +139,7 @@ contains
 !=========================================================
 
     
-    subroutine calc_analytical_asthenosphere_viscous_disk_params(kappa_mod,dist2c,r,lr,kappa_min,kappa_max,dk,nx,ny,dx)  
+    subroutine calc_analytical_viscous_disk_params(kappa_mod,dist2c,r,lr,kappa_min,kappa_max,dk,nx,ny,dx)  
        
         real(wp), allocatable, intent(OUT)  :: kappa_mod(:)
         real(wp), allocatable, intent(OUT)  :: dist2c(:,:)
@@ -211,9 +211,9 @@ contains
          
          return
       
-    end subroutine calc_analytical_asthenosphere_viscous_disk_params
+    end subroutine calc_analytical_viscous_disk_params
        
-    subroutine calc_analytical_asthenosphere_viscous_disk(me,w,kappa_mod,dist2c,r,lr,dx,t) 
+    subroutine calc_analytical_viscous_disk(me,w,kappa_mod,dist2c,r,lr,dx,t) 
 
         ! Calculate analytical solution for displacement for the asthenosphere viscous disk 
         ! u(r,t) as in Bueler et al (2007), eq. 17
@@ -294,7 +294,7 @@ contains
 
         return
          
-    end subroutine calc_analytical_asthenosphere_viscous_disk
+    end subroutine calc_analytical_viscous_disk
 
     subroutine initialize_integration_class(me,fx,xl,xu,tolx,methodx)
 

@@ -35,7 +35,6 @@ module isostasy
     
     type isos_param_class 
         integer            :: method            ! Type of isostasy to use
-        logical            :: use_reg_lith      ! Regional (elastic) lithospheric load, or local load
         real(wp)           :: dt_lith           ! [yr] Timestep to recalculate equilibrium lithospheric displacement
         real(wp)           :: dt_step           ! [yr] Timestep to recalculate bedrock uplift and rate
         real(wp)           :: He_lith           ! [km] Effective elastic thickness of lithosphere
@@ -496,26 +495,12 @@ module isostasy
                     ! ELVA - viscous half-space asthenosphere overlain by                                                   
                     ! elastic plate lithosphere with uniform constants                                                      
                     
-                    if (isos%par%use_reg_lith) then 
+                    ! Local lithosphere (LL)
+                    ! Calculate the local lithospheric load here because 
+                    ! the EL component is contained in the ELVA model solution
 
-                        ! Elastic lithosphere (EL)                                                                              
-                        if (update_equil) then                                                                              
+                    isos%now%q1 = rho_ice*g*H_ice
 
-!mmr recheck - Alex - ignored for the moment, need to recalculate Green's coefficients (solution is different in Bueler et al 2007)
-                       
-                            call calc_litho_regional(isos%now%w1,isos%now%q1,isos%now%z_bed,H_ice,z_sl,isos%now%G0)              
-                            call calc_litho_local(isos%now%w1,isos%now%q1,isos%now%z_bed,H_ice,z_sl)                         
-
-                        end if
-
-                    else
-                        ! Local lithosphere (LL)
-                        ! Imposing load here because there's no EL component
-
-                        isos%now%q1 = rho_ice*g*H_ice
-
-                    end if
-                    
                     ! Viscous (half-space) asthenosphere                                                                             
 
                     call calc_asthenosphere_viscous(isos%now%dzbdt,isos%now%w2,isos%now%q1,    &                            
@@ -575,7 +560,6 @@ module isostasy
         character(len=*),       intent(IN)  :: filename 
 
         call nml_read(filename,"isostasy","method",         par%method)
-        call nml_read(filename,"isostasy","use_reg_lith",   par%use_reg_lith)
         call nml_read(filename,"isostasy","dt_lith",        par%dt_lith)
         call nml_read(filename,"isostasy","dt_step",        par%dt_step)
         call nml_read(filename,"isostasy","He_lith",        par%He_lith)

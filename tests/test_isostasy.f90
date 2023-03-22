@@ -111,8 +111,10 @@ program test_isostasy
         xc(i) = xmin + (i-1)*dx 
     end do
 
-    ny = nx 
-    yc = xc 
+    ny = nx
+    yc = xc
+    !ny = nx-2
+    !yc = xc(1:nx-2)
 
     write(*,*) "Grid info: " 
     write(*,*) "dx = ", dx 
