@@ -2563,7 +2563,7 @@ end if
       else  
 
          write(*,*) 'Error, you have to choose an option to calculate the FFTs'
-         call abort()
+         stop
       endif
          
     ! Impose boundary conditions 
@@ -2603,7 +2603,7 @@ end if
 
       if(l.ne.m) then
          print*,'Dimensions do not match, stopping now'
-         call abort()
+         stop
       endif
 
       in_aux = in
