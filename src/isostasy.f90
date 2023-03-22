@@ -638,8 +638,8 @@ module isostasy
 
                     isos%now%q1 = rho_ice*g*H_ice !mmr recheck - imposing load here because there's no EL component
 
-                    call calc_asthenosphere_viscous(isos%now%dzbdt,isos%now%q1,isos%now%w2,    &                            
-                          dt_now,isos%par%mu,isos%now%kappa,isos%now%beta)                                                  
+                    call calc_asthenosphere_viscous(isos%now%dzbdt,isos%now%w2,isos%now%q1,    &                            
+                                                    isos%par%mu,isos%now%kappa,isos%now%beta,dt_now)
 
 !mmr Alex  - introduced to reduce computational time in analytical solution
                     if (calc_analytical .and. update_analytical) then                                                       
@@ -2422,230 +2422,226 @@ end if
         real(wp)                            :: xd, yd
         integer                             :: i, j, ip, iq, ic, jc 
       
-      allocate(kappa(nx,ny))
-      allocate(beta(nx,ny))
+        allocate(kappa(nx,ny))
+        allocate(beta(nx,ny))
 
-      mu = 2.*pi/((nx-1)*dx)
+        mu = 2.*pi/((nx-1)*dx)
       
-      kappa = 0.0
+        kappa = 0.0
       
-      ic = (nx-1)/2 + 1
-      jc = (ny-1)/2 + 1
+        ic = (nx-1)/2 + 1
+        jc = (ny-1)/2 + 1
 
-      do i = 1, nx
+        do i = 1, nx
             if (i.le.ic) then 
-            ip = i-1
-         else
-            ip = nx-i+1
-         end if
-         do j = 1, ny
-               if (j.le.jc) then
-               iq = j-1  
+                ip = i-1
             else
-               iq = ny-j+1
+                ip = nx-i+1
             end if
-            kappa(i,j)  = (ip*ip + iq*iq)**0.5
-            beta(i,j)   = rho_a*g + D_lith(i,j)*(mu**4)*kappa(i,j)**4
-         end do
-      end do
+            do j = 1, ny
+                if (j.le.jc) then
+                    iq = j-1  
+                else
+                    iq = ny-j+1
+                end if
+                kappa(i,j)  = (ip*ip + iq*iq)**0.5
+                beta(i,j)   = rho_a*g + D_lith(i,j)*(mu**4)*kappa(i,j)**4
+            end do
+        end do
 
-         return
+        return
       
     end subroutine calc_asthenosphere_viscous_params
 
  
-    subroutine calc_asthenosphere_viscous(dzbdt,q,w,dt,mu,kappa,beta)
+    subroutine calc_asthenosphere_viscous(dzbdt,w,q,mu,kappa,beta,dt)
         ! Calculate rate of change of vertical bedrock height
         ! from a viscous half-space asthenosphere.
         ! Contains viscous component only.
 
-      use, intrinsic :: iso_c_binding
-      implicit none
-      include 'fftw3.f03'
+        use, intrinsic :: iso_c_binding
+        implicit none
+        include 'fftw3.f03'
 
- 
-      integer(kind=4), parameter :: nd = 2
-      
-      real(wp), intent(OUT)   :: dzbdt(:,:)
-      real(wp), intent(IN)    :: q(:,:)
-      real(wp), intent(INOUT) :: w(:,:)
-      real(wp), intent(IN)    :: dt
-      real(wp), intent(IN)    :: mu
-      real(wp), intent(IN)    :: kappa(:,:)
-      real(wp), intent(IN)    :: beta(:,:)     
+        real(wp), intent(OUT)   :: dzbdt(:,:)
+        real(wp), intent(INOUT) :: w(:,:)
+        real(wp), intent(IN)    :: q(:,:)
+        real(wp), intent(IN)    :: mu
+        real(wp), intent(IN)    :: kappa(:,:)
+        real(wp), intent(IN)    :: beta(:,:)     
+        real(wp), intent(IN)    :: dt
+        
+        ! Local variables
+        real(wp), allocatable   :: w0(:,:)
+        real(wp), allocatable   :: q_hat(:,:)
+        real(wp), allocatable   :: w_hat(:,:)
 
-      
-      real(wp), allocatable   :: w0(:,:)
-      real(wp), allocatable   :: q_hat(:,:)
-      real(wp), allocatable   :: w_hat(:,:)
+        real(c_double), allocatable :: data_in(:,:), data_inbis(:,:)
+        complex(c_double_complex), allocatable :: data_out(:,:)
 
-      real(c_double), allocatable :: data_in(:,:), data_inbis(:,:)
-      complex(c_double_complex), allocatable :: data_out(:,:)
+        complex(dp), allocatable   :: q_hat_c(:,:)
+        complex(dp), allocatable   :: w_hat_c(:,:)
 
-      complex(dp), allocatable   :: q_hat_c(:,:)
-      complex(dp), allocatable   :: w_hat_c(:,:)
+        real(wp), allocatable      :: w_hat_c_re(:,:), w_hat_c_im(:,:)      
 
-      real(wp), allocatable   :: w_hat_c_re(:,:), w_hat_c_im(:,:)      
+        real(wp)                :: dt_sec
+        integer                 :: l, m, i, j
 
-      real(wp)                :: dt_sec
-      integer (kind = 4)      :: l, m, i, j
+        logical  :: fft_r2r, fft_c2c
 
-      logical  :: fft_r2r, fft_c2c
+        integer, parameter :: nd = 2
 
 
-      dt_sec = dt * 3600*24*365 ! [s] 
+        dt_sec = dt * 3600*24*365 ! [s] 
 
      
-      l = size(q,1)
-      m = size(q,2)
+        l = size(q,1)
+        m = size(q,2)
 
       
-      allocate(w0(l,m))
-      allocate(q_hat(l,m))
-      allocate(w_hat(l,m))
-      allocate(q_hat_c(l,m/2+1)) 
-      allocate(w_hat_c(l,m/2+1))
+        allocate(w0(l,m))
+        allocate(q_hat(l,m))
+        allocate(w_hat(l,m))
+        allocate(q_hat_c(l,m/2+1)) 
+        allocate(w_hat_c(l,m/2+1))
 
-      allocate(w_hat_c_re(l,m/2+1))
-      allocate(w_hat_c_im(l,m/2+1))
-
-
+        allocate(w_hat_c_re(l,m/2+1))
+        allocate(w_hat_c_im(l,m/2+1))
       
+        !  Initialize 
+
+        w0 = w
+
+        q_hat    = 0.0
+        w_hat    = 0.0
+        w_hat_c  = 0.0
+        dzbdt    = 0.0
+
+        fft_r2r = .true.
+        fft_c2c = .false.
       
-      !  Initialize 
+        if (fft_r2r) then
+
+            ! fft of load
+            ! 
+
+            call calc_fft_forward_r2r(q,q_hat)
+
+            ! fft of displacement
+
+            call calc_fft_forward_r2r(w,w_hat)
+
+            ! displacement fft at timestep n+1    
+
+            if (dt.gt.0)  w_hat = ( ( 2.*eta*mu*kappa - (dt_sec/2.)*beta)*w_hat + dt_sec*q_hat)/(2*eta*mu*kappa + (dt_sec/2.)*beta)
+
+            ! Inverse fft to obtain displacement at n+1
+
+            call calc_fft_backward_r2r(w_hat,w)
+
+        else if (fft_c2c) then
+
+            ! fft of load
+
+            call calc_fft_forward_c2c(q,q_hat)
+
+            ! fft of displacement
+
+            call calc_fft_forward_c2c(w,w_hat)
+
+            ! displacement fft at timestep n+1    
+
+            if (dt.gt.0)  w_hat = ( ( 2.*eta*mu*kappa - (dt_sec/2.)*beta)*w_hat + dt_sec*q_hat)/(2*eta*mu*kappa + (dt_sec/2.)*beta)
+
+            ! Inverse fft to obtain displacement at n+1
+
+            call calc_fft_backward_c2c(w_hat,w)
+
+        else  
+
+            write(*,*) "Error, you have to choose an option to calculate the FFTs."
+            stop
       
-      w0 = w
-      
-      q_hat    = 0.0
-      w_hat    = 0.0
-      w_hat_c  = 0.0
-      dzbdt    = 0.0
-      
-      fft_r2r = .true.
-      fft_c2c = .false.
-      
-      if (fft_r2r) then
-
-         ! fft of load
-         ! 
-
-         call calc_fft_forward_r2r(q,q_hat)
-
-         ! fft of displacement
-
-         call calc_fft_forward_r2r(w,w_hat)
-
-         ! displacement fft at timestep n+1    
-
-         if (dt.gt.0)  w_hat = ( ( 2.*eta*mu*kappa - (dt_sec/2.)*beta)*w_hat + dt_sec*q_hat)/(2*eta*mu*kappa + (dt_sec/2.)*beta)
-
-         ! Inverse fft to obtain displacement at n+1
-
-         call calc_fft_backward_r2r(w_hat,w)
-
-      else if (fft_c2c) then
-
-         ! fft of load
-
-         call calc_fft_forward_c2c(q,q_hat)
-
-         ! fft of displacement
-
-         call calc_fft_forward_c2c(w,w_hat)
-
-         ! displacement fft at timestep n+1    
-
-         if (dt.gt.0)  w_hat = ( ( 2.*eta*mu*kappa - (dt_sec/2.)*beta)*w_hat + dt_sec*q_hat)/(2*eta*mu*kappa + (dt_sec/2.)*beta)
-
-         ! Inverse fft to obtain displacement at n+1
-
-         call calc_fft_backward_c2c(w_hat,w)
-
-      else  
-
-         write(*,*) "Error, you have to choose an option to calculate the FFTs."
-         stop
-      end if
+        end if
          
-    ! Impose boundary conditions 
+        ! Impose boundary conditions 
 
-      w  = w - 0.25*(w(1,1)+w(l,m)+w(1,m)+w(l,1)) 
+        w  = w - 0.25*(w(1,1)+w(l,m)+w(1,m)+w(l,1)) 
 
-      ! Rate of viscous asthenosphere uplift
+        ! Rate of viscous asthenosphere uplift
 
-      if (dt.gt.0.)  dzbdt = -(w-w0)/dt
+        if (dt.gt.0.)  dzbdt = -(w-w0)/dt
 
+        deallocate(w0)
+        deallocate(q_hat)
+        deallocate(w_hat)
+        deallocate(q_hat_c)
+        deallocate(w_hat_c)
 
-      deallocate(w0)
-      deallocate(q_hat)
-      deallocate(w_hat)
-      deallocate(q_hat_c)
-      deallocate(w_hat_c)
-
-      return
+        return
 
     end subroutine calc_asthenosphere_viscous
 
     subroutine make_fft_plans(in,plan_fwd,plan_bck) 
  
-      use, intrinsic :: iso_c_binding
-      implicit none 
-      include 'fftw3.f03' 
-      
-      real(wp), intent(IN)       :: in(:,:)
-      type(c_ptr), intent(OUT)   :: plan_fwd, plan_bck
-      complex (dp), allocatable  :: in_aux(:,:)
-      complex (dp), allocatable  :: out_aux(:,:)
-      integer (kind = 4)         :: l, m
+        use, intrinsic :: iso_c_binding
+        implicit none 
+        include 'fftw3.f03' 
 
-      
-      l    = size(in,1)
-      m    = size(in,2)
+        real(wp), intent(IN)       :: in(:,:)
+        type(c_ptr), intent(OUT)   :: plan_fwd, plan_bck
+        complex (dp), allocatable  :: in_aux(:,:)
+        complex (dp), allocatable  :: out_aux(:,:)
+        integer (kind = 4)         :: l, m
 
-      if(l.ne.m) then
-         write(*,*) "Dimensions do not match, stopping now"
-         stop
-      end if
 
-      in_aux = in
+        l    = size(in,1)
+        m    = size(in,2)
+
+        if(l.ne.m) then
+            write(*,*) "Dimensions do not match, stopping now"
+            stop
+        end if
+
+        in_aux = in
 
 ! r2r      
-      plan_fwd = fftw_plan_dft_2d(l,m,in_aux,out_aux,-1,FFTW_ESTIMATE)
-      plan_bck = fftw_plan_dft_2d(l,m,out_aux,in_aux,+1,FFTW_ESTIMATE)
+        plan_fwd = fftw_plan_dft_2d(l,m,in_aux,out_aux,-1,FFTW_ESTIMATE)
+        plan_bck = fftw_plan_dft_2d(l,m,out_aux,in_aux,+1,FFTW_ESTIMATE)
 
-      return
+        return
 
     end subroutine make_fft_plans
 
 
    subroutine calc_fft_forward_r2r(in,out)
 
-      use, intrinsic :: iso_c_binding
-      implicit none 
-      include 'fftw3.f03'  
+        use, intrinsic :: iso_c_binding
+        implicit none 
+        include 'fftw3.f03'  
 
-      real(wp), intent(IN)       :: in(:,:)
-      real(wp), intent(OUT)      :: out(:,:)
-      
-      real(wp), allocatable      :: rec(:,:)
-      real(dp), allocatable      :: in_aux(:,:)
-      real(dp), allocatable      :: out_aux(:,:) 
-      real(dp), allocatable      :: rec_aux(:,:)
-      real(dp)                   :: dx, cc
-      type(c_ptr)                :: plan
-      integer(kind=4)            :: m,n
-      logical                    :: print_check
-      
+        real(wp), intent(IN)       :: in(:,:)
+        real(wp), intent(OUT)      :: out(:,:)
 
-      m = size(in,1)
-      n = size(in,2)
+        real(wp), allocatable      :: rec(:,:)
+        real(dp), allocatable      :: in_aux(:,:)
+        real(dp), allocatable      :: out_aux(:,:) 
+        real(dp), allocatable      :: rec_aux(:,:)
+        real(dp)                   :: dx, cc
+        type(c_ptr)                :: plan
+        integer(kind=4)            :: m,n
+        logical                    :: print_check
 
-      print_check = .false.
 
-      allocate(in_aux(m,n))
-      allocate(out_aux(m,n))
-      allocate(rec(m,n))
-      allocate(rec_aux(m,n))
+        m = size(in,1)
+        n = size(in,2)
+
+        print_check = .false.
+
+        allocate(in_aux(m,n))
+        allocate(out_aux(m,n))
+        allocate(rec(m,n))
+        allocate(rec_aux(m,n))
 
 
 ! http://www.fftw.org/fftw3_doc/The-Discrete-Hartley-Transform.html
@@ -2675,84 +2671,84 @@ end if
 !      useful.
 
 
-      in_aux = in 
-      plan = fftw_plan_r2r_2d(m,n,in_aux,out_aux,FFTW_DHT,FFTW_DHT,FFTW_ESTIMATE)
+        in_aux = in 
+        plan = fftw_plan_r2r_2d(m,n,in_aux,out_aux,FFTW_DHT,FFTW_DHT,FFTW_ESTIMATE)
 
-      call fftw_execute_r2r(plan, in_aux, out_aux)
+        call fftw_execute_r2r(plan, in_aux, out_aux)
 !mmr      call fftw_destroy_plan(plan)
-      out = real(out_aux/sqrt(m*n*1.))
+        out = real(out_aux/sqrt(m*n*1.))
 
-      if (print_check) then
-         call r4mat_print_some ( m, n, in, n/2-2, m/2-2, n/2+2, m/2+2, '  Part of the original data:' )
-         plan =  fftw_plan_r2r_2d(m,n,out_aux,rec_aux,FFTW_DHT,FFTW_DHT,FFTW_ESTIMATE)
-         call fftw_execute_r2r(plan, out_aux, rec_aux)
-         rec_aux = rec_aux/(m*n)
-         rec = real(rec_aux,wp) 
-         call fftw_destroy_plan(plan)
-         call r4mat_print_some (m, n, rec, n/2-2, m/2-2, n/2+2, m/2+2, '  Part of the recovered data:' )
-      end if
+        if (print_check) then
+            call r4mat_print_some ( m, n, in, n/2-2, m/2-2, n/2+2, m/2+2, '  Part of the original data:' )
+            plan =  fftw_plan_r2r_2d(m,n,out_aux,rec_aux,FFTW_DHT,FFTW_DHT,FFTW_ESTIMATE)
+            call fftw_execute_r2r(plan, out_aux, rec_aux)
+            rec_aux = rec_aux/(m*n)
+            rec = real(rec_aux,wp) 
+            call fftw_destroy_plan(plan)
+            call r4mat_print_some (m, n, rec, n/2-2, m/2-2, n/2+2, m/2+2, '  Part of the recovered data:' )
+        end if
 
-      deallocate(in_aux)
-      deallocate(out_aux)
-      deallocate(rec)
-      deallocate(rec_aux)
+        deallocate(in_aux)
+        deallocate(out_aux)
+        deallocate(rec)
+        deallocate(rec_aux)
       
-      return
+        return
       
     end subroutine calc_fft_forward_r2r
 
     subroutine calc_fft_backward_r2r(in,out)
 
-      use, intrinsic :: iso_c_binding
-      implicit none 
-      include 'fftw3.f03'  
+        use, intrinsic :: iso_c_binding
+        implicit none 
+        include 'fftw3.f03'  
 
-      real(wp), intent(IN)       :: in(:,:)
-      real(wp), intent(OUT)      :: out(:,:)
+        real(wp), intent(IN)       :: in(:,:)
+        real(wp), intent(OUT)      :: out(:,:)
 
-      real(wp), allocatable      :: rec(:,:)
-      real(dp), allocatable      :: in_aux(:,:)
-      real(dp), allocatable      :: out_aux(:,:) 
-      real(dp), allocatable      :: rec_aux(:,:)
-      real(dp)                   :: dx, cc
-      type(c_ptr)                :: plan
-      integer(kind=4)            :: m,n
-      logical                    :: print_check
+        real(wp), allocatable      :: rec(:,:)
+        real(dp), allocatable      :: in_aux(:,:)
+        real(dp), allocatable      :: out_aux(:,:) 
+        real(dp), allocatable      :: rec_aux(:,:)
+        real(dp)                   :: dx, cc
+        type(c_ptr)                :: plan
+        integer(kind=4)            :: m,n
+        logical                    :: print_check
 
-      m = size(in,1)
-      n = size(in,2)
-
-
-      allocate(in_aux(m,n))
-      allocate(out_aux(m,n))
-      allocate(rec(m,n))
-      allocate(rec_aux(m,n))
+        m = size(in,1)
+        n = size(in,2)
 
 
-      in_aux = in
-      plan = fftw_plan_r2r_2d(m,n,in_aux,out_aux,FFTW_DHT,FFTW_DHT,FFTW_ESTIMATE)
+        allocate(in_aux(m,n))
+        allocate(out_aux(m,n))
+        allocate(rec(m,n))
+        allocate(rec_aux(m,n))
 
-      call fftw_execute_r2r(plan, in_aux, out_aux)
+
+        in_aux = in
+        plan = fftw_plan_r2r_2d(m,n,in_aux,out_aux,FFTW_DHT,FFTW_DHT,FFTW_ESTIMATE)
+
+        call fftw_execute_r2r(plan, in_aux, out_aux)
 !mmr      call fftw_destroy_plan(plan)
-      out = real(out_aux/sqrt(m*n*1.)) 
+        out = real(out_aux/sqrt(m*n*1.)) 
 
-      if (print_check) then
-         call r4mat_print_some ( m, n, in, n/2-2, m/2-2, n/2+2, m/2+2, '  Part of the original data:' )
-         plan =  fftw_plan_r2r_2d(m,n,out_aux,rec_aux,FFTW_DHT,FFTW_DHT,FFTW_ESTIMATE)
-         call fftw_execute_r2r(plan, out_aux, rec_aux)
-         rec_aux = rec_aux/(m*n)
-         rec = real(rec_aux,wp) 
-         call fftw_destroy_plan(plan)
-         call r4mat_print_some ( m, n, rec, n/2-2, m/2-2, n/2+2, m/2+2, '  Part of the recovered data:' )
-      end if
+        if (print_check) then
+            call r4mat_print_some ( m, n, in, n/2-2, m/2-2, n/2+2, m/2+2, '  Part of the original data:' )
+            plan =  fftw_plan_r2r_2d(m,n,out_aux,rec_aux,FFTW_DHT,FFTW_DHT,FFTW_ESTIMATE)
+            call fftw_execute_r2r(plan, out_aux, rec_aux)
+            rec_aux = rec_aux/(m*n)
+            rec = real(rec_aux,wp) 
+            call fftw_destroy_plan(plan)
+            call r4mat_print_some ( m, n, rec, n/2-2, m/2-2, n/2+2, m/2+2, '  Part of the recovered data:' )
+        end if
 
-      deallocate(in_aux)
-      deallocate(out_aux)
-      deallocate(rec)
-      deallocate(rec_aux)
+        deallocate(in_aux)
+        deallocate(out_aux)
+        deallocate(rec)
+        deallocate(rec_aux)
 
-      return
-      
+        return
+    
     end subroutine calc_fft_backward_r2r
 
     
@@ -2768,89 +2764,89 @@ end if
  
     subroutine calc_fft_forward_c2c(in,out)
 
-      use, intrinsic :: iso_c_binding
-      implicit none 
-      include 'fftw3.f03'  
+        use, intrinsic :: iso_c_binding
+        implicit none 
+        include 'fftw3.f03'  
 
-      real(wp), intent(IN)       :: in(:,:)
-      real(wp), intent(OUT)      :: out(:,:)
+        real(wp), intent(IN)       :: in(:,:)
+        real(wp), intent(OUT)      :: out(:,:)
 
-      real(wp), allocatable      :: rec(:,:)
-      complex(dp), allocatable   :: in_aux(:,:)   
-      complex(dp), allocatable   :: out_aux(:,:)     
-      real(dp), allocatable      :: rec_aux(:,:)
-      real(dp)                   :: dx, cc
-      type(c_ptr)                :: plan
-      integer(kind=4)            :: m, n
+        real(wp), allocatable      :: rec(:,:)
+        complex(dp), allocatable   :: in_aux(:,:)   
+        complex(dp), allocatable   :: out_aux(:,:)     
+        real(dp), allocatable      :: rec_aux(:,:)
+        real(dp)                   :: dx, cc
+        type(c_ptr)                :: plan
+        integer(kind=4)            :: m, n
 
-      m = size(in,1)
-      n = size(in,2)
+        m = size(in,1)
+        n = size(in,2)
 
       
-      allocate(in_aux(m,n))
-      allocate(out_aux(m,n))
-      allocate(rec(m,n))
-      allocate(rec_aux(m,n))
+        allocate(in_aux(m,n))
+        allocate(out_aux(m,n))
+        allocate(rec(m,n))
+        allocate(rec_aux(m,n))
 
 
-      in_aux = in
-      plan = fftw_plan_dft_2d(m,n,in_aux,out_aux,-1,FFTW_ESTIMATE)
+        in_aux = in
+        plan = fftw_plan_dft_2d(m,n,in_aux,out_aux,-1,FFTW_ESTIMATE)
 
-      call fftw_execute_dft(plan, in_aux, out_aux)                 
-      call fftw_destroy_plan(plan)
-      out = real(out_aux/sqrt(m*n*1.)) 
+        call fftw_execute_dft(plan, in_aux, out_aux)                 
+        call fftw_destroy_plan(plan)
+        out = real(out_aux/sqrt(m*n*1.)) 
 
 
-      deallocate(in_aux)
-      deallocate(out_aux)
-      deallocate(rec)
-      deallocate(rec_aux)
+        deallocate(in_aux)
+        deallocate(out_aux)
+        deallocate(rec)
+        deallocate(rec_aux)
 
-      return
+        return
       
     end subroutine calc_fft_forward_c2c
 
     subroutine calc_fft_backward_c2c(in,out)
 
-      use, intrinsic :: iso_c_binding
-      implicit none 
-      include 'fftw3.f03'  
+        use, intrinsic :: iso_c_binding
+        implicit none 
+        include 'fftw3.f03'  
 
-      real(wp), intent(IN)       :: in(:,:)
-      real(wp), intent(OUT)      :: out(:,:)
+        real(wp), intent(IN)       :: in(:,:)
+        real(wp), intent(OUT)      :: out(:,:)
 
-      real(wp), allocatable      :: rec(:,:)
-      complex(dp), allocatable   :: in_aux(:,:)   
-      complex(dp), allocatable   :: out_aux(:,:)     
-      real(dp), allocatable      :: rec_aux(:,:)
-      real(dp)                   :: dx, cc
-      type(c_ptr)                :: plan
-      integer(kind=4)            :: m, n
+        real(wp), allocatable      :: rec(:,:)
+        complex(dp), allocatable   :: in_aux(:,:)   
+        complex(dp), allocatable   :: out_aux(:,:)     
+        real(dp), allocatable      :: rec_aux(:,:)
+        real(dp)                   :: dx, cc
+        type(c_ptr)                :: plan
+        integer(kind=4)            :: m, n
 
-      m = size(in,1)
-      n = size(in,2)
-
-
-      allocate(in_aux(m,n))
-      allocate(out_aux(m,n))
-      allocate(rec(m,n))
-      allocate(rec_aux(m,n))
+        m = size(in,1)
+        n = size(in,2)
 
 
-      in_aux = in
-      plan = fftw_plan_dft_2d(m,n,in_aux,out_aux,1,FFTW_ESTIMATE)
-
-      call fftw_execute_dft(plan, in_aux, out_aux)                 
-      call fftw_destroy_plan(plan)
-      out = real(out_aux/sqrt(m*n*1.)) 
+        allocate(in_aux(m,n))
+        allocate(out_aux(m,n))
+        allocate(rec(m,n))
+        allocate(rec_aux(m,n))
 
 
-      deallocate(in_aux)
-      deallocate(out_aux)
-      deallocate(rec)
-      deallocate(rec_aux)
+        in_aux = in
+        plan = fftw_plan_dft_2d(m,n,in_aux,out_aux,1,FFTW_ESTIMATE)
 
-      return
+        call fftw_execute_dft(plan, in_aux, out_aux)                 
+        call fftw_destroy_plan(plan)
+        out = real(out_aux/sqrt(m*n*1.)) 
+
+
+        deallocate(in_aux)
+        deallocate(out_aux)
+        deallocate(rec)
+        deallocate(rec_aux)
+
+        return
 
     end subroutine calc_fft_backward_c2c
 
