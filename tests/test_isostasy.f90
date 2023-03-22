@@ -81,7 +81,7 @@ program test_isostasy
     ! === Define simulation time ========
 
     time_init = 0.0
-    time_end  = 30e3    !mmr  
+    time_end  = 1e3     !mmr  
     dtt       = 200.0   !mmr  200.0 
 
     write(*,*) "time_init = ", time_init 

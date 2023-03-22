@@ -35,6 +35,9 @@ endif
 $(objdir)/isostasy.o: $(srcdir)/isostasy.f90 $(objdir)/nml.o
 	$(FC) $(DFLAGS) $(FFLAGS) -c -o $@ $<
 
+$(objdir)/isostasy_benchmarks.o: $(srcdir)/isostasy_benchmarks.f90
+	$(FC) $(DFLAGS) $(FFLAGS) -c -o $@ $<
+
 $(objdir)/ncio.o: $(srcdir)/ncio.f90
 	$(FC) $(DFLAGS) $(FFLAGS) $(INC_NC) -c -o $@ $<
 
@@ -47,7 +50,7 @@ $(objdir)/nml.o: $(srcdir)/nml.f90
 ##
 ###############################################
 
-test_isostasy : $(objdir)/isostasy.o $(objdir)/ncio.o $(objdir)/nml.o
+test_isostasy : $(objdir)/isostasy.o $(objdir)/isostasy_benchmarks.o $(objdir)/ncio.o $(objdir)/nml.o
 		$(FC) $(DFLAGS) $(FFLAGS) $(INC_LIS) -o $(bindir)/test_isostasy.x tests/test_isostasy.f90 \
 			$(LFLAGS) $^
 		@echo " "

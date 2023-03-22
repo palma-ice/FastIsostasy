@@ -317,13 +317,14 @@ module isostasy
 !                      
                 call calc_asthenosphere_viscous_params(isos%par%mu,isos%now%kappa,isos%now%beta,isos%now%D_lith,nx,ny,isos%par%dx)
                 if (calc_analytical) then   
-                   call calc_analytical_asthenosphere_viscous_disk_params(nx,ny,isos%par%dx,isos%par%kappa_min,isos%par%kappa_max,isos%par%dk,&
-                        isos%now%kappa_mod,isos%now%dist2c,isos%now%r,isos%now%lr)                                    
+                    call calc_analytical_asthenosphere_viscous_disk_params(isos%now%kappa_mod,isos%now%dist2c,isos%now%r, &
+                                        isos%now%lr,isos%par%kappa_min,isos%par%kappa_max,isos%par%dk,nx,ny,isos%par%dx)                                    
+                
+                    r0     = 1000.0e3 ! [m] recheck - include into routine?
+                    h0     = 1000.0   ! [m] 
+                    eta    = 1.e+21   ! [Pa s]
 
-                   r0     = 1000.0e3 ! [m] recheck - include into routine?
-                   h0     = 1000.0   ! [m] 
-                   eta    = 1.e+21   ! [Pa s]
-
+                    call initialize_analytical_integrand(ana,r0,h0,D_lith_const,eta)
                 end if
 
                 write(*,*) "isos_init:: summary"
@@ -332,7 +333,7 @@ module isostasy
                 write(*,*) "    L_w (m):      ", isos%par%L_w 
                 write(*,*) "    nr:           ", isos%par%nr
                 
-                write(*,*) "    range(kei): ", minval(isos%now%kei),   maxval(isos%now%kei)
+                write(*,*) "    range(kei): ", minval(isos%now%kei),  maxval(isos%now%kei)
                 write(*,*) "    range(G0):  ", minval(isos%now%G0),  maxval(isos%now%G0)
 
                 write(*,*) "    mu (1/m):  ", isos%par%mu                                                       
@@ -341,12 +342,11 @@ module isostasy
                 write(*,*) "    kappa_max: ", isos%par%kappa_max                                                
                 write(*,*) "    dk ( ):    ", isos%par%dk                                                       
 
-                write(*,*) "    range(kappa): ", minval(isos%now%kappa),  maxval(isos%now%kappa)                
-                write(*,*) "    range(beta): ", minval(isos%now%beta),  maxval(isos%now%beta)                   
+                write(*,*) "    range(kappa): ", minval(isos%now%kappa), maxval(isos%now%kappa)                
+                write(*,*) "    range(beta):  ", minval(isos%now%beta),  maxval(isos%now%beta)                   
 
                 if (calc_analytical) then                
-                   write(*,*) "    range(kappa_mod): ", minval(isos%now%kappa_mod),  maxval(isos%now%kappa_mod)    
-                   call initialize_analytical_integrand(ana,r0,h0,D_lith_const,eta)
+                   write(*,*) "    range(kappa_mod): ", minval(isos%now%kappa_mod),  maxval(isos%now%kappa_mod)
                 end if           
 !mmr----------------------------------------------------------------
             
@@ -406,7 +406,7 @@ module isostasy
         return 
 
     end subroutine isos_init
-
+    
     subroutine isos_init_state(isos,z_bed,H_ice,z_sl,z_bed_ref,H_ice_ref,z_sl_ref,time,calc_analytical)
 
         implicit none 
@@ -2858,18 +2858,24 @@ end if
 !=========================================================
 
     
-    subroutine calc_analytical_asthenosphere_viscous_disk_params(nx,ny,dx,kappa_min,kappa_max,dk,kappa_mod,dist2c,r,lr)  
+    subroutine calc_analytical_asthenosphere_viscous_disk_params(kappa_mod,dist2c,r,lr,kappa_min,kappa_max,dk,nx,ny,dx)  
        
-        integer(kind=4), intent(IN)              :: nx, ny
-        real(wp), intent(IN)                     :: dx
-        real(wp), intent(IN)                     :: kappa_min, kappa_max, dk
+        real(wp), allocatable, intent(OUT)  :: kappa_mod(:)
+        real(wp), allocatable, intent(OUT)  :: dist2c(:,:)
+        real(wp), allocatable, intent(OUT)  :: r(:) 
+        integer, allocatable,  intent(OUT)  :: lr(:,:)
 
-        real(wp), allocatable, intent(OUT)        :: kappa_mod(:), dist2c(:,:), r(:) 
-        integer(kind=4), allocatable, intent(OUT) :: lr(:,:)
-
-        integer(kind=4), allocatable              :: n(:,:)
-        real(wp)                                  :: xd, yd
-        integer(kind=4)                           :: i, j, ip, iq, ic, jc, k, nk, l, nl
+        real(wp), intent(IN)                :: kappa_min
+        real(wp), intent(IN)                :: kappa_max
+        real(wp), intent(IN)                :: dk
+        integer,  intent(IN)                :: nx
+        integer,  intent(IN)                :: ny
+        real(wp), intent(IN)                :: dx
+        
+        ! Local variables
+        integer, allocatable                :: n(:,:)
+        real(wp)                            :: xd, yd
+        integer                             :: i, j, ip, iq, ic, jc, k, nk, l, nl
 
         nk = int((kappa_max-kappa_min)/dk)
         nl = int(nx*sqrt(2.)/2) + 2
