@@ -87,9 +87,9 @@ program test_isostasy
     ! === Define simulation time ========
 
     time_init = 0.0
-    time_end  = 1e3     !mmr  
-    dtt       = 200.0   !mmr  200.0 
-    dt_out    = 200.0 
+    time_end  = 30e3
+    dtt       = 200.0
+    dt_out    = 5e3
 
     write(*,*) "time_init = ", time_init 
     write(*,*) "time_end  = ", time_end 
@@ -218,7 +218,7 @@ program test_isostasy
         time = time_init + (n-1)*dtt 
 
         ! Update bedrock
-        call isos_update(isos1,H_ice,z_sl,time,calc_analytical) !         call isos_update(isos1,H_ice,z_sl,time)
+        call isos_update(isos1,H_ice,z_sl,time)
 
         if (mod(time,dt_out) .eq. 0.0) then
             ! Write output for this timestep

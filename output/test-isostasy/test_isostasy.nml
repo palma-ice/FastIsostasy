@@ -1,5 +1,6 @@
 &isostasy 
     method          = 4                      ! 0: constant lithospheric displacement; 1: LLRA; 2: ELRA, 3: EGIA, 4: ELVA
+    use_reg_lith    = False                  ! True: regional elastic lithosphere, False: local lithosphere (ELVA method)
     dt_step         = 10.0                   ! [yr] Max. timestep to recalculate bedrock uplift and rate of change
     dt_lith         = 50.0                   ! [yr] Min. timestep to recalculate equilibrium lithospheric displacement
     He_lith         = 88.0                   ! [km] Effective elastic thickness lithosphere

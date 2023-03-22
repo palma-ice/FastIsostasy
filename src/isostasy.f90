@@ -35,26 +35,20 @@ module isostasy
     
     type isos_param_class 
         integer            :: method            ! Type of isostasy to use
+        logical            :: use_reg_lith      ! Regional (elastic) lithospheric load, or local load
         real(wp)           :: dt_lith           ! [yr] Timestep to recalculate equilibrium lithospheric displacement
         real(wp)           :: dt_step           ! [yr] Timestep to recalculate bedrock uplift and rate
         real(wp)           :: He_lith           ! [km] Effective elastic thickness of lithosphere
         real(wp)           :: tau               ! [yr] Asthenospheric relaxation constant
         
         ! Internal parameters 
+        real(wp) :: dx                        ! [m] Horizontal resolution                           
         real(wp) :: L_w                       ! [m] Lithosphere flexural length scale (for method=2)
         integer  :: nr                        ! [-] Radius of neighborhood for convolution, in number of grid points        
         real(wp) :: time_lith                 ! [yr] Current model time of last update of equilibrium lithospheric displacement
         real(wp) :: time_step                 ! [yr] Current model time of last update of bedrock uplift
-!mmr----------------------------------------------------------------
         real(wp) :: mu                        ! [1/m] 2pi/L                                         
-        real(wp) :: dx                        ! [m] Horizontal resolution                           
-
-        !ajr
-        ! ! Parameters for analytical ELVA disk solution - Alex - class apart?                              
-        ! real(wp) :: kappa_min = 0.  ! [] Minimum kappa for gaussian quadrature       
-        ! real(wp) :: kappa_max = 0.1 ! [] Maximum kappa for gaussian quadrature       
-        ! real(wp) :: dk = 1.e-3      ! [] Step in kappa for gaussian quadrature       
-!mmr----------------------------------------------------------------
+        
     end type 
 
     type isos_state_class 
@@ -73,19 +67,12 @@ module isostasy
         real(wp), allocatable :: w0(:,:)            ! Reference equilibrium displacement
         real(wp), allocatable :: q1(:,:)            ! Current load          
         real(wp), allocatable :: w1(:,:)            ! Current equilibrium displacement
-!mmr----------------------------------------------------------------
-!mmr Alex -  class apart?   (this is for the ELVA numerical solution)             
+
+        ! ELVA-specific variables (mmr: class apart?)
         real(wp), allocatable :: kappa(:,:)         ! sqrt(p^2 + q^2) as in Bueler et al 2007                      
         real(wp), allocatable :: beta(:,:)          ! beta as in Bueler et al 2007                                 
         real(wp), allocatable :: w2(:,:)            ! Current viscous equilibrium displacement
         
-! mmr Alex  - class apart? (this is for tge ELVA disk analytical solution)      
-        real(wp), allocatable    :: w2_ana(:,:)        ! Current analytical viscous equilibrium displacement                               
-        real(wp), allocatable    :: kappa_mod(:)       ! module of kappa (for analytical disk-load solution)                               
-        real(wp), allocatable    :: dist2c(:,:)        ! distance of individual points to disk center (for analytical disk-load solution)  
-        real(wp), allocatable    :: r(:)               ! radial distance to disk center (for analytical disk-load solution)                
-        integer(wp), allocatable :: lr(:,:)         ! index for remapping (for analytical disk-load solution)                           
-!mmr----------------------------------------------------------------
     end type isos_state_class
 
     type isos_class
@@ -119,18 +106,12 @@ module isostasy
         real(wp) :: radius_fac
         real(wp) :: filter_scaling
         real(wp) :: D_lith_const
-!mmr----------------------------------------------------------------    
-        real(wp) :: r0      
-        real(wp) :: h0      
-        real(wp) :: eta    
-
-        logical, parameter :: calc_analytical = .FALSE.
-!mmr---------------------------------------------------------------- 
-
 
         ! First, load parameters from parameter file `filename`
         call isos_par_load(isos%par,filename)
         
+        ! Store grid resolution
+        isos%par%dx = dx
 
         select case(isos%par%method)
             case(2)
@@ -253,25 +234,10 @@ module isostasy
                 ! Populate 2D D_lith field for aesethics too
                 isos%now%D_lith = D_lith_const
 
-                ! Store horizonal resolution
-                isos%par%dx = dx
-                
                 ! Calculate parameters needed for elastic lithosphere viscous asthenosphere (ELVA)                                        
                 ! solution as in Bueler et al 2007 (eq 11)                                                                                
 !                      
                 call calc_asthenosphere_viscous_params(isos%par%mu,isos%now%kappa,isos%now%beta,isos%now%D_lith,nx,ny,isos%par%dx)
-
-                !ajr
-                ! if (calc_analytical) then   
-                !     call calc_analytical_asthenosphere_viscous_disk_params(isos%now%kappa_mod,isos%now%dist2c,isos%now%r, &
-                !                         isos%now%lr,isos%par%kappa_min,isos%par%kappa_max,isos%par%dk,nx,ny,isos%par%dx)                                    
-                
-                !     r0     = 1000.0e3 ! [m] recheck - include into routine?
-                !     h0     = 1000.0   ! [m] 
-                !     eta    = 1.e+21   ! [Pa s]
-
-                !     call initialize_analytical_integrand(ana,r0,h0,D_lith_const,eta)
-                ! end if
 
                 write(*,*) "isos_init:: summary"
                 write(*,*) "    He_lith (km): ", isos%par%He_lith 
@@ -284,20 +250,10 @@ module isostasy
 
                 write(*,*) "    mu (1/m):  ", isos%par%mu                                                       
                 write(*,*) "    dx (m):    ", isos%par%dx 
-                !ajr                                                      
-                ! write(*,*) "    kappa_min: ", isos%par%kappa_min                                                
-                ! write(*,*) "    kappa_max: ", isos%par%kappa_max                                                
-                ! write(*,*) "    dk ( ):    ", isos%par%dk                                                       
 
                 write(*,*) "    range(kappa): ", minval(isos%now%kappa), maxval(isos%now%kappa)                
                 write(*,*) "    range(beta):  ", minval(isos%now%beta),  maxval(isos%now%beta)                   
 
-                !ajr
-                ! if (calc_analytical) then                
-                !    write(*,*) "    range(kappa_mod): ", minval(isos%now%kappa_mod),  maxval(isos%now%kappa_mod)
-                ! end if           
-!mmr----------------------------------------------------------------
-            
              case DEFAULT 
 
                 ! Set elastic length scale to zero (not used)
@@ -314,15 +270,9 @@ module isostasy
                 isos%now%kei = 0.0 
                 isos%now%G0  = 0.0
                 
-!mmr----------------------------------------------------------------
-!mmr - Alex, these should go within case = 4 but isos is initialized just after                
-                ! Set kappa to zero (only used for ELVA)                
-                isos%now%kappa = 0.0                                    
-                ! Set mu to zero (only used for ELVA)                   
-                isos%par%mu = 0.0                                       
-                ! Initializw (only used for ELVA)                   
-                isos%par%dx = dx
-!mmr----------------------------------------------------------------
+                ! Set ELVA values to zero too 
+                isos%now%kappa = 0.0   
+                isos%par%mu    = 0.0 
 
              end select
 
@@ -340,11 +290,9 @@ module isostasy
         isos%now%dzbdt      = 0.0 
 
         isos%now%w0         = 0.0   
-        isos%now%w1         = 0.0
-!mmr----------------------------------------------------------------        
+        isos%now%w1         = 0.0      
         isos%now%w2         = 0.0 
-        isos%now%w2_ana     = 0.0 
-!mmr----------------------------------------------------------------        
+
         ! Set time to very large value in the future 
         isos%par%time_lith = 1e10 
         isos%par%time_step = 1e10
@@ -367,10 +315,6 @@ module isostasy
         real(wp), intent(IN) :: H_ice_ref(:,:)        ! [m] Reference ice thickness (associated with reference z_bed)
         real(wp), intent(IN) :: z_sl_ref(:,:)         ! [m] Reference sea level (associated with reference z_bed)
         real(wp), intent(IN) :: time                  ! [a] Initial time 
-
-!mmr----------------------------------------------------------------
-        logical, parameter :: calc_analytical = .FALSE.
-!mmr----------------------------------------------------------------  
 
         ! Store initial bedrock field 
         isos%now%z_bed = z_bed 
@@ -439,21 +383,17 @@ module isostasy
 
         ! Call isos_update to diagnose rate of change
         ! (no change to z_bed will be applied since isos%par%time==time)
-!mmr----------------------------------------------------------------
-!mmr         call isos_update(isos,H_ice,z_sl,time)
-        call isos_update(isos,H_ice,z_sl,time,calc_analytical) 
-!mmr----------------------------------------------------------------               
+
+        call isos_update(isos,H_ice,z_sl,time) 
+            
         write(*,*) "isos_init_state:: "
         write(*,*) "  Initial time:   ", isos%par%time_step 
         write(*,*) "  range(He_lith): ", minval(isos%now%He_lith), maxval(isos%now%He_lith)
         write(*,*) "  range(tau):     ", minval(isos%now%tau),     maxval(isos%now%tau)
         write(*,*) "  range(w0):      ", minval(isos%now%w0),      maxval(isos%now%w0)
         write(*,*) "  range(w1):      ", minval(isos%now%w1),      maxval(isos%now%w1)
+        write(*,*) "  range(w2):      ", minval(isos%now%w2),      maxval(isos%now%w2)
         write(*,*) "  range(z_bed):   ", minval(isos%now%z_bed),   maxval(isos%now%z_bed)
-!mmr----------------------------------------------------------------         
-        write(*,*) "  range(w2):      ", minval(isos%now%w2),      maxval(isos%now%w2)      
-        write(*,*) "  range(w2_ana):  ", minval(isos%now%w2_ana),  maxval(isos%now%w2_ana)  
-!mmr----------------------------------------------------------------
 
         ! Make sure tau does not contain zero values, if so
         ! output an error for diagnostics. Don't kill the program
@@ -468,28 +408,20 @@ module isostasy
 
     end subroutine isos_init_state
 
-!mmr----------------------------------------------------------------
-!mmr     subroutine isos_update(isos,H_ice,z_sl,time)
-    subroutine isos_update(isos,H_ice,z_sl,time,calc_analytical) 
-!mmr----------------------------------------------------------------
+    subroutine isos_update(isos,H_ice,z_sl,time) 
+
         implicit none 
 
         type(isos_class), intent(INOUT) :: isos 
         real(wp), intent(IN) :: H_ice(:,:)        ! [m] Current ice thickness 
         real(wp), intent(IN) :: z_sl(:,:)         ! [m] Current sea level 
         real(wp), intent(IN) :: time              ! [a] Current time  
-!mmr----------------------------------------------------------------
-        logical, intent(IN)   :: calc_analytical
-!mmr----------------------------------------------------------------
+
         ! Local variables 
         real(wp) :: dt, dt_now  
         integer  :: n, nstep 
         logical  :: update_equil
-!mmr----------------------------------------------------------------
-! mmr Alex - introduced update analytical solution to reduce computational time
-        logical  :: update_analytical 
-!mmr----------------------------------------------------------------       
-        
+
         ! Step 0: determine current timestep and number of iterations
         dt = time - isos%par%time_step 
 
@@ -511,16 +443,6 @@ module isostasy
                 update_equil = .FALSE. 
             end if 
 
-!mmr----------------------------------------------------------------
-           ! Only update analytical displacement height (w_ana) if 
-           ! enough time has passed (to save on computations)
-             if ( (isos%par%time_step+dt_now) .ge. time) then 
-                 update_analytical = .TRUE.                   
-             else                                             
-                 update_analytical = .FALSE.                  
-             end if 
-!mmr----------------------------------------------------------------
-            
             ! Step 1: diagnose equilibrium displacement and rate of bedrock uplift
             select case(isos%par%method)
 
@@ -574,31 +496,31 @@ module isostasy
                     ! ELVA - viscous half-space asthenosphere overlain by                                                   
                     ! elastic plate lithosphere with uniform constants                                                      
                     
-                    ! Elastic lithosphere (EL)                                                                              
-                    if (update_equil) then                                                                              
+                    if (isos%par%use_reg_lith) then 
+
+                        ! Elastic lithosphere (EL)                                                                              
+                        if (update_equil) then                                                                              
 
 !mmr recheck - Alex - ignored for the moment, need to recalculate Green's coefficients (solution is different in Bueler et al 2007)
                        
-!mmr                    call calc_litho_regional(isos%now%w1,isos%now%q1,isos%now%z_bed,H_ice,z_sl,isos%now%G0)              
-!mmr                    call calc_litho_local(isos%now%w1,isos%now%q1,isos%now%z_bed,H_ice,z_sl)                         
+                            call calc_litho_regional(isos%now%w1,isos%now%q1,isos%now%z_bed,H_ice,z_sl,isos%now%G0)              
+                            call calc_litho_local(isos%now%w1,isos%now%q1,isos%now%z_bed,H_ice,z_sl)                         
+
+                        end if
+
+                    else
+                        ! Local lithosphere (LL)
+                        ! Imposing load here because there's no EL component
+
+                        isos%now%q1 = rho_ice*g*H_ice
 
                     end if
                     
                     ! Viscous (half-space) asthenosphere                                                                             
 
-                    isos%now%q1 = rho_ice*g*H_ice !mmr recheck - imposing load here because there's no EL component
-
                     call calc_asthenosphere_viscous(isos%now%dzbdt,isos%now%w2,isos%now%q1,    &                            
                                                     isos%par%mu,isos%now%kappa,isos%now%beta,dt_now)
 
-!ajr
-! !mmr Alex  - introduced to reduce computational time in analytical solution
-!                     if (calc_analytical .and. update_analytical) then                                                       
-!                        call calc_analytical_asthenosphere_viscous_disk(ana,isos%par%dx,   &                                 
-!                             isos%par%time_step + dt_now, &                                   !mmr  Alex - this is not very clean (from me)
-!                             isos%now%kappa_mod,isos%now%dist2c,isos%now%r,isos%now%lr,isos%now%w2_ana)  
-!                      end if
-! !mmr----------------------------------------------------------------
                  end select
 
             if (update_equil) then 
@@ -616,7 +538,7 @@ module isostasy
             end if
 
             ! Write a summary to check timestepping
-            !write(*,*) "isos: ", n, time, dt_now, isos%par%time_step, isos%par%time_lith, update_analytical
+            !write(*,*) "isos: ", n, time, dt_now, isos%par%time_step, isos%par%time_lith
 
             if ( abs(time-isos%par%time_step) .lt. 1e-5) then 
                 ! Desired time has reached, exit the loop 
@@ -653,6 +575,7 @@ module isostasy
         character(len=*),       intent(IN)  :: filename 
 
         call nml_read(filename,"isostasy","method",         par%method)
+        call nml_read(filename,"isostasy","use_reg_lith",   par%use_reg_lith)
         call nml_read(filename,"isostasy","dt_lith",        par%dt_lith)
         call nml_read(filename,"isostasy","dt_step",        par%dt_step)
         call nml_read(filename,"isostasy","He_lith",        par%He_lith)
@@ -684,21 +607,19 @@ module isostasy
 
         allocate(now%kei(nfilt,nfilt))
         allocate(now%G0(nfilt,nfilt))
-!mmr----------------------------------------------------------------        
+       
         allocate(now%kappa(nx,ny)) 
         allocate(now%beta(nx,ny))  
-!mmr----------------------------------------------------------------                
+             
         allocate(now%z_bed(nx,ny))
         allocate(now%dzbdt(nx,ny))
         allocate(now%z_bed_ref(nx,ny))
         allocate(now%q0(nx,ny))
         allocate(now%w0(nx,ny))
         allocate(now%q1(nx,ny))
-        allocate(now%w1(nx,ny))
-!mmr----------------------------------------------------------------        
+        allocate(now%w1(nx,ny))     
         allocate(now%w2(nx,ny))     
-        allocate(now%w2_ana(nx,ny)) 
-!mmr----------------------------------------------------------------                 
+                
         return 
 
     end subroutine isos_allocate
@@ -715,21 +636,19 @@ module isostasy
         
         if (allocated(now%kei))         deallocate(now%kei)
         if (allocated(now%G0))          deallocate(now%G0)
-!mmr----------------------------------------------------------------        
+     
         if (allocated(now%kappa))       deallocate(now%kappa) 
         if (allocated(now%beta))        deallocate(now%beta)  
-!mmr----------------------------------------------------------------                
+             
         if (allocated(now%z_bed))       deallocate(now%z_bed)
         if (allocated(now%dzbdt))       deallocate(now%dzbdt)
         if (allocated(now%z_bed_ref))   deallocate(now%z_bed_ref)
         if (allocated(now%q0))          deallocate(now%q0)
         if (allocated(now%w0))          deallocate(now%w0)
         if (allocated(now%q1))          deallocate(now%q1)
-        if (allocated(now%w1))          deallocate(now%w1)
-!mmr----------------------------------------------------------------        
+        if (allocated(now%w1))          deallocate(now%w1)    
         if (allocated(now%w2))          deallocate(now%w2)     
-        if (allocated(now%w2_ana))      deallocate(now%w2_ana) 
-!mmr----------------------------------------------------------------                
+
         return 
 
     end subroutine isos_deallocate
