@@ -325,7 +325,7 @@ module isostasy
                    h0     = 1000.0   ! [m] 
                    eta    = 1.e+21   ! [Pa s]
 
-                endif
+                end if
 
                 write(*,*) "isos_init:: summary"
                 write(*,*) "    He_lith (km): ", isos%par%He_lith 
@@ -348,7 +348,7 @@ module isostasy
                 if (calc_analytical) then                
                    write(*,*) "    range(kappa_mod): ", minval(isos%now%kappa_mod),  maxval(isos%now%kappa_mod)    
                    call initialize_analytical_integrand(ana,r0,h0,D_lith_const,eta)
-                endif           
+                end if           
 !mmr----------------------------------------------------------------
             
              case DEFAULT 
@@ -647,7 +647,7 @@ module isostasy
                        call calc_analytical_asthenosphere_viscous_disk(ana,isos%par%dx,   &                                 
                             isos%par%time_step + dt_now, &                                   !mmr  Alex - this is not very clean (from me)
                             isos%now%kappa_mod,isos%now%dist2c,isos%now%r,isos%now%lr,isos%now%w2_ana)  
-                     endif
+                     end if
 !mmr----------------------------------------------------------------
                  end select
 
@@ -2428,7 +2428,7 @@ end if
       
       kappa = 0.0
       
-      ic = (nx-1)/2 + 1  !mmr Alex - I have already calculated these in test_isostasy, I don't like to recalculate it here
+      ic = (nx-1)/2 + 1
       jc = (ny-1)/2 + 1
 
       do i = 1, nx
@@ -2436,17 +2436,17 @@ end if
             ip = i-1
          else
             ip = nx-i+1
-         endif
+         end if
          do j = 1, ny
                if (j.le.jc) then
                iq = j-1  
             else
                iq = ny-j+1
-            endif
+            end if
             kappa(i,j)  = (ip*ip + iq*iq)**0.5
             beta(i,j)   = rho_a*g + D_lith(i,j)*(mu**4)*kappa(i,j)**4
-         enddo
-      enddo
+         end do
+      end do
 
          return
       
@@ -2562,9 +2562,9 @@ end if
 
       else  
 
-         write(*,*) 'Error, you have to choose an option to calculate the FFTs'
+         write(*,*) "Error, you have to choose an option to calculate the FFTs."
          stop
-      endif
+      end if
          
     ! Impose boundary conditions 
 
@@ -2602,9 +2602,9 @@ end if
       m    = size(in,2)
 
       if(l.ne.m) then
-         print*,'Dimensions do not match, stopping now'
+         write(*,*) "Dimensions do not match, stopping now"
          stop
-      endif
+      end if
 
       in_aux = in
 
@@ -2689,7 +2689,7 @@ end if
          rec = real(rec_aux,wp) 
          call fftw_destroy_plan(plan)
          call r4mat_print_some (m, n, rec, n/2-2, m/2-2, n/2+2, m/2+2, '  Part of the recovered data:' )
-      endif
+      end if
 
       deallocate(in_aux)
       deallocate(out_aux)
@@ -2743,7 +2743,7 @@ end if
          rec = real(rec_aux,wp) 
          call fftw_destroy_plan(plan)
          call r4mat_print_some ( m, n, rec, n/2-2, m/2-2, n/2+2, m/2+2, '  Part of the recovered data:' )
-      endif
+      end if
 
       deallocate(in_aux)
       deallocate(out_aux)
@@ -2863,74 +2863,71 @@ end if
     
     subroutine calc_analytical_asthenosphere_viscous_disk_params(nx,ny,dx,kappa_min,kappa_max,dk,kappa_mod,dist2c,r,lr)  
        
-      integer(kind=4), intent(IN)              :: nx, ny
-      real(wp), intent(IN)                     :: dx
-      real(wp), intent(IN)                     :: kappa_min, kappa_max, dk
+        integer(kind=4), intent(IN)              :: nx, ny
+        real(wp), intent(IN)                     :: dx
+        real(wp), intent(IN)                     :: kappa_min, kappa_max, dk
 
-      real(wp), allocatable, intent(OUT)        :: kappa_mod(:), dist2c(:,:), r(:) 
-      integer(kind=4), allocatable, intent(OUT) :: lr(:,:)
-      
-      integer(kind=4), allocatable              :: n(:,:)
-      real(wp)                                  :: xd, yd
-      integer(kind=4)                           :: i, j, ip, iq, ic, jc, k, nk, l, nl
+        real(wp), allocatable, intent(OUT)        :: kappa_mod(:), dist2c(:,:), r(:) 
+        integer(kind=4), allocatable, intent(OUT) :: lr(:,:)
 
+        integer(kind=4), allocatable              :: n(:,:)
+        real(wp)                                  :: xd, yd
+        integer(kind=4)                           :: i, j, ip, iq, ic, jc, k, nk, l, nl
 
-      nk = int((kappa_max-kappa_min)/dk)
+        nk = int((kappa_max-kappa_min)/dk)
+        nl = int(nx*sqrt(2.)/2) + 2
       
-      nl = int(nx*sqrt(2.)/2) + 2
+        allocate(kappa_mod(nk+1))
+        allocate(dist2c(nx,ny))
+        allocate(r(nl))
+        allocate(lr(nx,ny))
+        allocate(n(nx,ny))
       
-      
-      allocate(kappa_mod(nk+1))
-      allocate(dist2c(nx,ny))
-      allocate(r(nl))
-      allocate(lr(nx,ny))
-      allocate(n(nx,ny))
-      
-      do k = 1, nk+1
-         kappa_mod(k) = kappa_min + dk * (k-1)
-      enddo
+        do k = 1, nk+1
+            kappa_mod(k) = kappa_min + dk * (k-1)
+        end do
 
       
-      ic = (nx-1)/2 + 1  !mmr Alex - I have already calculated these in test_isostasy, I don't like to recalculate it here
-      jc = (ny-1)/2 + 1
+        ic = (nx-1)/2 + 1  !mmr Alex - I have already calculated these in test_isostasy, I don't like to recalculate it here
+        jc = (ny-1)/2 + 1
 
-      do i = 1, nx
-         do j = 1, ny
+        do i = 1, nx
+        do j = 1, ny
             xd = dx*(i-ic)
             yd = dx*(j-jc)
             dist2c(i,j) = sqrt(xd**2 + yd**2)  !mmr Alex - I have already calculated it in test_isostasy, I don't like to recalculate it here
-         enddo
-      enddo
+        end do
+        end do
 
                
-      ! remap to (nx * xy) grid (w = w(r,t) so all points with same r have same w; this reduces computational time)
+        ! remap to (nx * xy) grid (w = w(r,t) so all points with same r have same w; this reduces computational time)
       
 
-      do l = 1, nl 
-         r(l) =  dx * (l-1)
-      enddo
+        do l = 1, nl 
+            r(l) =  dx * (l-1)
+        end do
      
-         do i = 1, nx 
-            do j = 1, ny
-               n(i,j) = 0       
-               do l = 1, nl-1
-                  if (dist2c(i,j).ge.r(l) .and. dist2c(i,j) .lt. r(l+1) ) then
-                     lr(i,j) = l 
-                     n(i,j) = n(i,j) + 1
-                  endif
-               enddo
-               if (n(i,j).ne.1) then
-                  print*,'==> error in radial distance allocation', n(i,j), i, j
-                  stop
-               endif
-            enddo
-         enddo
+        do i = 1, nx 
+        do j = 1, ny
+            n(i,j) = 0       
+            do l = 1, nl-1
+                if (dist2c(i,j).ge.r(l) .and. dist2c(i,j) .lt. r(l+1) ) then
+                    lr(i,j) = l 
+                    n(i,j) = n(i,j) + 1
+                end if
+            end do
+            if (n(i,j).ne.1) then
+                write(*,*) "==> error in radial distance allocation", n(i,j), i, j
+                stop
+            end if
+        end do
+        end do
 
          deallocate(n)
          
          return
       
-       end subroutine calc_analytical_asthenosphere_viscous_disk_params
+    end subroutine calc_analytical_asthenosphere_viscous_disk_params
        
     subroutine calc_analytical_asthenosphere_viscous_disk(me,dx,t,kappa_mod,dist2c,r,lr,w) 
 
@@ -2994,14 +2991,14 @@ end if
 
             wr(l)  = wr(l) + ans
 
-         enddo ! nk 
-      enddo ! nl
+         end do ! nk 
+      end do ! nl
 
       do i = 1, nx
          do j = 1, ny
             w(i,j) = wr(lr(i,j))  
-         enddo
-      enddo
+         end do
+      end do
       
       w  = w - 0.25*(w(1,1)+w(nx,ny)+w(1,ny)+w(nx,1)) 
 
