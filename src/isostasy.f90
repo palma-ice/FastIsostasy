@@ -314,9 +314,8 @@ module isostasy
                 
                 ! Calculate parameters needed for elastic lithosphere viscous asthenosphere (ELVA)                                        
                 ! solution as in Bueler et al 2007 (eq 11)                                                                                
-!
-                call calc_asthenosphere_viscous_params(nx,ny,isos%par%dx,isos%now%D_lith,isos%par%mu,isos%now%kappa,isos%now%beta)        
-
+!                      
+                call calc_asthenosphere_viscous_params(isos%par%mu,isos%now%kappa,isos%now%beta,isos%now%D_lith,nx,ny,isos%par%dx)
                 if (calc_analytical) then   
                    call calc_analytical_asthenosphere_viscous_disk_params(nx,ny,isos%par%dx,isos%par%kappa_min,isos%par%kappa_max,isos%par%dk,&
                         isos%now%kappa_mod,isos%now%dist2c,isos%now%r,isos%now%lr)                                    
@@ -2409,17 +2408,19 @@ end if
 ! mmr ========================================================
 
  
-    subroutine calc_asthenosphere_viscous_params(nx,ny,dx,D_lith,mu,kappa,beta) 
-       
-      integer(kind=4), intent(IN)              :: nx, ny
-      real(wp), intent(IN)                     :: dx
-      real(wp), intent(IN)                     :: D_lith(:,:)
-
-      real(wp), intent(OUT)                     :: mu      
-      real(wp), allocatable, intent(OUT)        :: kappa(:,:), beta(:,:) 
-      
-      real(wp)                                  :: xd, yd
-      integer(kind=4)                           :: i, j, ip, iq, ic, jc 
+    subroutine calc_asthenosphere_viscous_params(mu,kappa,beta,D_lith,nx,ny,dx) 
+    
+        real(wp), intent(OUT)               :: mu      
+        real(wp), allocatable, intent(OUT)  :: kappa(:,:)
+        real(wp), allocatable, intent(OUT)  :: beta(:,:) 
+        real(wp), intent(IN)                :: D_lith(:,:)
+        integer,  intent(IN)                :: nx
+        integer,  intent(IN)                :: ny
+        real(wp), intent(IN)                :: dx
+        
+        ! Local variables
+        real(wp)                            :: xd, yd
+        integer                             :: i, j, ip, iq, ic, jc 
       
       allocate(kappa(nx,ny))
       allocate(beta(nx,ny))
