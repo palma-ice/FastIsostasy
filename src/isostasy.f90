@@ -496,13 +496,13 @@ module isostasy
                     ! elastic plate lithosphere with uniform constants                                                      
                     
                     ! Local lithosphere (LL)
-                    ! Calculate the local lithospheric load here because 
+                    ! (update every time because it is cheap)
+                    ! Note: calculate the local lithospheric load here because 
                     ! the EL component is contained in the ELVA model solution
-
-                    isos%now%q1 = rho_ice*g*H_ice
-
+                    ! q1 will be used (the load), while w1 will not be used further.
+                    call calc_litho_local(isos%now%w1,isos%now%q1,isos%now%z_bed,H_ice,z_sl)
+                    
                     ! Viscous (half-space) asthenosphere                                                                             
-
                     call calc_asthenosphere_viscous(isos%now%dzbdt,isos%now%w2,isos%now%q1,    &                            
                                                     isos%par%mu,isos%now%kappa,isos%now%beta,dt_now)
 
