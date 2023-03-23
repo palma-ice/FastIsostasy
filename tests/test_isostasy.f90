@@ -1,24 +1,13 @@
 program test_isostasy
 
     use ncio
-    !use yelmo 
+    
+    use isostasy_defs, only : sp, dp, wp
     use isostasy 
     use isostasy_benchmarks
 
     implicit none
-
-    ! Internal constants
-    integer,  parameter :: dp  = kind(1.d0)
-    integer,  parameter :: sp  = kind(1.0)
-
-    ! Choose the precision of the library (sp,dp)
-    integer,  parameter :: wp = sp 
-
     
-    real(wp), parameter :: rho_ice  = 910.0         ! [kg/m^3]
-    real(wp), parameter :: rho_a    = 3300.0        ! [kg/m^3] 3370 used by Coulon et al (2021)
-    real(wp), parameter :: g  = 9.81                ! [m/s^2]
-
     character(len=512) :: outfldr
     character(len=512) :: path_par
     character(len=512) :: file_out 
@@ -225,7 +214,8 @@ program test_isostasy
                 case("elva_disk")
                     
                     ! Calculate analytical solution to elva_disk
-                    call isosbench_elva_disk(z_bed_bench,r0,h0,eta,isos1%par%dx,isos1%now%D_lith(1,1),rho_ice,rho_a,g,time)
+                    call isosbench_elva_disk(z_bed_bench,r0,h0,eta,isos1%par%dx,isos1%now%D_lith(1,1), &
+                                                            isos1%par%rho_ice,isos1%par%rho_a,isos1%par%g,time)
 
                     ! Write to file 
                     call isos_write_step(isos1,file_out,time,H_ice,z_sl,z_bed_bench)
