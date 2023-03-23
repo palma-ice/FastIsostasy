@@ -9,78 +9,16 @@ module isostasy
     
     use, intrinsic :: iso_fortran_env, only : input_unit, output_unit, error_unit
 
+    use isostasy_def, only : sp, dp, wp, pi, isos_param_class, isos_state_class, isos_class
+    
+    use solver_elva
+
     implicit none 
 
-    ! Internal constants
-    integer,  parameter :: dp  = kind(1.d0)
-    integer,  parameter :: sp  = kind(1.0)
-
-    ! Choose the precision of the library (sp,dp)
-    integer,  parameter :: wp = sp 
-
-    real(wp), parameter :: g  = 9.81                ! [m/s^2]
-    real(wp), parameter :: pi = 3.14159265359
-
-    real(wp), parameter :: rho_ice  = 910.0         ! [kg/m^3]
-    real(wp), parameter :: rho_sw   = 1028.0        ! [kg/m^3] 
-    real(wp), parameter :: rho_w    = 1000.0        ! [kg/m^3] 
-    real(wp), parameter :: rho_a    = 3300.0        ! [kg/m^3] 3370 used by Coulon et al (2021)
-!mmr----------------------------------------------------------------
-    real(wp), parameter :: nu       = 0.5   !0.25   ! [-]   Poisson's ratio: 0.25 for Coulon et al (2021) | 0.5 for Bueler et al (2007) 
-    real(wp), parameter :: E        = 66.0  !100.0  ! [GPa] Young's modulus | 100 for Coulon et al (2021) | 66  for Bueler et al (2007) 
-    real(wp), parameter :: eta      = 1.e21         ! [Pa s] Asthenosphere's viscosity, Bueler et al (2007)
-!mmr----------------------------------------------------------------    
-    real(wp), parameter :: r_earth  = 6.378e6       ! [m]  Earth's radius, Coulon et al (2021) 
-    real(wp), parameter :: m_earth  = 5.972e24      ! [kg] Earth's mass,   Coulon et al (2021) 
-    
-    type isos_param_class 
-        integer            :: method            ! Type of isostasy to use
-        real(wp)           :: dt_lith           ! [yr] Timestep to recalculate equilibrium lithospheric displacement
-        real(wp)           :: dt_step           ! [yr] Timestep to recalculate bedrock uplift and rate
-        real(wp)           :: He_lith           ! [km] Effective elastic thickness of lithosphere
-        real(wp)           :: tau               ! [yr] Asthenospheric relaxation constant
-        
-        ! Internal parameters 
-        real(wp) :: dx                        ! [m] Horizontal resolution                           
-        real(wp) :: L_w                       ! [m] Lithosphere flexural length scale (for method=2)
-        integer  :: nr                        ! [-] Radius of neighborhood for convolution, in number of grid points        
-        real(wp) :: time_lith                 ! [yr] Current model time of last update of equilibrium lithospheric displacement
-        real(wp) :: time_step                 ! [yr] Current model time of last update of bedrock uplift
-        real(wp) :: mu                        ! [1/m] 2pi/L                                         
-        
-    end type 
-
-    type isos_state_class 
-        
-        real(wp), allocatable :: tau(:,:)           ! [yr] Asthenospheric relaxation timescale field
-        real(wp), allocatable :: He_lith(:,:)       ! [m]  Effective elastic thickness of the lithosphere
-        real(wp), allocatable :: D_lith(:,:)        ! [N-m] Lithosphere flexural rigidity
-        
-        real(wp), allocatable :: kei(:,:)           ! Kelvin function filter values 
-        real(wp), allocatable :: G0(:,:)            ! Green's function values
-       
-        real(wp), allocatable :: z_bed(:,:)         ! Bedrock elevation         [m]
-        real(wp), allocatable :: dzbdt(:,:)         ! Rate of bedrock uplift    [m/a]
-        real(wp), allocatable :: z_bed_ref(:,:)     ! Reference (unweighted) bedrock 
-        real(wp), allocatable :: q0(:,:)            ! Reference load
-        real(wp), allocatable :: w0(:,:)            ! Reference equilibrium displacement
-        real(wp), allocatable :: q1(:,:)            ! Current load          
-        real(wp), allocatable :: w1(:,:)            ! Current equilibrium displacement
-
-        ! ELVA-specific variables (mmr: class apart?)
-        real(wp), allocatable :: kappa(:,:)         ! sqrt(p^2 + q^2) as in Bueler et al 2007                      
-        real(wp), allocatable :: beta(:,:)          ! beta as in Bueler et al 2007                                 
-        real(wp), allocatable :: w2(:,:)            ! Current viscous equilibrium displacement
-        
-    end type isos_state_class
-
-    type isos_class
-        type(isos_param_class) :: par
-        type(isos_state_class) :: now      
-    end type
-
     private
-    public :: isos_class 
+    public :: isos_param_class
+    public :: isos_state_class
+    public :: isos_class
     public :: isos_init
     public :: isos_init_state 
     public :: isos_update 
@@ -91,15 +29,25 @@ module isostasy
     
 !mmr----------------------------------------------------------------    
 !mmr     subroutine isos_init(isos,filename,nx,ny,dx)
-    subroutine isos_init(isos,filename,nx,ny,dx)
+    subroutine isos_init(isos,filename,group,nx,ny,dx,E,nu,rho_ice,rho_sw,rho_a,g,r_earth,m_earth)
 !mmr----------------------------------------------------------------    
 
         implicit none 
 
         type(isos_class), intent(OUT) :: isos 
         character(len=*), intent(IN)  :: filename 
-        integer,  intent(IN) :: nx, ny 
-        real(wp), intent(IN) :: dx
+        character(len=*), intent(IN)  :: group 
+        integer,  intent(IN)  :: nx
+        integer,  intent(IN)  :: ny 
+        real(wp), intent(IN)  :: dx
+        real(wp), intent(IN), optional :: E
+        real(wp), intent(IN), optional :: nu
+        real(wp), intent(IN), optional :: rho_ice
+        real(wp), intent(IN), optional :: rho_sw
+        real(wp), intent(IN), optional :: rho_a
+        real(wp), intent(IN), optional :: g 
+        real(wp), intent(IN), optional :: r_earth 
+        real(wp), intent(IN), optional :: m_earth
 
         ! Local variables
         real(wp) :: radius_fac
@@ -107,25 +55,36 @@ module isostasy
         real(wp) :: D_lith_const
 
         ! First, load parameters from parameter file `filename`
-        call isos_par_load(isos%par,filename)
+        call isos_par_load(isos%par,filename,group)
         
+        ! Overwrite physical constants with arguments if available
+        if (present(E))         isos%par%E       = E 
+        if (present(nu))        isos%par%nu      = nu 
+        if (present(rho_ice))   isos%par%rho_ice = rho_ice 
+        if (present(rho_sw))    isos%par%rho_sw  = rho_sw 
+        if (present(rho_a))     isos%par%rho_a   = rho_a 
+        if (present(g))         isos%par%g       = g 
+        if (present(r_earth))   isos%par%r_earth = r_earth 
+        if (present(m_earth))   isos%par%m_earth = m_earth 
+
         ! Store grid resolution
         isos%par%dx = dx
 
         select case(isos%par%method)
-            case(2)
-                ! ELRA method is being used, which requires a constant
+
+            case(2,4)
+                ! ELRA or ELVA method is being used, which require a constant
                 ! value of L_w, D_Lith and thus He_lith everywhere 
                 
                 ! Calculate the flexural rigidity based on the 
                 ! effective elastic thickness of the lithosphere (He_lith),
                 ! Young's modulus and Poisson's ratio. See Coulon et al. (2021) Eq. 5 & 6.
-                D_lith_const = (E*1e9) * (isos%par%He_lith*1e3)**3 / (12.0*(1.0-nu**2))
+                D_lith_const = (isos%par%E*1e9) * (isos%par%He_lith*1e3)**3 / (12.0*(1.0-isos%par%nu**2))
 
                 ! Calculate the flexural length scale
                 ! (Coulon et al, 2021, Eq. in text after Eq. 3)
                 ! Note: will be on the order of 100km
-                isos%par%L_w = (D_lith_const / (rho_a*g))**0.25 
+                isos%par%L_w = (D_lith_const / (isos%par%rho_a*isos%par%g))**0.25 
 
                 ! Modify the relative radius to use for the regional filter
                 ! depending on whether we want to include the forbulge at
@@ -147,7 +106,7 @@ module isostasy
                 ! should be 5-6x radius of relative stiffness to capture the forebuldge
                 ! further out from the depression near the center. 
                 ! Note: previous implementation stopped at 400km, hard coded. 
-                isos%par%nr = int(radius_fac*isos%par%L_w/dx)+1
+                isos%par%nr = int(radius_fac*isos%par%L_w/isos%par%dx)+1
                 
 
                 ! Now, initialize isos variables 
@@ -155,103 +114,53 @@ module isostasy
             
 
                 ! Calculate the Kelvin function filter 
-                call calc_kei_filter_2D(isos%now%kei,L_w=isos%par%L_w,dx=dx,dy=dx)
+                call calc_kei_filter_2D(isos%now%kei,L_w=isos%par%L_w,dx=isos%par%dx,dy=isos%par%dx)
 
                 ! Apply scaling to adjust magnitude of filter for radius of filter cutoff
                 isos%now%kei = filter_scaling*isos%now%kei
 
                 ! Calculate the reference Green's function values
-                call calc_greens_function_scaling(isos%now%G0,isos%now%kei, &
-                                                isos%par%L_w,D_lith_const,dx=dx,dy=dx)
+                call calc_greens_function_scaling(isos%now%G0,isos%now%kei,isos%par%L_w, &
+                                                    D_lith_const,dx=isos%par%dx,dy=isos%par%dx)
 
                 ! Populate 2D D_lith field to have it available
                 isos%now%D_lith = D_lith_const 
 
+                if (isos%par%method .eq. 4) then
+                    ! Calculate parameters needed for elastic lithosphere viscous asthenosphere (ELVA)                                        
+                    ! solution as in Bueler et al 2007 (eq 11)
+                    
+                    call calc_asthenosphere_viscous_params(isos%par%mu,isos%now%kappa,isos%now%beta,isos%now%D_lith, &
+                                                                            isos%par%rho_a,isos%par%g,nx,ny,isos%par%dx)
+                
+                end if 
+
                 write(*,*) "isos_init:: summary"
+                write(*,*) "    E           : ", isos%par%E 
+                write(*,*) "    nu          : ", isos%par%nu
+                write(*,*) "    rho_ice     : ", isos%par%rho_ice
+                write(*,*) "    rho_sw      : ", isos%par%rho_sw
+                write(*,*) "    rho_w       : ", isos%par%rho_w
+                write(*,*) "    rho_a       : ", isos%par%rho_a
+                write(*,*) "    g           : ", isos%par%g
+                write(*,*) "    r_earth     : ", isos%par%r_earth
+                write(*,*) "    m_earth     : ", isos%par%m_earth
+                
                 write(*,*) "    He_lith (km): ", isos%par%He_lith 
                 write(*,*) "    D_lith (N m): ", D_lith_const
                 write(*,*) "    L_w (m):      ", isos%par%L_w 
                 write(*,*) "    nr:           ", isos%par%nr
-                
+                write(*,*) "    dx (m):       ", isos%par%dx 
+
                 write(*,*) "    range(kei): ", minval(isos%now%kei),    maxval(isos%now%kei)
                 write(*,*) "    range(G0):  ", minval(isos%now%G0),     maxval(isos%now%G0)
 
-!mmr----------------------------------------------------------------
-            case(4) 
-                ! ELRA/ELVA method is being used, which require a constant 
-                ! value of L_w, D_Lith and thus He_lith everywhere         
+                if (isos%par%method .eq. 4) then
+                    write(*,*) "    mu (1/m):   ", isos%par%mu                                                       
                 
-                ! Calculate the flexural rigidity based on the 
-                ! effective elastic thickness of the lithosphere (He_lith),
-                ! Young's modulus and Poisson's ratio. See Coulon et al. (2021) Eq. 5 & 6.
-                D_lith_const = (E*1e9) * (isos%par%He_lith*1e3)**3 / (12.0*(1.0-nu**2))
-
-               ! Calculate the flexural length scale
-                ! (Coulon et al, 2021, Eq. in text after Eq. 3)
-                ! Note: will be on the order of 100km
-                isos%par%L_w = (D_lith_const / (rho_a*g))**0.25 
-
-                ! Modify the relative radius to use for the regional filter
-                ! depending on whether we want to include the forbulge at
-                ! large radii. Large radius makes the code run slower though too. 
-                ! Set filter_scaling to < 1.0 to adjust for values of 
-                ! radius_fac <~ 5.0 
-
-                ! Larger radius, no filter scaling needed
-                ! radius_fac      = 6.0 
-                ! filter_scaling  = 1.0 
-
-                ! Smaller radius, filter scaling to improve accuracy
-                radius_fac      = 4.0 
-                filter_scaling  = 0.91 
-
-                ! Calculate radius of grid points to use for regional elastic plate filter
-                ! See Greve and Blatter (2009), Chpt 8, page 192 for methodology 
-                ! and Le Muer and Huybrechts (1996). It seems that this value
-                ! should be 5-6x radius of relative stiffness to capture the forebuldge
-                ! further out from the depression near the center. 
-                ! Note: previous implementation stopped at 400km, hard coded. 
-                isos%par%nr = int(radius_fac*isos%par%L_w/dx)+1
-                
-
-                ! Now, initialize isos variables 
-                call isos_allocate(isos%now,nx,ny,nr=isos%par%nr)
-            
-
-                ! Calculate the Kelvin function filter 
-                call calc_kei_filter_2D(isos%now%kei,L_w=isos%par%L_w,dx=dx,dy=dx)
-
-                ! Apply scaling to adjust magnitude of filter for radius of filter cutoff
-                isos%now%kei = filter_scaling*isos%now%kei
-                
-!mmr recheck - Elastic solution is different in Bueler et al. 2007, need to recalculate Green's coefficients
-                
-                ! Calculate the reference Green's function values
-                call calc_greens_function_scaling(isos%now%G0,isos%now%kei, &
-                                                isos%par%L_w,D_lith_const,dx=dx,dy=dx)
-
-                ! Populate 2D D_lith field for aesethics too
-                isos%now%D_lith = D_lith_const
-
-                ! Calculate parameters needed for elastic lithosphere viscous asthenosphere (ELVA)                                        
-                ! solution as in Bueler et al 2007 (eq 11)                                                                                
-!                      
-                call calc_asthenosphere_viscous_params(isos%par%mu,isos%now%kappa,isos%now%beta,isos%now%D_lith,nx,ny,isos%par%dx)
-
-                write(*,*) "isos_init:: summary"
-                write(*,*) "    He_lith (km): ", isos%par%He_lith 
-                write(*,*) "    D_lith (N m): ", D_lith_const
-                write(*,*) "    L_w (m):      ", isos%par%L_w 
-                write(*,*) "    nr:           ", isos%par%nr
-                
-                write(*,*) "    range(kei): ", minval(isos%now%kei),  maxval(isos%now%kei)
-                write(*,*) "    range(G0):  ", minval(isos%now%G0),  maxval(isos%now%G0)
-
-                write(*,*) "    mu (1/m):  ", isos%par%mu                                                       
-                write(*,*) "    dx (m):    ", isos%par%dx 
-
-                write(*,*) "    range(kappa): ", minval(isos%now%kappa), maxval(isos%now%kappa)                
-                write(*,*) "    range(beta):  ", minval(isos%now%beta),  maxval(isos%now%beta)                   
+                    write(*,*) "    range(kappa): ", minval(isos%now%kappa), maxval(isos%now%kappa)                
+                    write(*,*) "    range(beta):  ", minval(isos%now%beta),  maxval(isos%now%beta)                   
+                end if 
 
              case DEFAULT 
 
@@ -269,9 +178,9 @@ module isostasy
                 isos%now%kei = 0.0 
                 isos%now%G0  = 0.0
                 
-                ! Set ELVA values to zero too 
-                isos%now%kappa = 0.0   
-                isos%par%mu    = 0.0 
+                ! Set ELVA helper values to zero too 
+                isos%now%kappa      = 0.0   
+                isos%par%mu         = 0.0 
 
              end select
 
@@ -282,6 +191,9 @@ module isostasy
         isos%now%He_lith    = isos%par%He_lith      ! [m]
         isos%now%tau        = isos%par%tau          ! [yr]
 
+        ! Set effective viscosity to a constant field too
+        ! Later this can be overwritten.
+        isos%now%eta_eff    = isos%par%visc         ! [Pa s]
         
         ! Intially ensure all variables are zero 
         isos%now%z_bed_ref  = 0.0
@@ -330,13 +242,15 @@ module isostasy
                 ! 1: LLRA - Local lithosphere, relaxing asthenosphere
 
                 ! Local lithosphere (LL)
-                call calc_litho_local(isos%now%w0,isos%now%q0,z_bed_ref,H_ice_ref,z_sl_ref)
+                call calc_litho_local(isos%now%w0,isos%now%q0,z_bed_ref,H_ice_ref,z_sl_ref, &
+                                            isos%par%rho_ice,isos%par%rho_sw,isos%par%rho_a,isos%par%g)
                 
             case(2)
                 ! 2: ELRA - Elastic lithosphere, relaxing asthenosphere
 
                 ! Elastic lithosphere
-                call calc_litho_regional(isos%now%w0,isos%now%q0,z_bed_ref,H_ice_ref,z_sl_ref,isos%now%G0)
+                call calc_litho_regional(isos%now%w0,isos%now%q0,z_bed_ref,H_ice_ref,z_sl_ref,isos%now%G0, &
+                                            isos%par%rho_ice,isos%par%rho_sw,isos%par%rho_a,isos%par%g)
 
             case(3)
                 ! 3: EGIA - 2D Elastic lithosphere, relaxing asthenosphere - to do!
@@ -345,11 +259,12 @@ module isostasy
                 ! effective elastic thickness of the lithosphere (He_lith),
                 ! Young's modulus and Poisson's ratio. See Coulon et al. (2021) Eq. 5 & 6.
                 ! Note: this 2D field is only needed for the EGIA model (method=3) below. 
-                isos%now%D_lith = (E*1e9) * (isos%now%He_lith*1e3)**3 / (12.0*(1.0-nu**2))
+                isos%now%D_lith = (isos%par%E*1e9) * (isos%now%He_lith*1e3)**3 / (12.0*(1.0-isos%par%nu**2))
 
 
                 ! Elastic lithosphere
-                !call calc_litho_regional(isos%now%w0,isos%now%q0,z_bed_ref,H_ice_ref,z_sl_ref,isos%now%G0)
+                !call calc_litho_regional(isos%now%w0,isos%now%q0,z_bed_ref,H_ice_ref,z_sl_ref,isos%now%G0, &
+                                            ! isos%par%rho_ice,isos%par%rho_sw,isos%par%rho_a,isos%par%g)
                 
                 write(*,*) "isos_init_state:: Error: method=3 not implemented yet."
                 stop
@@ -359,14 +274,24 @@ module isostasy
                 ! ELVA - viscous half-space asthenosphere overlain by                                       
                 ! elastic plate lithosphere with uniform constants                                          
 
-               ! Elastic lithosphere (EL)
+if (.FALSE.) then
+    ! Use LL solution, since elastisity is contained in viscous asthenosphere solution? 
 
-!mmr recheck - Alex - ignored for the moment, need to recalculate Green's coefficients (solution is different in Bueler et al 2007)
-               
-!mmr               call calc_litho_regional(isos%now%w0,isos%now%q0,z_bed_ref,H_ice_ref,z_sl_ref,isos%now%G0)
-!mmr               call calc_litho_local(isos%now%w0,isos%now%q0,z_bed_ref,H_ice_ref,z_sl_ref)  !mmr
-                                             
-                ! Viscous (half-space) asthenosphere (VA)                                                   
+                ! Local lithosphere
+                call calc_litho_local(isos%now%w0,isos%now%q0,z_bed_ref,H_ice_ref,z_sl_ref, &
+                                            isos%par%rho_ice,isos%par%rho_sw,isos%par%rho_a,isos%par%g)
+
+else
+    ! Use EL solution, since this is the reference bedrock elevation for the reference loads
+
+                ! Elastic lithosphere
+                call calc_litho_regional(isos%now%w0,isos%now%q0,z_bed_ref,H_ice_ref,z_sl_ref,isos%now%G0, &
+                                            isos%par%rho_ice,isos%par%rho_sw,isos%par%rho_a,isos%par%g)
+
+                ! Set the asthenospheric displacement equal to this reference displacement to start
+                isos%now%w2 = isos%now%w0 
+
+end if 
 
 !mmr recheck - calculate plans here forth and back?
 
@@ -456,7 +381,8 @@ module isostasy
 
                     ! Local lithosphere (LL)
                     ! (update every time because it is cheap)
-                    call calc_litho_local(isos%now%w1,isos%now%q1,isos%now%z_bed,H_ice,z_sl)
+                    call calc_litho_local(isos%now%w1,isos%now%q1,isos%now%z_bed,H_ice,z_sl, &
+                                                    isos%par%rho_ice,isos%par%rho_sw,isos%par%rho_a,isos%par%g)
 
                     ! Relaxing asthenosphere (RA)
                     call calc_asthenosphere_relax(isos%now%dzbdt,isos%now%z_bed,isos%now%z_bed_ref, &
@@ -467,7 +393,8 @@ module isostasy
                     
                     ! Elastic lithosphere (EL)
                     if (update_equil) then 
-                        call calc_litho_regional(isos%now%w1,isos%now%q1,isos%now%z_bed,H_ice,z_sl,isos%now%G0)
+                        call calc_litho_regional(isos%now%w1,isos%now%q1,isos%now%z_bed,H_ice,z_sl,isos%now%G0, &
+                                                    isos%par%rho_ice,isos%par%rho_sw,isos%par%rho_a,isos%par%g)
                     end if 
 
                     ! Relaxing asthenosphere (RA)
@@ -500,11 +427,12 @@ module isostasy
                     ! Note: calculate the local lithospheric load here because 
                     ! the EL component is contained in the ELVA model solution
                     ! q1 will be used (the load), while w1 will not be used further.
-                    call calc_litho_local(isos%now%w1,isos%now%q1,isos%now%z_bed,H_ice,z_sl)
+                    call calc_litho_local(isos%now%w1,isos%now%q1,isos%now%z_bed,H_ice,z_sl, &
+                                                    isos%par%rho_ice,isos%par%rho_sw,isos%par%rho_a,isos%par%g)
                     
                     ! Viscous (half-space) asthenosphere                                                                             
-                    call calc_asthenosphere_viscous(isos%now%dzbdt,isos%now%w2,isos%now%q1,    &                            
-                                                    isos%par%mu,isos%now%kappa,isos%now%beta,dt_now)
+                    call calc_asthenosphere_viscous(isos%now%dzbdt,isos%now%w2,isos%now%q1,isos%par%mu,    &                            
+                                                    isos%now%kappa,isos%now%beta,isos%par%visc,dt_now)
 
                     ! mmr, to do: calculate the elastic component u_E too,
                     ! as displacement u_tot = u_visc + u_E. 
@@ -554,7 +482,7 @@ module isostasy
 
     end subroutine isos_end
 
-    subroutine isos_par_load(par,filename)
+    subroutine isos_par_load(par,filename,group)
 
         use nml 
 
@@ -562,12 +490,25 @@ module isostasy
 
         type(isos_param_class), intent(OUT) :: par
         character(len=*),       intent(IN)  :: filename 
+        character(len=*),       intent(IN)  :: group 
 
-        call nml_read(filename,"isostasy","method",         par%method)
-        call nml_read(filename,"isostasy","dt_lith",        par%dt_lith)
-        call nml_read(filename,"isostasy","dt_step",        par%dt_step)
-        call nml_read(filename,"isostasy","He_lith",        par%He_lith)
-        call nml_read(filename,"isostasy","tau",            par%tau)
+        call nml_read(filename,group,"method",          par%method)
+        call nml_read(filename,group,"dt_lith",         par%dt_lith)
+        call nml_read(filename,group,"dt_step",         par%dt_step)
+        call nml_read(filename,group,"He_lith",         par%He_lith)
+        call nml_read(filename,group,"visc",            par%visc)
+        call nml_read(filename,group,"tau",             par%tau)
+        
+        ! Physical constants
+        call nml_read(filename,group,"E",               par%E)
+        call nml_read(filename,group,"nu",              par%nu)
+        call nml_read(filename,group,"rho_ice",         par%rho_ice)
+        call nml_read(filename,group,"rho_sw",          par%rho_sw)
+        call nml_read(filename,group,"rho_w",           par%rho_w)
+        call nml_read(filename,group,"rho_a",           par%rho_a)
+        call nml_read(filename,group,"g",               par%g)
+        call nml_read(filename,group,"r_earth",         par%r_earth)
+        call nml_read(filename,group,"m_earth",         par%m_earth)
         
         return
 
@@ -589,10 +530,11 @@ module isostasy
         call isos_deallocate(now)
 
         ! Allocate arrays
-        allocate(now%tau(nx,ny))
         allocate(now%He_lith(nx,ny))
         allocate(now%D_lith(nx,ny))
-
+        allocate(now%eta_eff(nx,ny))
+        allocate(now%tau(nx,ny))
+        
         allocate(now%kei(nfilt,nfilt))
         allocate(now%G0(nfilt,nfilt))
        
@@ -618,9 +560,10 @@ module isostasy
 
         type(isos_state_class), intent(INOUT) :: now 
 
-        if (allocated(now%tau))         deallocate(now%tau)
         if (allocated(now%He_lith))     deallocate(now%He_lith)
         if (allocated(now%D_lith))      deallocate(now%D_lith)
+        if (allocated(now%eta_eff))     deallocate(now%eta_eff)
+        if (allocated(now%tau))         deallocate(now%tau)
         
         if (allocated(now%kei))         deallocate(now%kei)
         if (allocated(now%G0))          deallocate(now%G0)
@@ -906,7 +849,7 @@ module isostasy
 
     end subroutine calc_asthenosphere_relax
 
-    elemental subroutine calc_litho_local(w,q,z_bed,H_ice,z_sl)
+    elemental subroutine calc_litho_local(w,q,z_bed,H_ice,z_sl,rho_ice,rho_sw,rho_a,g)
         ! Calculate the local lithospheric loading from ice or ocean weight 
         ! in units of [Pa] and local equilibrium displacement w [m].
 
@@ -914,7 +857,13 @@ module isostasy
 
         real(wp), intent(OUT) :: w
         real(wp), intent(OUT) :: q
-        real(wp), intent(IN)  :: z_bed, H_ice, z_sl 
+        real(wp), intent(IN)  :: z_bed
+        real(wp), intent(IN)  :: H_ice
+        real(wp), intent(IN)  :: z_sl 
+        real(wp), intent(IN)  :: rho_ice
+        real(wp), intent(IN)  :: rho_sw
+        real(wp), intent(IN)  :: rho_a
+        real(wp), intent(IN)  :: g 
 
         if (rho_ice*H_ice.ge.rho_sw*(z_sl-z_bed)) then
             ! Ice or land
@@ -935,7 +884,7 @@ module isostasy
 
     end subroutine calc_litho_local
 
-    subroutine calc_litho_regional(w1,q1,z_bed,H_ice,z_sl,G0)
+    subroutine calc_litho_regional(w1,q1,z_bed,H_ice,z_sl,G0,rho_ice,rho_sw,rho_a,g)
         ! Calculate the load on the lithosphere as
         ! distributed on an elastic plate. 
 
@@ -947,9 +896,13 @@ module isostasy
         real(wp), intent(IN)    :: H_ice(:,:)   ! [m] Ice thickness 
         real(wp), intent(IN)    :: z_sl(:,:)    ! [m] Sea level 
         real(wp), intent(IN)    :: G0(:,:)      ! Regional filter function
-        
+        real(wp), intent(IN)    :: rho_ice
+        real(wp), intent(IN)    :: rho_sw
+        real(wp), intent(IN)    :: rho_a
+        real(wp), intent(IN)    :: g 
+
         ! Calculate local lithospheric load and displacement first
-        call calc_litho_local(w1,q1,z_bed,H_ice,z_sl)
+        call calc_litho_local(w1,q1,z_bed,H_ice,z_sl,rho_ice,rho_sw,rho_a,g)
 
         ! Convolve the estimated point load with the regional
         ! filter to obtain the distributed load w1. 
@@ -2254,466 +2207,5 @@ end if
         return
 
     end subroutine load_kei_values_file
-
-!mmr----------------------------------------------------------------
-!mmr all below is new 
-
-
-! mmr ========================================================
-!
-! mmr Functions related to the ELVA
-!
-! mmr ========================================================
-
- 
-    subroutine calc_asthenosphere_viscous_params(mu,kappa,beta,D_lith,nx,ny,dx) 
-    
-        real(wp), intent(OUT)               :: mu      
-        real(wp), allocatable, intent(OUT)  :: kappa(:,:)
-        real(wp), allocatable, intent(OUT)  :: beta(:,:) 
-        real(wp), intent(IN)                :: D_lith(:,:)
-        integer,  intent(IN)                :: nx
-        integer,  intent(IN)                :: ny
-        real(wp), intent(IN)                :: dx
-        
-        ! Local variables
-        real(wp)                            :: xd, yd
-        integer                             :: i, j, ip, iq, ic, jc 
-
-        if (allocated(kappa)) deallocate(kappa)
-        if (allocated(beta))  deallocate(beta)
-        
-        allocate(kappa(nx,ny))
-        allocate(beta(nx,ny))
-        
-        ! Calculate mu
-
-        mu = 2.*pi/((nx-1)*dx)
-
-        ! Calculate kappa and beta
-
-        kappa = 0.0
-        beta  = 0.0 
-
-        ic = (nx-1)/2 + 1
-        jc = (ny-1)/2 + 1
-
-        do i = 1, nx
-            if (i.le.ic) then 
-                ip = i-1
-            else
-                ip = nx-i+1
-            end if
-            do j = 1, ny
-                if (j.le.jc) then
-                    iq = j-1  
-                else
-                    iq = ny-j+1
-                end if
-                kappa(i,j)  = (ip*ip + iq*iq)**0.5
-                beta(i,j)   = rho_a*g + D_lith(i,j)*(mu**4)*kappa(i,j)**4
-            end do
-        end do
-
-        return
-      
-    end subroutine calc_asthenosphere_viscous_params
-
- 
-    subroutine calc_asthenosphere_viscous(dzbdt,w,q,mu,kappa,beta,dt)
-        ! Calculate rate of change of vertical bedrock height
-        ! from a viscous half-space asthenosphere.
-        ! Contains viscous component only.
-
-        use, intrinsic :: iso_c_binding
-        implicit none
-        include 'fftw3.f03'
-
-        real(wp), intent(OUT)   :: dzbdt(:,:)           ! size [l0,m0]
-        real(wp), intent(INOUT) :: w(:,:)               ! size [l0,m0]
-        real(wp), intent(IN)    :: q(:,:)               ! size [l0,m0]
-        real(wp), intent(IN)    :: mu
-        real(wp), intent(IN)    :: kappa(:,:)           ! size [l,m]
-        real(wp), intent(IN)    :: beta(:,:)            ! size [l,m]
-        real(wp), intent(IN)    :: dt
-        
-        ! Local variables
-        real(wp), allocatable   :: w0(:,:)
-        real(wp), allocatable   :: q_hat(:,:)
-        real(wp), allocatable   :: w_hat(:,:)
-
-        real(c_double), allocatable :: data_in(:,:), data_inbis(:,:)
-        complex(c_double_complex), allocatable :: data_out(:,:)
-
-        complex(dp), allocatable   :: q_hat_c(:,:)
-        complex(dp), allocatable   :: w_hat_c(:,:)
-
-        real(wp), allocatable      :: w_hat_c_re(:,:), w_hat_c_im(:,:)      
-
-        real(wp)                :: dt_sec
-        integer                 :: l, m, i, j
-        integer                 :: nsq, l0, m0 
-        logical  :: fft_r2r, fft_c2c
-
-        integer, parameter :: nd = 2
-        
-        
-        dt_sec = dt * 3600*24*365 ! [s] 
-
-        l = size(dzbdt,1)
-        m = size(dzbdt,2)
-
-        allocate(w0(l,m))
-        allocate(q_hat(l,m))
-        allocate(w_hat(l,m))
-        allocate(q_hat_c(l,m/2+1)) 
-        allocate(w_hat_c(l,m/2+1))
-
-        allocate(w_hat_c_re(l,m/2+1))
-        allocate(w_hat_c_im(l,m/2+1))
-      
-        !  Initialize 
-        
-        w0 = w
-
-        q_hat    = 0.0
-        w_hat    = 0.0
-        w_hat_c  = 0.0
-        dzbdt    = 0.0
-
-        fft_r2r = .true.
-        fft_c2c = .false.
-      
-        if (fft_r2r) then
-
-            ! fft of load
-            ! 
-
-            call calc_fft_forward_r2r(q,q_hat)
-
-            ! fft of displacement
-
-            call calc_fft_forward_r2r(w,w_hat)
-
-            ! displacement fft at timestep n+1    
-
-            if (dt.gt.0)  w_hat = ( ( 2.*eta*mu*kappa - (dt_sec/2.)*beta)*w_hat + dt_sec*q_hat)/(2*eta*mu*kappa + (dt_sec/2.)*beta)
-
-            ! Inverse fft to obtain displacement at n+1
-
-            call calc_fft_backward_r2r(w_hat,w)
-
-        else if (fft_c2c) then
-
-            ! fft of load
-
-            call calc_fft_forward_c2c(q,q_hat)
-
-            ! fft of displacement
-
-            call calc_fft_forward_c2c(w,w_hat)
-
-            ! displacement fft at timestep n+1    
-
-            if (dt.gt.0)  w_hat = ( ( 2.*eta*mu*kappa - (dt_sec/2.)*beta)*w_hat + dt_sec*q_hat)/(2*eta*mu*kappa + (dt_sec/2.)*beta)
-
-            ! Inverse fft to obtain displacement at n+1
-
-            call calc_fft_backward_c2c(w_hat,w)
-
-        else  
-
-            write(*,*) "Error, you have to choose an option to calculate the FFTs."
-            stop
-      
-        end if
-         
-        ! Impose boundary conditions 
-
-        w  = w - 0.25*(w(1,1)+w(l,m)+w(1,m)+w(l,1)) 
-
-        ! Rate of viscous asthenosphere uplift
-
-        if (dt.gt.0.)  dzbdt = -(w-w0)/dt
-
-
-        deallocate(w0)
-        deallocate(q_hat)
-        deallocate(w_hat)
-        deallocate(q_hat_c)
-        deallocate(w_hat_c)
-
-        return
-
-    end subroutine calc_asthenosphere_viscous
-
-    subroutine make_fft_plans(in,plan_fwd,plan_bck) 
- 
-        use, intrinsic :: iso_c_binding
-        implicit none 
-        include 'fftw3.f03' 
-
-        real(wp), intent(IN)       :: in(:,:)
-        type(c_ptr), intent(OUT)   :: plan_fwd, plan_bck
-        complex (dp), allocatable  :: in_aux(:,:)
-        complex (dp), allocatable  :: out_aux(:,:)
-        integer (kind = 4)         :: l, m
-
-
-        l    = size(in,1)
-        m    = size(in,2)
-
-        if(l.ne.m) then
-            write(*,*) "Dimensions do not match, stopping now"
-            stop
-        end if
-
-        in_aux = in
-
-! r2r      
-        plan_fwd = fftw_plan_dft_2d(l,m,in_aux,out_aux,-1,FFTW_ESTIMATE)
-        plan_bck = fftw_plan_dft_2d(l,m,out_aux,in_aux,+1,FFTW_ESTIMATE)
-
-        return
-
-    end subroutine make_fft_plans
-
-
-   subroutine calc_fft_forward_r2r(in,out)
-
-        use, intrinsic :: iso_c_binding
-        implicit none 
-        include 'fftw3.f03'  
-
-        real(wp), intent(IN)       :: in(:,:)
-        real(wp), intent(OUT)      :: out(:,:)
-
-        real(wp), allocatable      :: rec(:,:)
-        real(dp), allocatable      :: in_aux(:,:)
-        real(dp), allocatable      :: out_aux(:,:) 
-        real(dp), allocatable      :: rec_aux(:,:)
-        real(dp)                   :: dx, cc
-        type(c_ptr)                :: plan
-        integer(kind=4)            :: m,n
-        logical                    :: print_check
-
-
-        m = size(in,1)
-        n = size(in,2)
-
-        print_check = .false.
-
-        allocate(in_aux(m,n))
-        allocate(out_aux(m,n))
-        allocate(rec(m,n))
-        allocate(rec_aux(m,n))
-
-
-! http://www.fftw.org/fftw3_doc/The-Discrete-Hartley-Transform.html
-      
-!      The discrete Hartley transform (DHT) is an invertible linear
-!      transform closely related to the DFT. In the DFT, one
-!      multiplies each input by cos - i * sin (a complex exponential),
-!      whereas in the DHT each input is multiplied by simply cos +
-!      sin. Thus, the DHT transforms n real numbers to n real numbers,
-!      and has the convenient property of being its own inverse. In
-!      FFTW, a DHT (of any positive n) can be specified by an r2r kind
-!      of FFTW_DHT.
-
-!      Like the DFT, in FFTW the DHT is unnormalized, so computing a
-!      DHT of size n followed by another DHT of the same size will
-!      result in the original array multiplied by n.
-
-!      The DHT was originally proposed as a more efficient alternative
-!      to the DFT for real data, but it was subsequently shown that a
-!      specialized DFT (such as FFTW’s r2hc or r2c transforms) could
-!      be just as fast. In FFTW, the DHT is actually computed by
-!      post-processing an r2hc transform, so there is ordinarily no
-!      reason to prefer it from a performance perspective.5 However,
-!      we have heard rumors that the DHT might be the most appropriate
-!      transform in its own right for certain applications, and we
-!      would be very interested to hear from anyone who finds it
-!      useful.
-
-
-        in_aux = in 
-        plan = fftw_plan_r2r_2d(m,n,in_aux,out_aux,FFTW_DHT,FFTW_DHT,FFTW_ESTIMATE)
-
-        call fftw_execute_r2r(plan, in_aux, out_aux)
-!mmr      call fftw_destroy_plan(plan)
-        out = real(out_aux/sqrt(m*n*1.))
-
-        if (print_check) then
-            call r4mat_print_some ( m, n, in, n/2-2, m/2-2, n/2+2, m/2+2, '  Part of the original data:' )
-            plan =  fftw_plan_r2r_2d(m,n,out_aux,rec_aux,FFTW_DHT,FFTW_DHT,FFTW_ESTIMATE)
-            call fftw_execute_r2r(plan, out_aux, rec_aux)
-            rec_aux = rec_aux/(m*n)
-            rec = real(rec_aux,wp) 
-            call fftw_destroy_plan(plan)
-            call r4mat_print_some (m, n, rec, n/2-2, m/2-2, n/2+2, m/2+2, '  Part of the recovered data:' )
-        end if
-
-        deallocate(in_aux)
-        deallocate(out_aux)
-        deallocate(rec)
-        deallocate(rec_aux)
-      
-        return
-      
-    end subroutine calc_fft_forward_r2r
-
-    subroutine calc_fft_backward_r2r(in,out)
-
-        use, intrinsic :: iso_c_binding
-        implicit none 
-        include 'fftw3.f03'  
-
-        real(wp), intent(IN)       :: in(:,:)
-        real(wp), intent(OUT)      :: out(:,:)
-
-        real(wp), allocatable      :: rec(:,:)
-        real(dp), allocatable      :: in_aux(:,:)
-        real(dp), allocatable      :: out_aux(:,:) 
-        real(dp), allocatable      :: rec_aux(:,:)
-        real(dp)                   :: dx, cc
-        type(c_ptr)                :: plan
-        integer(kind=4)            :: m,n
-        logical                    :: print_check
-
-        m = size(in,1)
-        n = size(in,2)
-
-
-        allocate(in_aux(m,n))
-        allocate(out_aux(m,n))
-        allocate(rec(m,n))
-        allocate(rec_aux(m,n))
-
-
-        in_aux = in
-        plan = fftw_plan_r2r_2d(m,n,in_aux,out_aux,FFTW_DHT,FFTW_DHT,FFTW_ESTIMATE)
-
-        call fftw_execute_r2r(plan, in_aux, out_aux)
-!mmr      call fftw_destroy_plan(plan)
-        out = real(out_aux/sqrt(m*n*1.)) 
-
-        if (print_check) then
-            call r4mat_print_some ( m, n, in, n/2-2, m/2-2, n/2+2, m/2+2, '  Part of the original data:' )
-            plan =  fftw_plan_r2r_2d(m,n,out_aux,rec_aux,FFTW_DHT,FFTW_DHT,FFTW_ESTIMATE)
-            call fftw_execute_r2r(plan, out_aux, rec_aux)
-            rec_aux = rec_aux/(m*n)
-            rec = real(rec_aux,wp) 
-            call fftw_destroy_plan(plan)
-            call r4mat_print_some ( m, n, rec, n/2-2, m/2-2, n/2+2, m/2+2, '  Part of the recovered data:' )
-        end if
-
-        deallocate(in_aux)
-        deallocate(out_aux)
-        deallocate(rec)
-        deallocate(rec_aux)
-
-        return
-    
-    end subroutine calc_fft_backward_r2r
-
-    
-    ! http://www.fftw.org/fftw3_doc/Real_002ddata-DFTs.html
-    ! FFTW computes an unnormalized transform: computing an r2c
-    ! followed by a c2r transform (or vice versa) will result in the
-    ! original data multiplied by the size of the transform (the
-    ! product of the logical dimensions). An r2c transform produces
-    ! the same output as a FFTW_FORWARD complex DFT of the same input,
-    ! and a c2r transform is correspondingly equivalent to
-    ! FFTW_BACKWARD.
-    
- 
-    subroutine calc_fft_forward_c2c(in,out)
-
-        use, intrinsic :: iso_c_binding
-        implicit none 
-        include 'fftw3.f03'  
-
-        real(wp), intent(IN)       :: in(:,:)
-        real(wp), intent(OUT)      :: out(:,:)
-
-        real(wp), allocatable      :: rec(:,:)
-        complex(dp), allocatable   :: in_aux(:,:)   
-        complex(dp), allocatable   :: out_aux(:,:)     
-        real(dp), allocatable      :: rec_aux(:,:)
-        real(dp)                   :: dx, cc
-        type(c_ptr)                :: plan
-        integer(kind=4)            :: m, n
-
-        m = size(in,1)
-        n = size(in,2)
-
-      
-        allocate(in_aux(m,n))
-        allocate(out_aux(m,n))
-        allocate(rec(m,n))
-        allocate(rec_aux(m,n))
-
-
-        in_aux = in
-        plan = fftw_plan_dft_2d(m,n,in_aux,out_aux,-1,FFTW_ESTIMATE)
-
-        call fftw_execute_dft(plan, in_aux, out_aux)                 
-        call fftw_destroy_plan(plan)
-        out = real(out_aux/sqrt(m*n*1.)) 
-
-
-        deallocate(in_aux)
-        deallocate(out_aux)
-        deallocate(rec)
-        deallocate(rec_aux)
-
-        return
-      
-    end subroutine calc_fft_forward_c2c
-
-    subroutine calc_fft_backward_c2c(in,out)
-
-        use, intrinsic :: iso_c_binding
-        implicit none 
-        include 'fftw3.f03'  
-
-        real(wp), intent(IN)       :: in(:,:)
-        real(wp), intent(OUT)      :: out(:,:)
-
-        real(wp), allocatable      :: rec(:,:)
-        complex(dp), allocatable   :: in_aux(:,:)   
-        complex(dp), allocatable   :: out_aux(:,:)     
-        real(dp), allocatable      :: rec_aux(:,:)
-        real(dp)                   :: dx, cc
-        type(c_ptr)                :: plan
-        integer(kind=4)            :: m, n
-
-        m = size(in,1)
-        n = size(in,2)
-
-
-        allocate(in_aux(m,n))
-        allocate(out_aux(m,n))
-        allocate(rec(m,n))
-        allocate(rec_aux(m,n))
-
-
-        in_aux = in
-        plan = fftw_plan_dft_2d(m,n,in_aux,out_aux,1,FFTW_ESTIMATE)
-
-        call fftw_execute_dft(plan, in_aux, out_aux)                 
-        call fftw_destroy_plan(plan)
-        out = real(out_aux/sqrt(m*n*1.)) 
-
-
-        deallocate(in_aux)
-        deallocate(out_aux)
-        deallocate(rec)
-        deallocate(rec_aux)
-
-        return
-
-    end subroutine calc_fft_backward_c2c
-
 
 end module isostasy

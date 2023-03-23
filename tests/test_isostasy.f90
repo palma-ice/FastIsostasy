@@ -140,7 +140,7 @@ program test_isostasy
 
 
     ! Initialize bedrock model (allocate fields)  
-    call isos_init(isos1,path_par,nx,ny,dx) 
+    call isos_init(isos1,path_par,"isostasy",nx,ny,dx) 
     
     ! Define ice thickness field based on experiment being run...
     
@@ -180,7 +180,7 @@ program test_isostasy
             eta = 1.e+21   ! [Pa s]
         
             H_ice = 0.
-            xcntr = (xmax+xmin)/2.
+            xcntr = (xmax+xmin)/2.0
             ycntr = xcntr
 
             do j = 1, ny
@@ -219,12 +219,26 @@ program test_isostasy
         if (mod(time,dt_out) .eq. 0.0) then
             ! Write output for this timestep
 
-            ! Calculate analytical solution to elva_disk
-            call isosbench_elva_disk(z_bed_bench,r0,h0,eta,isos1%par%dx,isos1%now%D_lith(1,1),rho_ice,rho_a,g,time)
-            
-            ! Write to file 
-            call isos_write_step(isos1,file_out,time,H_ice,z_sl,z_bed_bench)
+            ! Calculate benchmark solutions when available and write to file
+            select case(trim(experiment))
 
+                case("elva_disk")
+                    
+                    ! Calculate analytical solution to elva_disk
+                    call isosbench_elva_disk(z_bed_bench,r0,h0,eta,isos1%par%dx,isos1%now%D_lith(1,1),rho_ice,rho_a,g,time)
+
+                    ! Write to file 
+                    call isos_write_step(isos1,file_out,time,H_ice,z_sl,z_bed_bench)
+
+                case DEFAULT
+
+                    z_bed_bench = 0.0 
+
+                    ! Write to file 
+                    call isos_write_step(isos1,file_out,time,H_ice,z_sl)
+
+            end select
+            
         end if 
 
         write(*,*) "time = ", time 

@@ -32,10 +32,17 @@ endif
 ##
 ###############################################
 
-$(objdir)/isostasy.o: $(srcdir)/isostasy.f90 $(objdir)/nml.o
+
+$(objdir)/isostasy_def.o: $(srcdir)/isostasy_def.f90
 	$(FC) $(DFLAGS) $(FFLAGS) -c -o $@ $<
 
-$(objdir)/isostasy_benchmarks.o: $(srcdir)/isostasy_benchmarks.f90
+$(objdir)/isostasy.o: $(srcdir)/isostasy.f90 $(objdir)/isostasy_def.o $(objdir)/solver_elva.o $(objdir)/nml.o
+	$(FC) $(DFLAGS) $(FFLAGS) -c -o $@ $<
+
+$(objdir)/solver_elva.o: $(srcdir)/solver_elva.f90 $(objdir)/isostasy_def.o $(objdir)/nml.o
+	$(FC) $(DFLAGS) $(FFLAGS) -c -o $@ $<
+
+$(objdir)/isostasy_benchmarks.o: $(srcdir)/isostasy_benchmarks.f90 $(objdir)/isostasy_def.o
 	$(FC) $(DFLAGS) $(FFLAGS) -c -o $@ $<
 
 $(objdir)/ncio.o: $(srcdir)/ncio.f90
@@ -44,15 +51,29 @@ $(objdir)/ncio.o: $(srcdir)/ncio.f90
 $(objdir)/nml.o: $(srcdir)/nml.f90
 	$(FC) $(DFLAGS) $(FFLAGS) -c -o $@ $<
 
+isostasy_libs = 		$(objdir)/isostasy_def.o \
+						$(objdir)/isostasy.o \
+						$(objdir)/solver_elva.o
+
 ###############################################
 ##
 ## Compilation of complete programs
 ##
 ###############################################
 
-test_isostasy : $(objdir)/isostasy.o $(objdir)/isostasy_benchmarks.o $(objdir)/ncio.o $(objdir)/nml.o
+# Static library compilation
+isostasy-static: $(isostasy_libs)
+	ar rc $(objdir)/libisostasy.a $(isostasy_libs)
+	ranlib $(objdir)/libisostasy.a
+	@echo " "
+	@echo "    $(objdir)/libisostasy.a is ready."
+	@echo " "
+
+#-L${CURDIR}/libyelmo/include -lisostasy
+
+test_isostasy : $(isostasy_libs) $(objdir)/isostasy_benchmarks.o $(objdir)/ncio.o $(objdir)/nml.o
 		$(FC) $(DFLAGS) $(FFLAGS) $(INC_LIS) -o $(bindir)/test_isostasy.x tests/test_isostasy.f90 \
-			$(LFLAGS) $^
+			 $(LFLAGS) $^
 		@echo " "
 		@echo "    test_isostasy.x is ready."
 		@echo " "
