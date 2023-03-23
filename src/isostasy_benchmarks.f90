@@ -172,20 +172,19 @@ contains
         end do
 
       
-        ic = (nx-1)/2 + 1  !mmr Alex - I have already calculated these in test_isostasy, I don't like to recalculate it here
+        ic = (nx-1)/2 + 1
         jc = (ny-1)/2 + 1
 
         do i = 1, nx
         do j = 1, ny
             xd = dx*(i-ic)
             yd = dx*(j-jc)
-            dist2c(i,j) = sqrt(xd**2 + yd**2)  !mmr Alex - I have already calculated it in test_isostasy, I don't like to recalculate it here
+            dist2c(i,j) = sqrt(xd**2 + yd**2)
         end do
         end do
 
-               
-        ! remap to (nx * xy) grid (w = w(r,t) so all points with same r have same w; this reduces computational time)
-      
+        ! Remap to (nx * xy) grid (w = w(r,t) so all points with same r have same w; 
+        ! this reduces computational time      
 
         do l = 1, nl 
             r(l) =  dx * (l-1)
@@ -207,9 +206,9 @@ contains
         end do
         end do
 
-         deallocate(n)
+        deallocate(n)
          
-         return
+        return
       
     end subroutine calc_analytical_viscous_disk_params
        

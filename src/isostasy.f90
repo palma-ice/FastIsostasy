@@ -506,6 +506,10 @@ module isostasy
                     call calc_asthenosphere_viscous(isos%now%dzbdt,isos%now%w2,isos%now%q1,    &                            
                                                     isos%par%mu,isos%now%kappa,isos%now%beta,dt_now)
 
+                    ! mmr, to do: calculate the elastic component u_E too,
+                    ! as displacement u_tot = u_visc + u_E. 
+                    ! See Bueler et al. (2007). u_E should be relatively small. 
+
                  end select
 
             if (update_equil) then 
@@ -516,7 +520,7 @@ module isostasy
             ! Step 2: update bedrock elevation and current model time
             if (dt_now .gt. 0.0) then
 
-               isos%now%z_bed = isos%now%z_bed + isos%now%dzbdt*dt_now !mmr recheck -  contains only viscous component 
+               isos%now%z_bed = isos%now%z_bed + isos%now%dzbdt*dt_now
                
                isos%par%time_step = isos%par%time_step + dt_now
                
@@ -2275,14 +2279,22 @@ end if
         ! Local variables
         real(wp)                            :: xd, yd
         integer                             :: i, j, ip, iq, ic, jc 
-      
+
+        if (allocated(kappa)) deallocate(kappa)
+        if (allocated(beta))  deallocate(beta)
+        
         allocate(kappa(nx,ny))
         allocate(beta(nx,ny))
+        
+        ! Calculate mu
 
         mu = 2.*pi/((nx-1)*dx)
-      
+
+        ! Calculate kappa and beta
+
         kappa = 0.0
-      
+        beta  = 0.0 
+
         ic = (nx-1)/2 + 1
         jc = (ny-1)/2 + 1
 
@@ -2317,12 +2329,12 @@ end if
         implicit none
         include 'fftw3.f03'
 
-        real(wp), intent(OUT)   :: dzbdt(:,:)
-        real(wp), intent(INOUT) :: w(:,:)
-        real(wp), intent(IN)    :: q(:,:)
+        real(wp), intent(OUT)   :: dzbdt(:,:)           ! size [l0,m0]
+        real(wp), intent(INOUT) :: w(:,:)               ! size [l0,m0]
+        real(wp), intent(IN)    :: q(:,:)               ! size [l0,m0]
         real(wp), intent(IN)    :: mu
-        real(wp), intent(IN)    :: kappa(:,:)
-        real(wp), intent(IN)    :: beta(:,:)     
+        real(wp), intent(IN)    :: kappa(:,:)           ! size [l,m]
+        real(wp), intent(IN)    :: beta(:,:)            ! size [l,m]
         real(wp), intent(IN)    :: dt
         
         ! Local variables
@@ -2340,19 +2352,17 @@ end if
 
         real(wp)                :: dt_sec
         integer                 :: l, m, i, j
-
+        integer                 :: nsq, l0, m0 
         logical  :: fft_r2r, fft_c2c
 
         integer, parameter :: nd = 2
-
-
+        
+        
         dt_sec = dt * 3600*24*365 ! [s] 
 
-     
-        l = size(q,1)
-        m = size(q,2)
+        l = size(dzbdt,1)
+        m = size(dzbdt,2)
 
-      
         allocate(w0(l,m))
         allocate(q_hat(l,m))
         allocate(w_hat(l,m))
@@ -2363,7 +2373,7 @@ end if
         allocate(w_hat_c_im(l,m/2+1))
       
         !  Initialize 
-
+        
         w0 = w
 
         q_hat    = 0.0
@@ -2425,6 +2435,7 @@ end if
         ! Rate of viscous asthenosphere uplift
 
         if (dt.gt.0.)  dzbdt = -(w-w0)/dt
+
 
         deallocate(w0)
         deallocate(q_hat)

@@ -89,7 +89,7 @@ program test_isostasy
     time_init = 0.0
     time_end  = 30e3
     dtt       = 200.0
-    dt_out    = 5e3
+    dt_out    = 10e3
 
     write(*,*) "time_init = ", time_init 
     write(*,*) "time_end  = ", time_end 
@@ -137,11 +137,11 @@ program test_isostasy
 
     z_bed_ref   = 0.0 
     H_ice_ref   = 0.0 
-    z_sl_ref    = 0.0 
+    z_sl_ref    = -1e3 
     
     z_bed       = 0.0 
     H_ice       = 0.0  
-    z_sl        = 0.0 
+    z_sl        = -1e3 
     
     z_bed_bench = z_bed 
 
