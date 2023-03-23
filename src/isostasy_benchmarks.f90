@@ -13,7 +13,6 @@ module isostasy_benchmarks
 
     real(wp), parameter :: pi = 3.14159265359
 
-
     type isos_analytical_elva_disk_load_class 
         integer  :: ifunc   = 0                      ! choice of function f(x) to integrate (integrand of analytical solution, in case there are several) 
         integer  :: n_evals = 0                      ! number of function evaluations
@@ -35,6 +34,10 @@ module isostasy_benchmarks
         real(wp) :: rho_a 
         real(wp) :: g 
 
+        real(wp), allocatable :: kappa_mod(:)
+        real(wp), allocatable :: rad(:) 
+        integer,  allocatable :: lrad(:,:)
+        
     contains
 
         private
@@ -71,16 +74,19 @@ module isostasy_benchmarks
     end interface
 
     private
-    public :: isosbench_elva_disk 
+    public :: isosbench_elva_disk
 
 contains
 
-    subroutine isosbench_elva_disk(z_bed,dx,D_lith,rho_ice,rho_a,g,time)
+    subroutine isosbench_elva_disk(z_bed,r0,h0,eta,dx,D_lith,rho_ice,rho_a,g,time)
         ! This will calculate the analytical solution 'elva_disk' for a specific time
 
         implicit none
 
-        real(wp), intent(INOUT) :: z_bed(:,:) 
+        real(wp), intent(INOUT) :: z_bed(:,:)   ! [m]
+        real(wp), intent(IN)    :: r0           ! Radius, r0=1000e3 m (1000 km) by default
+        real(wp), intent(IN)    :: h0           ! Ice thickness, h0=1000 m by default
+        real(wp), intent(IN)    :: eta          ! Viscosity, eta=1e21 Pa s by default
         real(wp), intent(IN)    :: dx 
         real(wp), intent(IN)    :: D_lith
         real(wp), intent(IN)    :: rho_ice
@@ -90,15 +96,9 @@ contains
 
         ! Local variables
         integer  :: nx, ny 
-        real(wp) :: r0, h0, eta 
-
+        
         type(isos_analytical_elva_disk_load_class) :: ana        ! object containing all info relative to function to be integrated for analytical solution
 
-        real(wp), allocatable :: kappa_mod(:)
-        real(wp), allocatable :: dist2c(:,:)
-        real(wp), allocatable :: r(:) 
-        integer,  allocatable :: lr(:,:)
-        
         ! Parameters for analytical ELVA disk solution - Alex - class apart?                              
         real(wp), parameter :: kappa_min = 0.  ! [] Minimum kappa for gaussian quadrature       
         real(wp), parameter :: kappa_max = 0.1 ! [] Maximum kappa for gaussian quadrature       
@@ -109,27 +109,29 @@ contains
         nx = size(z_bed,1)
         ny = size(z_bed,2) 
 
-        call calc_analytical_viscous_disk_params(kappa_mod,dist2c,r, &
-                                                        lr,kappa_min,kappa_max,dk,nx,ny,dx)                                    
-    
-        r0     = 1000.0e3 ! [m] recheck - include into routine?
-        h0     = 1000.0   ! [m] 
-        eta    = 1.e+21   ! [Pa s]
+        ! Store several parameters for the analytical integrand
+        ana%r0         = r0
+        ana%h0         = h0
+        ana%D_lith     = D_lith
+        ana%eta        = eta
         
-        ! Initialize parameters for the analytical integrand
-        call initialize_analytical_integrand(ana,r0,h0,D_lith,eta,rho_ice,rho_a,g)
+        ana%rho_ice    = rho_ice
+        ana%rho_a      = rho_a
+        ana%g          = g
         
+        ! Calculate some arrays that are also needed 
+        call calc_analytical_viscous_disk_params(ana%kappa_mod,ana%rad,ana%lrad, &
+                                                            kappa_min,kappa_max,dk,nx,ny,dx)                                    
+
         ! Updating ===========
 
-        call calc_analytical_viscous_disk(ana,z_bed,kappa_mod,dist2c,r,lr,dx,time)  
+        call calc_analytical_viscous_disk(ana,z_bed,dx,time)  
 
-        write(*,*) "benchmark elva_disk: ", time, minval(z_bed), maxval(z_bed)
+        write(*,*) "isostasy benchmark elva_disk: ", time, minval(z_bed), maxval(z_bed)
 
         return
 
     end subroutine isosbench_elva_disk
-
-
 
 
 !=========================================================
@@ -138,11 +140,9 @@ contains
 !
 !=========================================================
 
-    
-    subroutine calc_analytical_viscous_disk_params(kappa_mod,dist2c,r,lr,kappa_min,kappa_max,dk,nx,ny,dx)  
+    subroutine calc_analytical_viscous_disk_params(kappa_mod,r,lr,kappa_min,kappa_max,dk,nx,ny,dx)  
        
         real(wp), allocatable, intent(OUT)  :: kappa_mod(:)
-        real(wp), allocatable, intent(OUT)  :: dist2c(:,:)
         real(wp), allocatable, intent(OUT)  :: r(:) 
         integer,  allocatable, intent(OUT)  :: lr(:,:)
 
@@ -157,7 +157,8 @@ contains
         integer, allocatable                :: n(:,:)
         real(wp)                            :: xd, yd
         integer                             :: i, j, ip, iq, ic, jc, k, nk, l, nl
-
+        real(wp), allocatable               :: dist2c(:,:)
+        
         nk = int((kappa_max-kappa_min)/dk)
         nl = int(nx*sqrt(2.)/2) + 2
       
@@ -211,8 +212,8 @@ contains
         return
       
     end subroutine calc_analytical_viscous_disk_params
-       
-    subroutine calc_analytical_viscous_disk(me,w,kappa_mod,dist2c,r,lr,dx,t) 
+    
+    subroutine calc_analytical_viscous_disk(me,w,dx,t) 
 
         ! Calculate analytical solution for displacement for the asthenosphere viscous disk 
         ! u(r,t) as in Bueler et al (2007), eq. 17
@@ -222,11 +223,6 @@ contains
 
         class(isos_analytical_elva_disk_load_class), intent(INOUT) :: me
         real(wp), intent(OUT)         :: w(:,:)
-
-        real(wp), intent(IN)          :: kappa_mod(:)
-        real(wp), intent(IN)          :: dist2c(:,:)
-        real(wp), intent(IN)          :: r(:)
-        integer(kind=4), intent(IN)   :: lr(:,:)
         real(wp), intent(IN)          :: dx
         real(wp), intent(IN)          :: t
         
@@ -245,8 +241,8 @@ contains
         
         nx = size(w,1)
         ny = size(w,2)
-        nk = size(kappa_mod)-1
-        nl = size(r)
+        nk = size(me%kappa_mod)-1
+        nl = size(me%rad)
 
         allocate(wr(nl)) 
         allocate(n(nx,ny))
@@ -260,13 +256,14 @@ contains
       
         do l = 1, nl ! number of points neccessary to cover whole domain radially (ca. diagonal)
          
-            me%r = r(l)
+            me%r = me%rad(l)
 
             do k = 1, nk
 
                 ! sets parameters but most notably integration limits      
 
-                call initialize_integration_class(me, fx=analytical_integrand, xl=kappa_mod(k), xu=kappa_mod(k+1), tolx=tol, methodx=method)
+                call initialize_integration_class(me, fx=analytical_integrand, &
+                            xl=me%kappa_mod(k), xu=me%kappa_mod(k+1), tolx=tol, methodx=method)
 
                 ! reset number of function evaluations:
 
@@ -283,7 +280,7 @@ contains
 
         do i = 1, nx
         do j = 1, ny
-            w(i,j) = wr(lr(i,j))  
+            w(i,j) = wr(me%lrad(i,j))  
         end do
         end do
       
@@ -648,10 +645,6 @@ contains
     return
     
   end function g6
-
-!mmr----------------------------------------------------------------
-    
-
 
 end module isostasy_benchmarks
 

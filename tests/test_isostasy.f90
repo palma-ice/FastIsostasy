@@ -32,11 +32,11 @@ program test_isostasy
     real(wp) :: dt_out 
     integer  :: n, nt 
 
+    real(wp) :: r0, h0, eta 
+
     integer  :: i, j, nx, ny 
-    real(wp) :: xmin, xmax, dx
-!mmr------------------------------------------------------------------------------------------------------------------------            
-    real(wp) :: xcntr, ycntr              
-!mmr------------------------------------------------------------------------------------------------------------------------            
+    real(wp) :: xmin, xmax, dx       
+    real(wp) :: xcntr, ycntr                        
     real(wp), allocatable :: xc(:)
     real(wp), allocatable :: yc(:)
 
@@ -49,10 +49,7 @@ program test_isostasy
     real(wp), allocatable :: z_sl(:,:) 
     
     real(wp), allocatable :: mask(:,:)
-!mmr----------------------------------------------------------------
     real(wp), allocatable :: z_bed_bench(:,:) 
-    logical :: calc_analytical 
-!mmr----------------------------------------------------------------
 
     type(isos_class) :: isos1
 
@@ -73,14 +70,8 @@ program test_isostasy
 
     !experiment = "constant_thickness"
     !experiment = "variable_tau"
-    !experiment = "point_load"
-!mmr----------------------------------------------------------------            
-    experiment = "disk_load"
-    
-    ! === Define whether to calculate analytical solution (only available for VA disk) ====
-    
-    calc_analytical = .true.
-!mmr----------------------------------------------------------------                
+    !experiment = "point_load"          
+    experiment = "elva_disk"
     
     write(*,*) "experiment = ", trim(experiment)
 
@@ -181,17 +172,20 @@ program test_isostasy
             H_ice = 0.0 
             H_ice(int((nx-1)/2),int((ny-1)/2)) = 1000.0 
 
-!mmr----------------------------------------------------------------
-         case("disk_load")
+         case("elva_disk")
             ! Define ice thickness only in a circle of radius 1000 km and thickness 1000 m
 
+            r0  = 1000.0e3 ! [m] recheck - include into routine?
+            h0  = 1000.0   ! [m] 
+            eta = 1.e+21   ! [Pa s]
+        
             H_ice = 0.
             xcntr = (xmax+xmin)/2.
             ycntr = xcntr
 
             do j = 1, ny
             do i = 1, nx
-                if ( (xc(i)-xcntr)**2 + (yc(j)-ycntr)**2  .le. (1000.e3)**2 ) H_ice(i,j) = 1000.0 
+                if ( (xc(i)-xcntr)**2 + (yc(j)-ycntr)**2  .le. (r0)**2 ) H_ice(i,j) = h0
             end do
             end do
        
@@ -226,8 +220,8 @@ program test_isostasy
             ! Write output for this timestep
 
             ! Calculate analytical solution to elva_disk
-            call isosbench_elva_disk(z_bed_bench,isos1%par%dx,isos1%now%D_lith(1,1),rho_ice,rho_a,g,time)
-
+            call isosbench_elva_disk(z_bed_bench,r0,h0,eta,isos1%par%dx,isos1%now%D_lith(1,1),rho_ice,rho_a,g,time)
+            
             ! Write to file 
             call isos_write_step(isos1,file_out,time,H_ice,z_sl,z_bed_bench)
 
