@@ -32,6 +32,8 @@ module isostasy_defs
         real(wp) :: m_earth 
 
         ! Internal parameters 
+        integer  :: nx
+        integer  :: ny
         real(wp) :: dx                        ! [m] Horizontal resolution                           
         real(wp) :: L_w                       ! [m] Lithosphere flexural length scale (for method=2)
         integer  :: nr                        ! [-] Radius of neighborhood for convolution, in number of grid points        

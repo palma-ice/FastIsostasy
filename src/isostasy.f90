@@ -64,7 +64,9 @@ module isostasy
         if (present(r_earth))   isos%par%r_earth = r_earth 
         if (present(m_earth))   isos%par%m_earth = m_earth 
 
-        ! Store grid resolution
+        ! Store grid information
+        isos%par%nx = nx
+        isos%par%ny = ny
         isos%par%dx = dx
 
         select case(isos%par%method)
@@ -107,7 +109,7 @@ module isostasy
                 
 
                 ! Now, initialize isos variables 
-                call isos_allocate(isos%now,nx,ny,nr=isos%par%nr)
+                call isos_allocate(isos%now,isos%par%nx,isos%par%ny,nr=isos%par%nr)
             
 
                 ! Calculate the Kelvin function filter 
@@ -147,6 +149,8 @@ module isostasy
                 write(*,*) "    D_lith (N m): ", D_lith_const
                 write(*,*) "    L_w (m):      ", isos%par%L_w 
                 write(*,*) "    nr:           ", isos%par%nr
+                write(*,*) "    nx:           ", isos%par%nx
+                write(*,*) "    ny:           ", isos%par%ny
                 write(*,*) "    dx (m):       ", isos%par%dx 
 
                 write(*,*) "    range(kei): ", minval(isos%now%kei),    maxval(isos%now%kei)
@@ -169,7 +173,7 @@ module isostasy
                 isos%par%nr = 1 
 
                 ! Now, initialize isos variables 
-                call isos_allocate(isos%now,nx,ny,nr=isos%par%nr)
+                call isos_allocate(isos%now,isos%par%nx,isos%par%ny,nr=isos%par%nr)
                 
                 ! Set regional filter fields to zero (not used)
                 isos%now%kei = 0.0 
