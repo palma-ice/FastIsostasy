@@ -27,10 +27,7 @@ module isostasy
 
   contains
     
-!mmr----------------------------------------------------------------    
-!mmr     subroutine isos_init(isos,filename,nx,ny,dx)
     subroutine isos_init(isos,filename,group,nx,ny,dx,E,nu,rho_ice,rho_sw,rho_a,g,r_earth,m_earth)
-!mmr----------------------------------------------------------------    
 
         implicit none 
 
@@ -268,8 +265,7 @@ module isostasy
                 
                 write(*,*) "isos_init_state:: Error: method=3 not implemented yet."
                 stop
-                
-!mmr----------------------------------------------------------------                
+                            
             case(4) 
                 ! ELVA - viscous half-space asthenosphere overlain by                                       
                 ! elastic plate lithosphere with uniform constants                                          
@@ -417,7 +413,6 @@ end if
                     call calc_asthenosphere_relax(isos%now%dzbdt,isos%now%z_bed,isos%now%z_bed_ref, &
                                                     w_b=isos%now%w1-isos%now%w0,tau=isos%now%tau)
 
-!mmr----------------------------------------------------------------
                  case(4) 
                     ! ELVA - viscous half-space asthenosphere overlain by                                                   
                     ! elastic plate lithosphere with uniform constants                                                      

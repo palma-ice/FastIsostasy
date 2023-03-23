@@ -11,19 +11,6 @@ module isostasy_def
 
     real(wp), parameter :: pi = 3.14159265359
 
-!     real(wp), parameter :: g  = 9.81                ! [m/s^2]
-    
-!     real(wp), parameter :: rho_ice  = 910.0         ! [kg/m^3]
-!     real(wp), parameter :: rho_sw   = 1028.0        ! [kg/m^3] 
-!     real(wp), parameter :: rho_w    = 1000.0        ! [kg/m^3] 
-!     real(wp), parameter :: rho_a    = 3300.0        ! [kg/m^3] 3370 used by Coulon et al (2021)
-! !mmr----------------------------------------------------------------
-!     real(wp), parameter :: nu       = 0.5   !0.25   ! [-]   Poisson's ratio: 0.25 for Coulon et al (2021) | 0.5 for Bueler et al (2007) 
-!     real(wp), parameter :: E        = 66.0  !100.0  ! [GPa] Young's modulus | 100 for Coulon et al (2021) | 66  for Bueler et al (2007) 
-!     real(wp), parameter :: eta      = 1.e21         ! [Pa s] Asthenosphere's viscosity, Bueler et al (2007)
-! !mmr----------------------------------------------------------------    
-!     real(wp), parameter :: r_earth  = 6.378e6       ! [m]  Earth's radius, Coulon et al (2021) 
-!     real(wp), parameter :: m_earth  = 5.972e24      ! [kg] Earth's mass,   Coulon et al (2021) 
     
     type isos_param_class 
         integer            :: method            ! Type of isostasy to use
