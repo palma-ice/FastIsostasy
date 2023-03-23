@@ -61,11 +61,7 @@ module isostasy_defs
         real(wp), allocatable :: w0(:,:)            ! Reference equilibrium displacement
         real(wp), allocatable :: q1(:,:)            ! Current load          
         real(wp), allocatable :: w1(:,:)            ! Current equilibrium displacement
-
-        ! ELVA-specific variables (mmr: class apart?)
-        real(wp), allocatable :: kappa(:,:)         ! sqrt(p^2 + q^2) as in Bueler et al 2007                      
-        real(wp), allocatable :: beta(:,:)          ! beta as in Bueler et al 2007                                 
-        real(wp), allocatable :: w2(:,:)            ! Current viscous equilibrium displacement
+        real(wp), allocatable :: w2(:,:)            ! Current viscous equilibrium displacement (ELVA)
         
     end type isos_state_class
 

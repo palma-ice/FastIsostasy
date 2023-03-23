@@ -4,78 +4,29 @@ module solver_elva
 
     implicit none
 
+    private
+    public :: calc_asthenosphere_viscous_square
+    public :: calc_asthenosphere_viscous
 
 contains
 
-    subroutine calc_asthenosphere_viscous_params(mu,kappa,beta,D_lith,rho_a,g,nx,ny,dx) 
+    subroutine calc_asthenosphere_viscous_square(dzbdt,w,q,D_lith,eta,rho_a,g,dx,dt)
     
-        real(wp), intent(OUT)               :: mu      
-        real(wp), allocatable, intent(OUT)  :: kappa(:,:)
-        real(wp), allocatable, intent(OUT)  :: beta(:,:) 
-        real(wp), intent(IN)                :: D_lith(:,:)
-        real(wp), intent(IN)                :: rho_a 
-        real(wp), intent(IN)                :: g 
-        integer,  intent(IN)                :: nx
-        integer,  intent(IN)                :: ny
-        real(wp), intent(IN)                :: dx
-        
-        ! Local variables
-        real(wp)                            :: xd, yd
-        integer                             :: i, j, ip, iq, ic, jc 
-
-        if (allocated(kappa)) deallocate(kappa)
-        if (allocated(beta))  deallocate(beta)
-        
-        allocate(kappa(nx,ny))
-        allocate(beta(nx,ny))
-
-        ! Calculate mu
-
-        mu = 2.*pi/((nx-1)*dx)
-
-        ! Calculate kappa and beta
-
-        kappa = 0.0
-        beta  = 0.0 
-
-        ic = (nx-1)/2 + 1
-        jc = (ny-1)/2 + 1
-
-        do i = 1, nx
-            if (i.le.ic) then 
-                ip = i-1
-            else
-                ip = nx-i+1
-            end if
-            do j = 1, ny
-                if (j.le.jc) then
-                    iq = j-1  
-                else
-                    iq = ny-j+1
-                end if
-                kappa(i,j)  = (ip*ip + iq*iq)**0.5
-                beta(i,j)   = rho_a*g + D_lith(i,j)*(mu**4)*kappa(i,j)**4
-            end do
-        end do
-
-        return
-      
-    end subroutine calc_asthenosphere_viscous_params
-
-    subroutine calc_asthenosphere_viscous_square(dzbdt,w,q,kappa,beta,mu,eta,dt)
-        ! Calculate rate of change of vertical bedrock height
-        ! from a viscous half-space asthenosphere.
-        ! Contains viscous component only.
+        ! Extend a given domain [nx,ny] so that it is square based on the 
+        ! largest dimension of original data. 
+        ! Solve calc_asthenosphere_viscous on the square arrays, then 
+        ! extract solution onto original domain [nx,ny]. 
 
         implicit none
 
         real(wp), intent(OUT)   :: dzbdt(:,:)
         real(wp), intent(INOUT) :: w(:,:)    
         real(wp), intent(IN)    :: q(:,:)    
-        real(wp), intent(IN)    :: kappa(:,:)
-        real(wp), intent(IN)    :: beta(:,:) 
-        real(wp), intent(IN)    :: mu
+        real(wp), intent(IN)    :: D_lith
         real(wp), intent(IN)    :: eta                  ! [Pa s] Viscosity, eta=1e21 by default.
+        real(wp), intent(IN)    :: rho_a 
+        real(wp), intent(IN)    :: g 
+        real(wp), intent(IN)    :: dx
         real(wp), intent(IN)    :: dt
         
         ! Local variables
@@ -84,23 +35,37 @@ contains
         real(wp), allocatable :: sq_dzbdt(:,:)
         real(wp), allocatable :: sq_w(:,:)    
         real(wp), allocatable :: sq_q(:,:)    
-        real(wp), allocatable :: sq_kappa(:,:)
-        real(wp), allocatable :: sq_beta(:,:) 
+
+        ! Step 0: determine size of square array and allocate variables
+
+        nx  = size(dzbdt,1)
+        ny  = size(dzbdt,2)
+        nsq = max(nx,ny)
+        
+        allocate(sq_dzbdt(nsq,nsq))
+        allocate(sq_w(nsq,nsq))
+        allocate(sq_q(nsq,nsq))
 
         ! Step 1: populate variables on a square grid
-
+        
+        sq_dzbdt = 0.0 
+        call extend_array(sq_w,w,fill_with="val",val=0.0_wp)
+        call extend_array(sq_q,q,fill_with="val",val=0.0_wp)
 
         ! Step 2: solve
 
-        call calc_asthenosphere_viscous(sq_dzbdt,sq_w,sq_q,sq_kappa,sq_beta,mu,eta,dt)
+        call calc_asthenosphere_viscous(sq_dzbdt,sq_w,sq_q,D_lith,eta,rho_a,g,dx,dt)
 
         ! Step 3: get solution on original grid
+
+        call reduce_array(dzbdt,sq_dzbdt)
+        call reduce_array(w,sq_w)
         
         return
 
     end subroutine calc_asthenosphere_viscous_square
 
-    subroutine calc_asthenosphere_viscous(dzbdt,w,q,kappa,beta,mu,eta,dt)
+    subroutine calc_asthenosphere_viscous(dzbdt,w,q,D_lith,eta,rho_a,g,dx,dt)
         ! Calculate rate of change of vertical bedrock height
         ! from a viscous half-space asthenosphere.
         ! Contains viscous component only.
@@ -109,40 +74,49 @@ contains
         implicit none
         include 'fftw3.f03'
 
-        real(wp), intent(OUT)   :: dzbdt(:,:)           ! size [l0,m0]
-        real(wp), intent(INOUT) :: w(:,:)               ! size [l0,m0]
-        real(wp), intent(IN)    :: q(:,:)               ! size [l0,m0]
-        real(wp), intent(IN)    :: kappa(:,:)           ! size [l,m]
-        real(wp), intent(IN)    :: beta(:,:)            ! size [l,m]
-        real(wp), intent(IN)    :: mu
+        real(wp), intent(OUT)   :: dzbdt(:,:)
+        real(wp), intent(INOUT) :: w(:,:)
+        real(wp), intent(IN)    :: q(:,:)
+        real(wp), intent(IN)    :: D_lith
         real(wp), intent(IN)    :: eta                  ! [Pa s] Viscosity, eta=1e21 by default.
+        real(wp), intent(IN)    :: rho_a 
+        real(wp), intent(IN)    :: g 
+        real(wp), intent(IN)    :: dx
         real(wp), intent(IN)    :: dt
         
         ! Local variables
-        real(wp), allocatable   :: w0(:,:)
-        real(wp), allocatable   :: q_hat(:,:)
-        real(wp), allocatable   :: w_hat(:,:)
-
-        real(c_double), allocatable :: data_in(:,:), data_inbis(:,:)
-        complex(c_double_complex), allocatable :: data_out(:,:)
-
-        complex(dp), allocatable   :: q_hat_c(:,:)
-        complex(dp), allocatable   :: w_hat_c(:,:)
-
-        real(wp), allocatable      :: w_hat_c_re(:,:), w_hat_c_im(:,:)      
-
-        real(wp)                :: dt_sec
-        integer                 :: l, m, i, j
-        integer                 :: nsq, l0, m0 
+        integer  :: l, m, i, j
+        real(wp) :: dt_sec
         logical  :: fft_r2r, fft_c2c
 
-        integer, parameter :: nd = 2
+        real(wp), allocatable :: kappa(:,:)
+        real(wp), allocatable :: beta(:,:)
+        real(wp) :: mu 
+
+        real(wp), allocatable :: w0(:,:)
+        real(wp), allocatable :: q_hat(:,:)
+        real(wp), allocatable :: w_hat(:,:)
+
+        real(c_double), allocatable :: data_in(:,:)
+        real(c_double), allocatable :: data_inbis(:,:)
+        complex(c_double_complex), allocatable :: data_out(:,:)
+
+        complex(dp), allocatable :: q_hat_c(:,:)
+        complex(dp), allocatable :: w_hat_c(:,:)
+
+        real(wp), allocatable    :: w_hat_c_re(:,:)
+        real(wp), allocatable    :: w_hat_c_im(:,:)      
+
         
+        integer, parameter :: nd = 2
         
         dt_sec = dt * 3600*24*365 ! [s] 
 
         l = size(dzbdt,1)
         m = size(dzbdt,2)
+
+        allocate(kappa(l,m))
+        allocate(beta(l,m))
 
         allocate(w0(l,m))
         allocate(q_hat(l,m))
@@ -152,7 +126,11 @@ contains
 
         allocate(w_hat_c_re(l,m/2+1))
         allocate(w_hat_c_im(l,m/2+1))
-      
+
+        ! Step 0: initialize helper variables
+
+        call calc_asthenosphere_viscous_params(kappa,beta,mu,D_lith,rho_a,g,dx) 
+
         !  Initialize 
         
         w0 = w
@@ -217,16 +195,62 @@ contains
 
         if (dt.gt.0.)  dzbdt = -(w-w0)/dt
 
-
-        deallocate(w0)
-        deallocate(q_hat)
-        deallocate(w_hat)
-        deallocate(q_hat_c)
-        deallocate(w_hat_c)
-
         return
 
     end subroutine calc_asthenosphere_viscous
+
+    subroutine calc_asthenosphere_viscous_params(kappa,beta,mu,D_lith,rho_a,g,dx) 
+        ! Calculate parameters needed for elastic lithosphere viscous asthenosphere (ELVA)                                        
+        ! solution as in Bueler et al 2007 (eq 11)
+                    
+        real(wp), intent(OUT)  :: kappa(:,:)
+        real(wp), intent(OUT)  :: beta(:,:) 
+        real(wp), intent(OUT)  :: mu      
+        real(wp), intent(IN)   :: D_lith
+        real(wp), intent(IN)   :: rho_a 
+        real(wp), intent(IN)   :: g 
+        real(wp), intent(IN)   :: dx
+        
+        ! Local variables
+        integer  :: i, j, nx, ny 
+        integer  :: ip, iq, ic, jc 
+        real(wp) :: xd, yd
+
+        nx = size(kappa,1)
+        ny = size(kappa,2)
+
+        ! Calculate mu
+
+        mu = 2.*pi/((nx-1)*dx)
+
+        ! Calculate kappa and beta
+
+        kappa = 0.0
+        beta  = 0.0 
+
+        ic = (nx-1)/2 + 1
+        jc = (ny-1)/2 + 1
+
+        do i = 1, nx
+            if (i.le.ic) then 
+                ip = i-1
+            else
+                ip = nx-i+1
+            end if
+            do j = 1, ny
+                if (j.le.jc) then
+                    iq = j-1  
+                else
+                    iq = ny-j+1
+                end if
+                kappa(i,j)  = (ip*ip + iq*iq)**0.5
+                beta(i,j)   = rho_a*g + D_lith*(mu**4)*kappa(i,j)**4
+            end do
+        end do
+
+        return
+      
+    end subroutine calc_asthenosphere_viscous_params
 
     subroutine make_fft_plans(in,plan_fwd,plan_bck) 
  
@@ -494,5 +518,129 @@ contains
         return
 
     end subroutine calc_fft_backward_c2c
+
+
+    ! ===== ARRAY SIZING FUNCTIONS ==============================
+
+    subroutine extend_array(ve,v,fill_with,val)
+        ! Given an array ve with dimensions >= those of v, 
+        ! populate ve with values of v, centered in the larger array.
+        ! Fill extra cells with value of user's choice. 
+
+        implicit none
+
+        real(wp), intent(INOUT) :: ve(:,:) 
+        real(wp), intent(IN)    :: v(:,:)
+        character(len=*), intent(IN) :: fill_with
+        real(wp), intent(IN), optional :: val
+
+        ! Local variables
+        integer  :: i, j, nx, ny, nx1, ny1
+        integer  :: i0, i1, j0, j1
+        real(wp) :: fill_value 
+
+        nx = size(v,1)
+        ny = size(v,2) 
+
+        nx1 = size(ve,1)
+        ny1 = size(ve,2)
+
+        ! Determine fill value to be used
+
+        select case(trim(fill_with))
+
+            case("zero","zeros")
+
+                fill_value = 0.0
+
+            case("mean")
+
+                fill_value = sum(v) / real(nx*ny,wp)
+
+            case("val")
+
+                if (.not. present(val)) then
+                    write(*,*) "extend_array:: Error: for fill_with='val', the optional &
+                    &argument val must be provided and is missing right now."
+                    stop
+                end if
+
+                fill_value = val
+
+            case DEFAULT
+                write(*,*) "extend_array:: Error: choice of 'fill_with' not recognized."
+                write(*,*) "fill_with = ", trim(fill_with)
+                stop
+        
+        end select
+
+        ! Initialize extended array to correct fill value
+
+        ve = fill_value 
+
+        ! Fill in the actual values centered within the extended array
+
+        if (nx .eq. nx1) then
+            i0 = 1
+        else
+            i0 = floor( (nx1-nx)/2.0 )
+        end if 
+        i1 = i0+nx-1
+
+        if (ny .eq. ny1) then
+            j0 = 1
+        else
+            j0 = floor( (ny1-ny)/2.0 )
+        end if 
+        j1 = j0+ny-1
+
+        ve(i0:i1,j0:j1) = v
+
+        return
+    
+    end subroutine extend_array
+
+    subroutine reduce_array(v,ve)
+        ! Given an array of dimensions >= those of v
+        ! extract centered values of ve of interest,
+        ! discarding remaining values around the borders.
+
+        implicit none
+
+        real(wp), intent(INOUT) :: v(:,:)
+        real(wp), intent(IN)    :: ve(:,:) 
+        
+        ! Local variables
+        integer  :: i, j, nx, ny, nx1, ny1
+        integer  :: i0, i1, j0, j1
+        real(wp) :: fill_value 
+
+        nx = size(v,1)
+        ny = size(v,2) 
+
+        nx1 = size(ve,1)
+        ny1 = size(ve,2)
+
+        ! Fill in the actual values from those centered within the extended array
+
+        if (nx .eq. nx1) then
+            i0 = 1
+        else
+            i0 = floor( (nx1-nx)/2.0 )
+        end if 
+        i1 = i0+nx-1
+
+        if (ny .eq. ny1) then
+            j0 = 1
+        else
+            j0 = floor( (ny1-ny)/2.0 )
+        end if 
+        j1 = j0+ny-1
+
+        v = ve(i0:i1,j0:j1)
+
+        return
+    
+    end subroutine reduce_array
 
 end module solver_elva

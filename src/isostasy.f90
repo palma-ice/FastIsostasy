@@ -125,15 +125,6 @@ module isostasy
                 ! Populate 2D D_lith field to have it available
                 isos%now%D_lith = D_lith_const 
 
-                if (isos%par%method .eq. 4) then
-                    ! Calculate parameters needed for elastic lithosphere viscous asthenosphere (ELVA)                                        
-                    ! solution as in Bueler et al 2007 (eq 11)
-                    
-                    call calc_asthenosphere_viscous_params(isos%par%mu,isos%now%kappa,isos%now%beta,isos%now%D_lith, &
-                                                                            isos%par%rho_a,isos%par%g,nx,ny,isos%par%dx)
-                
-                end if 
-
                 write(*,*) "isos_init:: summary"
                 write(*,*) "    E           : ", isos%par%E 
                 write(*,*) "    nu          : ", isos%par%nu
@@ -156,13 +147,6 @@ module isostasy
                 write(*,*) "    range(kei): ", minval(isos%now%kei),    maxval(isos%now%kei)
                 write(*,*) "    range(G0):  ", minval(isos%now%G0),     maxval(isos%now%G0)
 
-                if (isos%par%method .eq. 4) then
-                    write(*,*) "    mu (1/m):   ", isos%par%mu                                                       
-                
-                    write(*,*) "    range(kappa): ", minval(isos%now%kappa), maxval(isos%now%kappa)                
-                    write(*,*) "    range(beta):  ", minval(isos%now%beta),  maxval(isos%now%beta)                   
-                end if 
-
              case DEFAULT 
 
                 ! Set elastic length scale to zero (not used)
@@ -179,10 +163,6 @@ module isostasy
                 isos%now%kei = 0.0 
                 isos%now%G0  = 0.0
                 
-                ! Set ELVA helper values to zero too 
-                isos%now%kappa      = 0.0   
-                isos%par%mu         = 0.0 
-
              end select
 
          ! Set He_lith and tau to constant fields initially.
@@ -430,8 +410,10 @@ end if
                                                     isos%par%rho_ice,isos%par%rho_sw,isos%par%rho_a,isos%par%g)
                     
                     ! Viscous (half-space) asthenosphere                                                                             
-                    call calc_asthenosphere_viscous(isos%now%dzbdt,isos%now%w2,isos%now%q1,isos%now%kappa, &                            
-                                                    isos%now%beta,isos%par%mu,isos%par%visc,dt_now)
+                    ! call calc_asthenosphere_viscous(isos%now%dzbdt,isos%now%w2,isos%now%q1,isos%now%D_lith(1,1), &
+                    !                                         isos%par%visc,isos%par%rho_a,isos%par%g,isos%par%dx,dt_now)
+                    call calc_asthenosphere_viscous_square(isos%now%dzbdt,isos%now%w2,isos%now%q1,isos%now%D_lith(1,1), &
+                                                            isos%par%visc,isos%par%rho_a,isos%par%g,isos%par%dx,dt_now)
 
                     ! mmr, to do: calculate the elastic component u_E too,
                     ! as displacement u_tot = u_visc + u_E. 
@@ -536,10 +518,7 @@ end if
         
         allocate(now%kei(nfilt,nfilt))
         allocate(now%G0(nfilt,nfilt))
-       
-        allocate(now%kappa(nx,ny)) 
-        allocate(now%beta(nx,ny))  
-             
+
         allocate(now%z_bed(nx,ny))
         allocate(now%dzbdt(nx,ny))
         allocate(now%z_bed_ref(nx,ny))
@@ -566,10 +545,7 @@ end if
         
         if (allocated(now%kei))         deallocate(now%kei)
         if (allocated(now%G0))          deallocate(now%G0)
-     
-        if (allocated(now%kappa))       deallocate(now%kappa) 
-        if (allocated(now%beta))        deallocate(now%beta)  
-             
+
         if (allocated(now%z_bed))       deallocate(now%z_bed)
         if (allocated(now%dzbdt))       deallocate(now%dzbdt)
         if (allocated(now%z_bed_ref))   deallocate(now%z_bed_ref)
