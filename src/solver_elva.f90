@@ -62,7 +62,45 @@ contains
       
     end subroutine calc_asthenosphere_viscous_params
 
-    subroutine calc_asthenosphere_viscous(dzbdt,w,q,mu,kappa,beta,eta,dt)
+    subroutine calc_asthenosphere_viscous_square(dzbdt,w,q,kappa,beta,mu,eta,dt)
+        ! Calculate rate of change of vertical bedrock height
+        ! from a viscous half-space asthenosphere.
+        ! Contains viscous component only.
+
+        implicit none
+
+        real(wp), intent(OUT)   :: dzbdt(:,:)
+        real(wp), intent(INOUT) :: w(:,:)    
+        real(wp), intent(IN)    :: q(:,:)    
+        real(wp), intent(IN)    :: kappa(:,:)
+        real(wp), intent(IN)    :: beta(:,:) 
+        real(wp), intent(IN)    :: mu
+        real(wp), intent(IN)    :: eta                  ! [Pa s] Viscosity, eta=1e21 by default.
+        real(wp), intent(IN)    :: dt
+        
+        ! Local variables
+        integer :: i, j, nx, ny
+        integer :: nsq
+        real(wp), allocatable :: sq_dzbdt(:,:)
+        real(wp), allocatable :: sq_w(:,:)    
+        real(wp), allocatable :: sq_q(:,:)    
+        real(wp), allocatable :: sq_kappa(:,:)
+        real(wp), allocatable :: sq_beta(:,:) 
+
+        ! Step 1: populate variables on a square grid
+
+
+        ! Step 2: solve
+
+        call calc_asthenosphere_viscous(sq_dzbdt,sq_w,sq_q,sq_kappa,sq_beta,mu,eta,dt)
+
+        ! Step 3: get solution on original grid
+        
+        return
+
+    end subroutine calc_asthenosphere_viscous_square
+
+    subroutine calc_asthenosphere_viscous(dzbdt,w,q,kappa,beta,mu,eta,dt)
         ! Calculate rate of change of vertical bedrock height
         ! from a viscous half-space asthenosphere.
         ! Contains viscous component only.
@@ -74,9 +112,9 @@ contains
         real(wp), intent(OUT)   :: dzbdt(:,:)           ! size [l0,m0]
         real(wp), intent(INOUT) :: w(:,:)               ! size [l0,m0]
         real(wp), intent(IN)    :: q(:,:)               ! size [l0,m0]
-        real(wp), intent(IN)    :: mu
         real(wp), intent(IN)    :: kappa(:,:)           ! size [l,m]
         real(wp), intent(IN)    :: beta(:,:)            ! size [l,m]
+        real(wp), intent(IN)    :: mu
         real(wp), intent(IN)    :: eta                  ! [Pa s] Viscosity, eta=1e21 by default.
         real(wp), intent(IN)    :: dt
         

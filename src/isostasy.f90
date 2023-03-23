@@ -430,8 +430,8 @@ end if
                                                     isos%par%rho_ice,isos%par%rho_sw,isos%par%rho_a,isos%par%g)
                     
                     ! Viscous (half-space) asthenosphere                                                                             
-                    call calc_asthenosphere_viscous(isos%now%dzbdt,isos%now%w2,isos%now%q1,isos%par%mu,    &                            
-                                                    isos%now%kappa,isos%now%beta,isos%par%visc,dt_now)
+                    call calc_asthenosphere_viscous(isos%now%dzbdt,isos%now%w2,isos%now%q1,isos%now%kappa, &                            
+                                                    isos%now%beta,isos%par%mu,isos%par%visc,dt_now)
 
                     ! mmr, to do: calculate the elastic component u_E too,
                     ! as displacement u_tot = u_visc + u_E. 
