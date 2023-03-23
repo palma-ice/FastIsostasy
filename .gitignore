@@ -1,6 +1,6 @@
 .DS_Store
 Makefile
-lib/include/*.o
-lib/include/*.mod
-lib/bin/*.x
+libisostasy/include/*.o
+libisostasy/include/*.mod
+libisostasy/bin/*.x
 output/test-isostasy/bedtest.nc

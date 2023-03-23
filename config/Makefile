@@ -3,8 +3,8 @@
 
 # PATH options
 srcdir = src
-objdir = lib/include
-bindir = lib/bin
+objdir = libisostasy/include
+bindir = libisostasy/bin
 
 # Command-line options at make call
 debug    ?= 0
@@ -69,11 +69,9 @@ isostasy-static: $(isostasy_libs)
 	@echo "    $(objdir)/libisostasy.a is ready."
 	@echo " "
 
-#-L${CURDIR}/libyelmo/include -lisostasy
-
-test_isostasy : $(isostasy_libs) $(objdir)/isostasy_benchmarks.o $(objdir)/ncio.o $(objdir)/nml.o
-		$(FC) $(DFLAGS) $(FFLAGS) $(INC_LIS) -o $(bindir)/test_isostasy.x tests/test_isostasy.f90 \
-			 $(LFLAGS) $^
+test_isostasy : isostasy-static $(objdir)/isostasy_benchmarks.o $(objdir)/ncio.o $(objdir)/nml.o
+		$(FC) $(DFLAGS) $(FFLAGS) -o $(bindir)/test_isostasy.x tests/test_isostasy.f90 \
+			-L${CURDIR}/libisostasy/include -lisostasy $(LFLAGS) $(objdir)/isostasy_benchmarks.o $(objdir)/ncio.o $(objdir)/nml.o
 		@echo " "
 		@echo "    test_isostasy.x is ready."
 		@echo " "
