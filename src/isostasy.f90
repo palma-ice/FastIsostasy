@@ -9,7 +9,7 @@ module isostasy
     
     use, intrinsic :: iso_fortran_env, only : input_unit, output_unit, error_unit
 
-    use isostasy_def, only : sp, dp, wp, pi, isos_param_class, isos_state_class, isos_class
+    use isostasy_defs, only : sp, dp, wp, pi, isos_param_class, isos_state_class, isos_class
     
     use solver_elva
 

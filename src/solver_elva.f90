@@ -1,6 +1,6 @@
 module solver_elva
 
-    use isostasy_def, only : sp, dp, wp, pi 
+    use isostasy_defs, only : sp, dp, wp, pi 
 
     implicit none
 

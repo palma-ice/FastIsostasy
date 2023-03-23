@@ -1,4 +1,4 @@
-module isostasy_def
+module isostasy_defs
 
     implicit none
 
@@ -79,4 +79,4 @@ module isostasy_def
 contains
 
 
-end module isostasy_def
+end module isostasy_defs

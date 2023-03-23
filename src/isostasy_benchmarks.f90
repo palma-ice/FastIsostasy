@@ -2,16 +2,9 @@ module isostasy_benchmarks
 
     use, intrinsic :: iso_fortran_env, only : input_unit, output_unit, error_unit
 
+    use isostasy_defs, only : sp, dp, wp, pi
+
     implicit none
-
-    ! Internal constants
-    integer,  parameter :: dp  = kind(1.d0)
-    integer,  parameter :: sp  = kind(1.0)
-
-    ! Choose the precision of the library (sp,dp) - should match isostasy definitions
-    integer,  parameter :: wp = sp 
-
-    real(wp), parameter :: pi = 3.14159265359
 
     type isos_analytical_elva_disk_load_class 
         integer  :: ifunc   = 0                      ! choice of function f(x) to integrate (integrand of analytical solution, in case there are several) 

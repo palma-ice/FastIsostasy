@@ -33,16 +33,16 @@ endif
 ###############################################
 
 
-$(objdir)/isostasy_def.o: $(srcdir)/isostasy_def.f90
+$(objdir)/isostasy_defs.o: $(srcdir)/isostasy_defs.f90
 	$(FC) $(DFLAGS) $(FFLAGS) -c -o $@ $<
 
-$(objdir)/isostasy.o: $(srcdir)/isostasy.f90 $(objdir)/isostasy_def.o $(objdir)/solver_elva.o $(objdir)/nml.o
+$(objdir)/isostasy.o: $(srcdir)/isostasy.f90 $(objdir)/isostasy_defs.o $(objdir)/solver_elva.o $(objdir)/nml.o
 	$(FC) $(DFLAGS) $(FFLAGS) -c -o $@ $<
 
-$(objdir)/solver_elva.o: $(srcdir)/solver_elva.f90 $(objdir)/isostasy_def.o $(objdir)/nml.o
+$(objdir)/solver_elva.o: $(srcdir)/solver_elva.f90 $(objdir)/isostasy_defs.o $(objdir)/nml.o
 	$(FC) $(DFLAGS) $(FFLAGS) -c -o $@ $<
 
-$(objdir)/isostasy_benchmarks.o: $(srcdir)/isostasy_benchmarks.f90 $(objdir)/isostasy_def.o
+$(objdir)/isostasy_benchmarks.o: $(srcdir)/isostasy_benchmarks.f90 $(objdir)/isostasy_defs.o
 	$(FC) $(DFLAGS) $(FFLAGS) -c -o $@ $<
 
 $(objdir)/ncio.o: $(srcdir)/ncio.f90
@@ -51,7 +51,7 @@ $(objdir)/ncio.o: $(srcdir)/ncio.f90
 $(objdir)/nml.o: $(srcdir)/nml.f90
 	$(FC) $(DFLAGS) $(FFLAGS) -c -o $@ $<
 
-isostasy_libs = 		$(objdir)/isostasy_def.o \
+isostasy_libs = 		$(objdir)/isostasy_defs.o \
 						$(objdir)/isostasy.o \
 						$(objdir)/solver_elva.o
 
