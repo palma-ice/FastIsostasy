@@ -49,8 +49,8 @@ contains
         ! Step 1: populate variables on a square grid
         
         sq_dzbdt = 0.0 
-        call extend_array(sq_w,w,fill_with="val",val=0.0_wp)
-        call extend_array(sq_q,q,fill_with="val",val=0.0_wp)
+        call extend_array(sq_w,w,fill_with="mirror")
+        call extend_array(sq_q,q,fill_with="mirror")
 
         ! Step 2: solve
 
@@ -567,6 +567,11 @@ contains
 
                 fill_value = val
 
+            case("mirror")
+                ! Set fill_value to zero, it will not be used 
+
+                fill_value = 0.0 
+
             case DEFAULT
                 write(*,*) "extend_array:: Error: choice of 'fill_with' not recognized."
                 write(*,*) "fill_with = ", trim(fill_with)
@@ -595,6 +600,33 @@ contains
         j1 = j0+ny-1
 
         ve(i0:i1,j0:j1) = v
+
+
+        if (trim(fill_with) .eq. "mirror") then
+            ! Populate extended array region with mirrored points 
+
+            ! Left
+            if (i0 .gt. 1) then 
+                ve(1:i0-1,j0:j1) = v(i0-1:1:-1,:)
+            end if
+            ! Right
+            if (i1 .lt. nx1) then 
+                ve(i1+1:nx1,j0:j1) = v(nx:nx-(nx1-i1)+1:-1,:)
+            end if
+            
+            ! Bottom
+            if (j0 .gt. 1) then 
+                ve(i0:i1,1:j0-1) = v(:,j0-1:1:-1)
+            end if
+            ! Top
+            if (j1 .lt. ny1) then 
+                ve(i0:i1,j1+1:ny1) = v(:,ny:ny-(ny1-j1)+1:-1)
+            end if
+            
+            ! To do - populate the corners too. For now ignore, and keep 
+            ! extended array values equal to fill_value=0.0. 
+
+        end if 
 
         return
     
