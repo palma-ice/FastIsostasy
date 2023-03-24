@@ -9,7 +9,7 @@ INC_LIS =
 LIB_LIS =
 
 INC_FFTW = 
-LIB_FFTW = -L/usr/local/Cellar/fftw/3.3.10_1/lib -lfftw3 -lm
+LIB_FFTW = -L/p/system/packages/fftw/3.3.9/lib -lfftw3 -lm
 
 FFLAGS  = -module $(objdir) -L$(objdir)
 
