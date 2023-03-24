@@ -4,17 +4,12 @@ FC  = mpiifort
 INC_NC  = -I${NETCDF_FORTRANROOT}/include
 LIB_NC  = -L${NETCDF_FORTRANROOT}/lib -lnetcdff -L${NETCDF_CROOT}/lib -lnetcdf
 
-REMBOROOT = rembo1
-INC_REMBO = -I${REMBOROOT}/librembo/include 
-LIB_REMBO = -L${REMBOROOT}/librembo/include -lrembo
+LISROOT =
+INC_LIS =
+LIB_LIS =
 
-YELMOROOT = yelmo
-INC_YELMO = -I${YELMOROOT}/libyelmo/include 
-LIB_YELMO = -L${YELMOROOT}/libyelmo/include -lyelmo
-
-LISROOT = /home/robinson/apps/lis/lis
-INC_LIS = -I${LISROOT}/include 
-LIB_LIS = -L${LISROOT}/lib/ -llis
+INC_FFTW = 
+LIB_FFTW = -L/usr/local/Cellar/fftw/3.3.10_1/lib -lfftw3 -lm
 
 FFLAGS  = -module $(objdir) -L$(objdir)
 
@@ -29,7 +24,7 @@ ifeq ($(parallel), 1)
 
 endif 
 
-LFLAGS  = $(LIB_YELMO) $(LIB_NC) $(LIB_LIS) -Wl,-zmuldefs
+LFLAGS  = $(LIB_NC) $(LIB_LIS) $(LIB_FFTW) -Wl,-zmuldefs
 
 DFLAGS_NODEBUG = -O2 -fp-model precise
 DFLAGS_DEBUG   = -C -traceback -ftrapuv -fpe0 -check all -fp-model precise
