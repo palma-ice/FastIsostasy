@@ -410,7 +410,11 @@ end if
                     call calc_litho_local(isos%now%w1,isos%now%q1,isos%now%z_bed,H_ice,z_sl, &
                                                     isos%par%rho_ice,isos%par%rho_sw,isos%par%rho_a,isos%par%g)
                     
-                    ! Viscous (half-space) asthenosphere                                                                             
+                    ! Viscous (half-space) asthenosphere
+
+                    ! Make sure viscous asthenosphere displacement is equal to current z_bed
+                    isos%now%w2 = isos%now%z_bed
+                                
                     ! call calc_asthenosphere_viscous(isos%now%dzbdt,isos%now%w2,isos%now%q1,isos%now%D_lith(1,1), &
                     !                                         isos%par%visc,isos%par%rho_a,isos%par%g,isos%par%dx,dt_now)
                     call calc_asthenosphere_viscous_square(isos%now%dzbdt,isos%now%w2,isos%now%q1,isos%now%D_lith(1,1), &
