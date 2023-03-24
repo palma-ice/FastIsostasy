@@ -268,11 +268,11 @@ else
                 call calc_litho_regional(isos%now%w0,isos%now%q0,z_bed_ref,H_ice_ref,z_sl_ref,isos%now%G0, &
                                             isos%par%rho_ice,isos%par%rho_sw,isos%par%rho_a,isos%par%g)
 
-                ! Set the asthenospheric displacement equal to this reference displacement to start
-                isos%now%w2 = isos%now%w0 
-
 end if 
 
+                ! Set the asthenospheric displacement equal to this reference displacement to start
+                isos%now%w2 = isos%now%w0 
+                
 !mmr recheck - calculate plans here forth and back?
 
 !mmr               call make_fft_plans(isos%now%q0,plan_fwd,plan_bck) 
