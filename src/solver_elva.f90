@@ -49,8 +49,10 @@ contains
         ! Step 1: populate variables on a square grid
         
         sq_dzbdt = 0.0 
-        call extend_array(sq_w,w,fill_with="mirror",val=0.0_wp)
-        call extend_array(sq_q,q,fill_with="mirror",val=0.0_wp)
+        !call extend_array(sq_w,w,fill_with="mirror")
+        !call extend_array(sq_q,q,fill_with="mirror")
+        call extend_array(sq_w,w,fill_with="val",val=0.0_wp)
+        call extend_array(sq_q,q,fill_with="val",val=0.0_wp)
 
         ! Step 2: solve
 
