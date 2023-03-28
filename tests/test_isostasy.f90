@@ -24,7 +24,10 @@ program test_isostasy
     real(wp) :: r0, h0, eta 
 
     integer  :: i, j, nx, ny 
-    real(wp) :: xmin, xmax, dx       
+    real(wp) :: xmin, xmax, dx
+!mmr----------------------------------------------------------------------------------------------------------------------
+    real(wp) :: ymin, ymax, dy
+!mmr------------------------------------------------------------------------------------------------------------------------
     real(wp) :: xcntr, ycntr                        
     real(wp), allocatable :: xc(:)
     real(wp), allocatable :: yc(:)
@@ -69,7 +72,7 @@ program test_isostasy
     time_init = 0.0
     time_end  = 30e3
     dtt       = 200.0
-    dt_out    = 10e3
+    dt_out    = 200.0 !mmr recheck 10e3
 
     write(*,*) "time_init = ", time_init 
     write(*,*) "time_end  = ", time_end 
@@ -82,22 +85,41 @@ program test_isostasy
 
     xmin = -2000.0e3
     xmax = abs(xmin)
-    nx   = int( (xmax-xmin) / dx ) + 1 
+    nx   = int( (xmax-xmin) / dx ) + 1
+!mmr-------------------------------------------------------------------------------------------------
+    !    ny = nx
+    dy = dx
+    ymin = -4000.0e3
+    ymax = abs(ymin)
+    ny   = int( (ymax-ymin) / dy ) + 1
+!mmr--------------------------------------------------------------------------------------------------
 
     allocate(xc(nx))
-    allocate(yc(nx))
+!mmr--------------------------------------------------------------------------------------------------
+!mmr    allocate(yc(nx))
+    allocate(yc(ny))
+!mmr--------------------------------------------------------------------------------------------------    
 
     do i = 1, nx 
         xc(i) = xmin + (i-1)*dx 
     end do
 
-    ny = nx
-    yc = xc
+!mmr--------------------------------------------------------------------------------------------------
+!mmr    ny = nx
+!mmr    yc = xc
     !ny = nx-20
     !yc = xc(11:nx-10)
+    
+    do j = 1, ny
+       yc(j) = ymin + (j-1)*dy
+    end do
+!mmr--------------------------------------------------------------------------------------------------
 
     write(*,*) "Grid info: " 
-    write(*,*) "dx = ", dx 
+    write(*,*) "dx = ", dx
+!mmr--------------------------------------------------------------------------------------------------
+    write(*,*) "dy = ", dy
+!mmr--------------------------------------------------------------------------------------------------
     write(*,*) "nx, ny = ", nx, ny 
     write(*,*) "range(xc): ", minval(xc), maxval(xc) 
     write(*,*) "range(yc): ", minval(yc), maxval(yc) 
@@ -170,7 +192,10 @@ program test_isostasy
         
             H_ice = 0.
             xcntr = (xmax+xmin)/2.0
-            ycntr = xcntr
+!mmr----------------------------------------------------------------
+!mmr            ycntr = xcntr
+            ycntr = (ymax+ymin)/2.
+!mmr----------------------------------------------------------------
 
             do j = 1, ny
             do i = 1, nx
@@ -214,8 +239,8 @@ program test_isostasy
                 case("elva_disk")
                     
                     ! Calculate analytical solution to elva_disk
-                    call isosbench_elva_disk(z_bed_bench,r0,h0,eta,isos1%par%dx,isos1%now%D_lith(1,1), &
-                                                            isos1%par%rho_ice,isos1%par%rho_a,isos1%par%g,time)
+                   call isosbench_elva_disk(z_bed_bench,r0,h0,eta,isos1%par%dx,isos1%now%D_lith(1,1), &
+                                                           isos1%par%rho_ice,isos1%par%rho_a,isos1%par%g,time)
 
                     ! Write to file 
                     call isos_write_step(isos1,file_out,time,H_ice,z_sl,z_bed_bench)
