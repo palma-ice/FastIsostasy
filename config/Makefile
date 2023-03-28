@@ -71,7 +71,7 @@ isostasy-static: $(isostasy_libs)
 
 test_isostasy : isostasy-static $(objdir)/isostasy_benchmarks.o $(objdir)/ncio.o $(objdir)/nml.o
 		$(FC) $(DFLAGS) $(FFLAGS) -o $(bindir)/test_isostasy.x tests/test_isostasy.f90 \
-			-L${CURDIR}/libisostasy/include -lisostasy $(LFLAGS) $(objdir)/isostasy_benchmarks.o $(objdir)/ncio.o $(objdir)/nml.o
+			-L${CURDIR}/libisostasy/include -lisostasy $(objdir)/isostasy_benchmarks.o $(objdir)/ncio.o $(objdir)/nml.o $(LFLAGS)
 		@echo " "
 		@echo "    test_isostasy.x is ready."
 		@echo " "
