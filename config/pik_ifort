@@ -4,10 +4,6 @@ FC  = mpiifort
 INC_NC  = -I${NETCDF_FORTRANROOT}/include
 LIB_NC  = -L${NETCDF_FORTRANROOT}/lib -lnetcdff -L${NETCDF_CROOT}/lib -lnetcdf
 
-LISROOT =
-INC_LIS =
-LIB_LIS =
-
 INC_FFTW = 
 LIB_FFTW = -L/p/system/packages/fftw/3.3.9/lib -lfftw3 -lm
 
@@ -16,15 +12,11 @@ FFLAGS  = -module $(objdir) -L$(objdir)
 ifeq ($(parallel), 1)
     # Overwrite default choices with openmp relevant choices 
 
-    LISROOT = /home/robinson/apps/lis/lis-omp
-    INC_LIS = -I${LISROOT}/include 
-    LIB_LIS = -L${LISROOT}/lib/ -llis
-
     FFLAGS  = -module $(objdir) -L$(objdir) -qopenmp 
 
 endif 
 
-LFLAGS  = $(LIB_NC) $(LIB_LIS) $(LIB_FFTW) -Wl,-zmuldefs
+LFLAGS  = $(LIB_NC) $(LIB_FFTW) -Wl,-zmuldefs
 
 DFLAGS_NODEBUG = -O2 -fp-model precise
 DFLAGS_DEBUG   = -C -traceback -ftrapuv -fpe0 -check all -fp-model precise
