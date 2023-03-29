@@ -7,6 +7,7 @@ So far, the implementations include:
 1. Local lithosphere, relaxing asthenosphere (LLRA)
 2. Elastic lithosphere, relaxing asthenosphere (ELRA)
 3. Elementary GIA model (EGIA) - work in progress!
+4. Elastic lithosphere, viscous asthenosphere (ELVA)
 
 ## Initial configuration and running the program
 
