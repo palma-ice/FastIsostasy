@@ -25,9 +25,7 @@ program test_isostasy
 
     integer  :: i, j, nx, ny 
     real(wp) :: xmin, xmax, dx
-!mmr----------------------------------------------------------------------------------------------------------------------
     real(wp) :: ymin, ymax, dy
-!mmr------------------------------------------------------------------------------------------------------------------------
     real(wp) :: xcntr, ycntr                        
     real(wp), allocatable :: xc(:)
     real(wp), allocatable :: yc(:)
@@ -46,8 +44,7 @@ program test_isostasy
     type(isos_class) :: isos1
 
     ! === Define runtime information =========
-    ! program runs from yelmox/
-    ! executable is defined in libyelmox/bin/test_isostasy.x 
+    ! executable is defined in libisostasy/bin/test_isostasy.x 
     ! output directory should be predefined: output/test-isostasy
 
     outfldr = "output/test-isostasy"
@@ -72,7 +69,7 @@ program test_isostasy
     time_init = 0.0
     time_end  = 30e3
     dtt       = 200.0
-    dt_out    = 200.0 !mmr recheck 10e3
+    dt_out    = 10e3
 
     write(*,*) "time_init = ", time_init 
     write(*,*) "time_end  = ", time_end 
@@ -86,40 +83,26 @@ program test_isostasy
     xmin = -2000.0e3
     xmax = abs(xmin)
     nx   = int( (xmax-xmin) / dx ) + 1
-!mmr-------------------------------------------------------------------------------------------------
-    !    ny = nx
+
     dy = dx
     ymin = -4000.0e3
     ymax = abs(ymin)
     ny   = int( (ymax-ymin) / dy ) + 1
-!mmr--------------------------------------------------------------------------------------------------
 
     allocate(xc(nx))
-!mmr--------------------------------------------------------------------------------------------------
-!mmr    allocate(yc(nx))
     allocate(yc(ny))
-!mmr--------------------------------------------------------------------------------------------------    
 
     do i = 1, nx 
         xc(i) = xmin + (i-1)*dx 
     end do
 
-!mmr--------------------------------------------------------------------------------------------------
-!mmr    ny = nx
-!mmr    yc = xc
-    !ny = nx-20
-    !yc = xc(11:nx-10)
-    
     do j = 1, ny
        yc(j) = ymin + (j-1)*dy
     end do
-!mmr--------------------------------------------------------------------------------------------------
 
     write(*,*) "Grid info: " 
     write(*,*) "dx = ", dx
-!mmr--------------------------------------------------------------------------------------------------
     write(*,*) "dy = ", dy
-!mmr--------------------------------------------------------------------------------------------------
     write(*,*) "nx, ny = ", nx, ny 
     write(*,*) "range(xc): ", minval(xc), maxval(xc) 
     write(*,*) "range(yc): ", minval(yc), maxval(yc) 
@@ -192,10 +175,7 @@ program test_isostasy
         
             H_ice = 0.
             xcntr = (xmax+xmin)/2.0
-!mmr----------------------------------------------------------------
-!mmr            ycntr = xcntr
             ycntr = (ymax+ymin)/2.
-!mmr----------------------------------------------------------------
 
             do j = 1, ny
             do i = 1, nx
@@ -340,16 +320,13 @@ contains
              dim1="xc",dim2="yc",dim3="time",start=[1,1,n],ncid=ncid) 
         call nc_write(filename,"dzbdt",isos%now%dzbdt,units="m/yr",long_name="Bedrock elevation change", &
              dim1="xc",dim2="yc",dim3="time",start=[1,1,n],ncid=ncid)
-!mmr------------------------------------------------------------------------------------------------------------------------        
         call nc_write(filename,"q_load",isos%now%q1,units="N/m2",long_name="Load", &                                        
              dim1="xc",dim2="yc",dim3="time",start=[1,1,n],ncid=ncid)                                            
-        call nc_write(filename,"w_VA",-isos%now%w2,units="m",long_name="Load", &                                        
-             dim1="xc",dim2="yc",dim3="time",start=[1,1,n],ncid=ncid)                                            
-        call nc_write(filename,"z_bed_EL",-isos%now%w1,units="m",long_name="Displacement (for ELVA only EL)", &
+        call nc_write(filename,"w1",-isos%now%w1,units="m",long_name="Displacement (for ELVA only EL)", &
              dim1="xc",dim2="yc",dim3="time",start=[1,1,n],ncid=ncid)                                           
-                                                        
-!mmr------------------------------------------------------------------------------------------------------------------------    
-
+        call nc_write(filename,"w2",-isos%now%w2,units="m",long_name="Displacement (for ELVA only VA)", &                                        
+             dim1="xc",dim2="yc",dim3="time",start=[1,1,n],ncid=ncid)                                            
+        
         if (present(z_bed_bench)) then 
             ! Compare with benchmark solution 
 
