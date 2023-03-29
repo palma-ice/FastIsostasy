@@ -258,14 +258,18 @@ if (.FALSE.) then
     ! Use LL solution, since elastisity is contained in viscous asthenosphere solution? 
 
                 ! Local lithosphere
-                call calc_litho_local(isos%now%w0,isos%now%q0,z_bed_ref,H_ice_ref,z_sl_ref, &
+                !call calc_litho_local(isos%now%w0,isos%now%q0,z_bed_ref,H_ice_ref,z_sl_ref, &
+                !                            isos%par%rho_ice,isos%par%rho_sw,isos%par%rho_a,isos%par%g)
+                call calc_litho_local(isos%now%w0,isos%now%q0,z_bed,H_ice,z_sl, &
                                             isos%par%rho_ice,isos%par%rho_sw,isos%par%rho_a,isos%par%g)
-
+                
 else
     ! Use EL solution, since this is the reference bedrock elevation for the reference loads
 
                 ! Elastic lithosphere
-                call calc_litho_regional(isos%now%w0,isos%now%q0,z_bed_ref,H_ice_ref,z_sl_ref,isos%now%G0, &
+                !call calc_litho_regional(isos%now%w0,isos%now%q0,z_bed_ref,H_ice_ref,z_sl_ref,isos%now%G0, &
+                !                            isos%par%rho_ice,isos%par%rho_sw,isos%par%rho_a,isos%par%g)
+                call calc_litho_regional(isos%now%w0,isos%now%q0,z_bed,H_ice,z_sl,isos%now%G0, &
                                             isos%par%rho_ice,isos%par%rho_sw,isos%par%rho_a,isos%par%g)
 
 end if 
