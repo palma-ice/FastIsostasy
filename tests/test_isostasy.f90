@@ -70,26 +70,26 @@ program test_isostasy
     ! === Define simulation time ========
 
     time_init = 0.0
-    time_end  = 30e3
-    dtt       = 200.0
-    dt_out    = 200.0 !mmr recheck 10e3
+    time_end  = 30.e3  !mmr 30e3
+    dtt       = 1. !! 200. !mmr 
+    dt_out    = 1.e3 !mmr recheck 10e3
 
     write(*,*) "time_init = ", time_init 
     write(*,*) "time_end  = ", time_end 
     write(*,*) "dtt       = ", dtt 
-    write(*,*) "dt_out    = ", dt_out 
+    write(*,*) "dt_out    = ", dt_out
 
     ! === Define grid information ============
 
     dx = 20.0e3
 
-    xmin = -2000.0e3
+    xmin = -2000.0e3 !mmr2 -2000.0e3
     xmax = abs(xmin)
     nx   = int( (xmax-xmin) / dx ) + 1
 !mmr-------------------------------------------------------------------------------------------------
     !    ny = nx
     dy = dx
-    ymin = -4000.0e3
+    ymin = xmin !mmr -2000.0e3
     ymax = abs(ymin)
     ny   = int( (ymax-ymin) / dy ) + 1
 !mmr--------------------------------------------------------------------------------------------------
@@ -175,7 +175,8 @@ program test_isostasy
             mask(2*int(nx/3.0)+1:nx,:) = 2.0 
 
             ! Define tau field using the mask
-            call isos_set_field(isos1%now%tau,[1e2,1e3,3e3],[0.0_wp,1.0_wp,2.0_wp],mask,dx,sigma=150e3)
+!mmr2            call isos_set_field(isos1%now%tau,[1e2,1e3,3e3],[0.0_wp,1.0_wp,2.0_wp],mask,dx,sigma=150e3)
+            call isos_set_field(isos1%now%tau,[1.e2_wp,1.e3_wp,3.e3_wp],[0.0_wp,1.0_wp,2.0_wp],mask,dx,sigma=150.e3_wp) !mmr2
 
         case("point_load")
             ! Define ice thickness only in one grid point 
@@ -237,10 +238,10 @@ program test_isostasy
             select case(trim(experiment))
 
                 case("elva_disk")
-                    
-                    ! Calculate analytical solution to elva_disk
-                   call isosbench_elva_disk(z_bed_bench,r0,h0,eta,isos1%par%dx,isos1%now%D_lith(1,1), &
-                                                           isos1%par%rho_ice,isos1%par%rho_a,isos1%par%g,time)
+!mmr2 comment this to spare time                    
+!mmr2                    ! Calculate analytical solution to elva_disk
+!mmr2                   call isosbench_elva_disk(z_bed_bench,r0,h0,eta,isos1%par%dx,isos1%now%D_lith(1,1), &
+!mmr2                                                           isos1%par%rho_ice,isos1%par%rho_a,isos1%par%g,time)
 
                     ! Write to file 
                     call isos_write_step(isos1,file_out,time,H_ice,z_sl,z_bed_bench)

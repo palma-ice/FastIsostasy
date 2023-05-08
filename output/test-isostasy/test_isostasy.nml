@@ -1,7 +1,7 @@
 &isostasy 
-    method          = 4                     ! 0: constant lithospheric displacement; 1: LLRA; 2: ELRA, 3: EGIA, 4: ELVA
-    dt_step         = 10.0                  ! [yr] Max. timestep to recalculate bedrock uplift and rate of change
-    dt_lith         = 50.0                  ! [yr] Min. timestep to recalculate equilibrium lithospheric displacement
+    method          = 5                     ! 0: constant lithospheric displacement; 1: LLRA; 2: ELRA, 3: EGIA, 4: ELVA, 5: LV-ELVA
+    dt_step         = 1.                   ! [yr] Max. timestep to recalculate bedrock uplift and rate of change
+    dt_lith         = 1.                   ! [yr] Min. timestep to recalculate equilibrium lithospheric displacement
     He_lith         = 88.0                  ! [km] Effective elastic thickness lithosphere
     visc            = 1.e21                 ! [Pa s] Asthenosphere's viscosity, visc=1e21 for Bueler et al (2007)  
     tau             = 200.0                 ! [yr] Relaxation time 

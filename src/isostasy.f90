@@ -12,6 +12,7 @@ module isostasy
     use isostasy_defs, only : sp, dp, wp, pi, isos_param_class, isos_state_class, isos_class
     
     use solver_elva
+    use solver_lv_elva !mmr2
 
     implicit none 
 
@@ -71,7 +72,10 @@ module isostasy
 
         select case(isos%par%method)
 
-            case(2,4)
+!mmr2---------------------------------------------------------------
+!mmr2        case(2,4)
+        case(2,4,5)
+!mmr2---------------------------------------------------------------
                 ! ELRA or ELVA method is being used, which require a constant
                 ! value of L_w, D_Lith and thus He_lith everywhere 
                 
@@ -175,6 +179,7 @@ module isostasy
         ! Set effective viscosity to a constant field too
         ! Later this can be overwritten.
         isos%now%eta_eff    = isos%par%visc         ! [Pa s]
+
         
         ! Intially ensure all variables are zero 
         isos%now%z_bed_ref  = 0.0
@@ -276,8 +281,39 @@ end if
 !mmr recheck - calculate plans here forth and back?
 
 !mmr               call make_fft_plans(isos%now%q0,plan_fwd,plan_bck) 
-!mmr----------------------------------------------------------------               
-               
+!mmr----------------------------------------------------------------
+
+
+!mmr2----------------------------------------------------------------
+             case(5) 
+                ! LV-ELVA - laterally-variable viscosity
+                ! viscous half-space asthenosphere overlain by                                       
+                ! elastic plate lithosphere with uniform constants                                          
+if (.FALSE.) then
+    ! Use LL solution, since elastisity is contained in viscous asthenosphere solution? 
+
+                ! Local lithosphere
+                call calc_litho_local(isos%now%w0,isos%now%q0,z_bed_ref,H_ice_ref,z_sl_ref, &
+                                            isos%par%rho_ice,isos%par%rho_sw,isos%par%rho_a,isos%par%g)
+else
+    ! Use EL solution, since this is the reference bedrock elevation for the reference loads
+
+                ! Elastic lithosphere
+                call calc_litho_regional(isos%now%w0,isos%now%q0,z_bed_ref,H_ice_ref,z_sl_ref,isos%now%G0, &
+                                            isos%par%rho_ice,isos%par%rho_sw,isos%par%rho_a,isos%par%g)
+end if 
+                ! Set the asthenospheric displacement equal to this reference displacement to start
+                isos%now%w2 = isos%now%w0 
+
+!mmr2
+                ! Calculate effective viscosity
+!mmr2 hereiam                call calc_effective_viscosity(isos%now%eta_eff,isos%par%visc,3)
+!mmr2
+                
+!mmr2 recheck - calculate plans here forth and back?
+                !mmr2               call make_fft_plans(isos%now%q0,plan_fwd,plan_bck)
+!mmr2----------------------------------------------------------------               
+
          end select 
 
         ! Define initial time of isostasy model 
@@ -326,6 +362,13 @@ end if
         real(wp) :: dt, dt_now  
         integer  :: n, nstep 
         logical  :: update_equil
+
+        integer  :: nx,ny !mmr2
+        
+        !mmr2
+        nx = size(dzbdt_corr,1)
+        ny = size(dzbdt_corr,2)
+        !mmr2
 
         ! Step 0: determine current timestep and number of iterations
         dt = time - isos%par%time_step 
@@ -415,6 +458,30 @@ end if
                     !                                         isos%par%visc,isos%par%rho_a,isos%par%g,isos%par%dx,dt_now)
                     call calc_asthenosphere_viscous_square(isos%now%dzbdt,isos%now%w2,isos%now%q1,isos%now%D_lith(1,1), &
                                                             isos%par%visc,isos%par%rho_a,isos%par%g,isos%par%dx,dt_now)
+ 
+                    ! mmr, to do: calculate the elastic component u_E too,
+                    ! as displacement u_tot = u_visc + u_E. 
+                    ! See Bueler et al. (2007). u_E should be relatively small. 
+
+                 case(5) 
+                    ! LV-ELVA - laterally-variable viscosity
+                    ! viscous half-space asthenosphere overlain by                                                   
+                    ! elastic plate lithosphere with uniform constants                                                      
+                    
+                    ! Local lithosphere (LL)
+                    ! (update every time because it is cheap)
+                    ! Note: calculate the local lithospheric load here because 
+                    ! the EL component is contained in the ELVA model solution
+                    ! q1 will be used (the load), while w1 will not be used further.
+                    call calc_litho_local(isos%now%w1,isos%now%q1,isos%now%z_bed,H_ice,z_sl, &
+                                                    isos%par%rho_ice,isos%par%rho_sw,isos%par%rho_a,isos%par%g)
+                    
+                    ! Viscous (half-space) asthenosphere
+                    ! call calc_asthenosphere_viscous(isos%now%dzbdt,isos%now%w2,isos%now%q1,isos%now%D_lith(1,1), &
+                    !                                         isos%par%visc,isos%par%rho_a,isos%par%g,isos%par%dx,dt_now)
+                    call calc_lv_asthenosphere_viscous_square(isos%now%dzbdt,isos%now%w2,isos%now%q1,isos%par%nu,isos%now%D_lith(1,1), &
+!mmr2                         isos%par%visc,isos%par%rho_a,isos%par%g,isos%par%dx,dt_now)
+                         isos%now%eta_eff,isos%par%rho_a,isos%par%g,isos%par%dx,dt_now)
 
                     ! mmr, to do: calculate the elastic component u_E too,
                     ! as displacement u_tot = u_visc + u_E. 
@@ -432,10 +499,16 @@ end if
 
                 isos%now%z_bed = isos%now%z_bed + isos%now%dzbdt*dt_now
 
-                ! Additionally apply bedrock adjustment field
-                if (present(dzbdt_corr)) then 
-                    isos%now%z_bed = isos%now%z_bed + dzbdt_corr*dt_now
-                end if 
+!                ! Additionally apply bedrock adjustment field
+!               if (present(dzbdt_corr)) then 
+!                    isos%now%z_bed = isos%now%z_bed + dzbdt_corr*dt_now
+!                end if 
+!mmr2
+!                isos%now%z_bed   = isos%now%z_bed  - 0.25*(isos%now%z_bed(1,1)+isos%now%z_bed(nx,ny)+&
+!                     isos%now%z_bed(1,ny)+isos%now%z_bed(nx,1))
+!
+                isos%now%w2 = isos%now%z_bed !mmr2
+!mmr2
                 
                 isos%par%time_step = isos%par%time_step + dt_now
                
@@ -2187,6 +2260,8 @@ end if
 
         return
 
-    end subroutine load_kei_values_file
+      end subroutine load_kei_values_file
+
+
 
 end module isostasy

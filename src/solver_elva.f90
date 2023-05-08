@@ -7,6 +7,16 @@ module solver_elva
     private
     public :: calc_asthenosphere_viscous_square
     public :: calc_asthenosphere_viscous
+    !mmr2
+    public :: extend_array 
+    public :: reduce_array
+    public :: calc_asthenosphere_viscous_params
+    public :: calc_fft_backward_r2r
+    Public :: calc_fft_forward_r2r
+    public :: calc_fft_backward_c2c
+    public :: calc_fft_forward_c2c
+    
+    !mmr2
 
 contains
 
@@ -90,6 +100,8 @@ contains
         logical  :: fft_r2r, fft_c2c
 
         real(wp), allocatable :: kappa(:,:)
+        real(wp), allocatable :: kappa_p(:,:)
+        real(wp), allocatable :: kappa_q(:,:)
         real(wp), allocatable :: beta(:,:)
         real(wp) :: mu 
 
@@ -129,7 +141,7 @@ contains
 
         ! Step 0: initialize helper variables
 
-        call calc_asthenosphere_viscous_params(kappa,beta,mu,D_lith,rho_a,g,dx) 
+        call calc_asthenosphere_viscous_params(kappa,kappa_p,kappa_q,beta,mu,D_lith,rho_a,g,dx) 
 
         !  Initialize 
         
@@ -199,11 +211,13 @@ contains
 
     end subroutine calc_asthenosphere_viscous
 
-    subroutine calc_asthenosphere_viscous_params(kappa,beta,mu,D_lith,rho_a,g,dx) 
+    subroutine calc_asthenosphere_viscous_params(kappa,kappa_p,kappa_q,beta,mu,D_lith,rho_a,g,dx) 
         ! Calculate parameters needed for elastic lithosphere viscous asthenosphere (ELVA)                                        
         ! solution as in Bueler et al 2007 (eq 11)
                     
-        real(wp), intent(OUT)  :: kappa(:,:)
+      real(wp), intent(OUT)  :: kappa(:,:)
+      real(wp), intent(OUT)  :: kappa_p(:,:)
+      real(wp), intent(OUT)  :: kappa_q(:,:)
         real(wp), intent(OUT)  :: beta(:,:) 
         real(wp), intent(OUT)  :: mu      
         real(wp), intent(IN)   :: D_lith
@@ -226,6 +240,8 @@ contains
         ! Calculate kappa and beta
 
         kappa = 0.0
+        kappa_p = 0.0
+        kappa_q = 0.0
         beta  = 0.0 
 
         ic = (nx-1)/2 + 1
@@ -244,6 +260,8 @@ contains
                     iq = ny-j+1
                 end if
                 kappa(i,j)  = (ip*ip + iq*iq)**0.5
+                kappa_p(i,j) = ip !mmr2
+                kappa_q(i,j) = iq !mmr2
                 beta(i,j)   = rho_a*g + D_lith*(mu**4)*kappa(i,j)**4
             end do
         end do
