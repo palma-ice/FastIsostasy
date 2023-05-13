@@ -32,8 +32,8 @@ contains
         real(wp), intent(OUT)   :: dzbdt(:,:)
         real(wp), intent(INOUT) :: w(:,:)    
         real(wp), intent(IN)    :: q(:,:)    
-        real(wp), intent(IN)    :: D_lith
-        real(wp), intent(IN)    :: eta                  ! [Pa s] Viscosity, eta=1e21 by default.
+        real(wp), intent(IN)    :: D_lith(:,:)
+        real(wp), intent(IN)    :: eta(:,:)                  ! [Pa s] Viscosity, eta=1e21 by default.
         real(wp), intent(IN)    :: rho_a 
         real(wp), intent(IN)    :: g 
         real(wp), intent(IN)    :: dx
@@ -87,8 +87,8 @@ contains
         real(wp), intent(OUT)   :: dzbdt(:,:)
         real(wp), intent(INOUT) :: w(:,:)
         real(wp), intent(IN)    :: q(:,:)
-        real(wp), intent(IN)    :: D_lith
-        real(wp), intent(IN)    :: eta                  ! [Pa s] Viscosity, eta=1e21 by default.
+        real(wp), intent(IN)    :: D_lith(:,:)
+        real(wp), intent(IN)    :: eta(:,:)                  ! [Pa s] Viscosity, eta=1e21 by default.
         real(wp), intent(IN)    :: rho_a 
         real(wp), intent(IN)    :: g 
         real(wp), intent(IN)    :: dx
@@ -220,7 +220,7 @@ contains
       real(wp), intent(OUT)  :: kappa_q(:,:)
         real(wp), intent(OUT)  :: beta(:,:) 
         real(wp), intent(OUT)  :: mu      
-        real(wp), intent(IN)   :: D_lith
+        real(wp), intent(IN)   :: D_lith(:,:)
         real(wp), intent(IN)   :: rho_a 
         real(wp), intent(IN)   :: g 
         real(wp), intent(IN)   :: dx
@@ -262,7 +262,7 @@ contains
                 kappa(i,j)  = (ip*ip + iq*iq)**0.5
                 kappa_p(i,j) = ip !mmr2
                 kappa_q(i,j) = iq !mmr2
-                beta(i,j)   = rho_a*g + D_lith*(mu**4)*kappa(i,j)**4
+                beta(i,j)   = rho_a*g + D_lith(i,j)*(mu**4)*kappa(i,j)**4
             end do
         end do
 

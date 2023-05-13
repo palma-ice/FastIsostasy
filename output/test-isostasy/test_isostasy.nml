@@ -16,4 +16,10 @@
     g               = 9.81                  ! [m/s^2]
     r_earth         = 6.378e6               ! [m]  Earth's radius, Coulon et al (2021) 
     m_earth         = 5.972e24              ! [kg] Earth's mass,   Coulon et al (2021) 
+
+    ! Laterally variable asthenosphere viscosity
+    visc_method     = constant         ! constant | gaussian_minus
+
+    ! Laterally variable lithosphere effective thickness (and therefore ridigidity)
+    rigidity_method = gaussian_plus         ! constant | gaussian_minus
 /

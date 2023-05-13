@@ -11,6 +11,7 @@ module solver_lv_elva
     public :: calc_lv_asthenosphere_viscous_square
 !    public :: calc_lv_asthenosphere_viscous
     public :: calc_gaussian_viscosity
+    public :: calc_gaussian_rigidity
   contains
 
 
@@ -28,8 +29,8 @@ module solver_lv_elva
         real(wp), intent(INOUT) :: w(:,:)    
         real(wp), intent(IN)    :: q(:,:)
         real(wp), intent(IN)    :: nu  
-        real(wp), intent(IN)    :: D_lith
-        real(wp), intent(IN)    :: eta(:,:) !mmr2                  ! [Pa s] Viscosity, eta=1e21 by default.
+        real(wp), intent(IN)    :: D_lith(:,:) !mmr2
+        real(wp), intent(IN)    :: eta(:,:)    !mmr2                  ! [Pa s] Viscosity, eta=1e21 by default.
         real(wp), intent(IN)    :: rho_a 
         real(wp), intent(IN)    :: g 
         real(wp), intent(IN)    :: dx
@@ -88,8 +89,8 @@ module solver_lv_elva
         real(wp), intent(INOUT) :: u(:,:) 
         real(wp), intent(IN)    :: q(:,:)
         real(wp), intent(IN)    :: nu
-        real(wp), intent(IN)    :: D_lith
-        real(wp), intent(IN)    :: eta(:,:)   ! [Pa s] Viscosity, eta=1e21 by default. ! recheck - laterally variable
+        real(wp), intent(IN)    :: D_lith(:,:) !mmr2
+        real(wp), intent(IN)    :: eta(:,:)   ! [Pa s] Viscosity, eta=1e21 by default. 
         real(wp), intent(IN)    :: rho_a 
         real(wp), intent(IN)    :: g 
         real(wp), intent(IN)    :: dx
@@ -452,11 +453,10 @@ module solver_lv_elva
 
         do i = 1, nx
            do j = 1, ny
-              eta(i,j) =  1.e+21 * exp(-0.5*dot_product([xc(i),yc(j)]-[xcntr,ycntr], matmul(eta_sigma_m1, [xc(i),yc(j)]-[xcntr,ycntr]) )) ! &/ (2.0*pi*det_eta_sigma**0.5)
-!              if (xc(i).eq.xcntr.and.yc(j).eq.ycntr) then
-!                 print*,'hola', eta(i,j)/1.e21
-!                 stop
-!               endif
+! mmr2 crude attempt in asthenosphere. Note viscosity has to be large enough so model does not go unstable              
+              !              eta(i,j) =  1.e+21 * exp(-0.5*dot_product([xc(i),yc(j)]-[xcntr,ycntr], matmul(eta_sigma_m1, [xc(i),yc(j)]-[xcntr,ycntr]) )) & / (2.0*pi*det_eta_sigma**0.5)
+              eta(i,j) =  1.e+21 * exp(-0.1*dot_product([xc(i),yc(j)]-[xcntr,ycntr], matmul(eta_sigma_m1, [xc(i),yc(j)]-[xcntr,ycntr]) ))
+              !&/ (2.0*pi*det_eta_sigma**0.5)
            enddo
         enddo
 
@@ -464,6 +464,66 @@ module solver_lv_elva
         return
         
       end subroutine calc_gaussian_viscosity
+
+      subroutine calc_gaussian_rigidity(He_lith,He_lith_0,dx,dy)
+
+        real(wp), intent(IN) :: He_lith_0, dx, dy
+        real(wp), intent(OUT) :: He_lith(:,:)
+        real(wp) :: Lx, Ly, L, det_He_lith_sigma
+        real(wp) :: xcntr, ycntr, xmax, xmin, ymax, ymin
+
+        real(wp), allocatable :: xc(:), yc(:)
+
+        real(wp) :: He_lith_sigma(2,2)
+        real(wp) :: He_lith_sigma_m1(2,2)
+
+        integer  :: i, j, nx, ny
+
+        nx = size(He_lith,1)
+        ny = size(He_lith,2)
+
+        allocate(xc(nx))
+        allocate(yc(ny))
+
+        
+        do i = 1, nx
+           xc(i) = dx*(i-1)
+        end do
+        xmin = xc(1)
+        xmax = xc(nx)
+
+        do j = 1, ny
+           yc(j) = dy*(j-1)
+        enddo
+        ymin = yc(1)
+        ymax = yc(ny)
+
+        
+        xcntr = (xmax+xmin)/2.0
+        ycntr = (ymax+ymin)/2.0
+
+
+        Lx = xmax - xmin
+        Ly = ymax - ymin
+        L = (Lx + Ly) / 2.0
+
+        He_lith_sigma_m1 = reshape ([ 0.5*(4./L)**2,  0.0_wp &
+             , 0.0_wp,  0.5*(4./L)**2], shape = shape(He_lith_sigma_m1))
+        
+        det_He_lith_sigma = (L/4.)**2
+
+        do i = 1, nx
+           do j = 1, ny
+              He_lith(i,j) = He_lith_0  *exp(-0.1*dot_product([xc(i),yc(j)]-[xcntr,ycntr], matmul(He_lith_sigma_m1, [xc(i),yc(j)]-[xcntr,ycntr]) )) !/(2.0*pi*det_He_lith_sigma**0.5)
+!mmr2              He_lith(i,j) = He_lith_0 *exp(-0.5*dot_product([xc(i),yc(j)]-[xcntr,ycntr], matmul(He_lith_sigma_m1, [xc(i),yc(j)]-[xcntr,ycntr]) )) !/(2.0*pi*det_He_lith_sigma**0.5)
+           enddo
+        enddo
+
+
+        
+        return
+        
+      end subroutine calc_gaussian_rigidity
         
       subroutine calc_effective_viscosity_scaling(r,eta_ratio,tc,kappa,level)
 

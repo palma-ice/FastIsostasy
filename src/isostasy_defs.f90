@@ -19,7 +19,11 @@ module isostasy_defs
         real(wp)           :: He_lith           ! [km] Effective elastic thickness of lithosphere
         real(wp)           :: visc              ! [Pa s] Asthenosphere viscosity (constant)
         real(wp)           :: tau               ! [yr] Asthenospheric relaxation constant
-        
+        !mmr2
+        character(len=56)  :: visc_method           ! [-] Method use to prescribe asthenosphere's viscosity field
+        character(len=56)  :: rigidity_method       ! [-] Method use to prescribe lithosphere's rigidity field
+        !mmr2
+
         ! Physical constants
         real(wp) :: E 
         real(wp) :: nu 
@@ -29,7 +33,7 @@ module isostasy_defs
         real(wp) :: rho_a 
         real(wp) :: g 
         real(wp) :: r_earth 
-        real(wp) :: m_earth 
+        real(wp) :: m_earth
 
         ! Internal parameters 
         integer  :: nx
@@ -50,6 +54,8 @@ module isostasy_defs
         real(wp), allocatable :: D_lith(:,:)        ! [N-m] Lithosphere flexural rigidity
         real(wp), allocatable :: eta_eff(:,:)       ! [Pa-s] Effective asthenosphere viscosity
         real(wp), allocatable :: tau(:,:)           ! [yr] Asthenospheric relaxation timescale field
+
+  !mmr2      real(wp), allocatable :: visc_field(:,:)    ! [yr] Asthenospheric  viscosity
         
         real(wp), allocatable :: kei(:,:)           ! Kelvin function filter values 
         real(wp), allocatable :: G0(:,:)            ! Green's function values

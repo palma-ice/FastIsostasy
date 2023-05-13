@@ -12,8 +12,11 @@ program test_isostasy
     character(len=512) :: path_par
     character(len=512) :: file_out 
 
-    character(len=56)  :: experiment 
-
+    character(len=56)  :: experiment
+!mmr2
+    character(len=56)  :: visc_method
+    character(len=56)  :: rigidity_method
+!mmr2
     real(wp) :: time 
     real(wp) :: time_init 
     real(wp) :: time_end 
@@ -67,11 +70,28 @@ program test_isostasy
     
     write(*,*) "experiment = ", trim(experiment)
 
+!mmr2 ----------------------------------------------
+
+ ! === Define viscosity field to be used ====
+
+    visc_method = "constant"
+    
+    write(*,*) "viscosity field method = ", trim(visc_method)
+
+! === Define rigidity field to be used ====
+
+!    visc_method = "constant"
+    rigidity_method = "gauss_plus"
+    
+    write(*,*) "rigidity method = ", trim(rigidity_method)
+
+!mmr2------------------------------------------------
+    
     ! === Define simulation time ========
 
     time_init = 0.0
     time_end  = 30.e3  !mmr 30e3
-    dtt       = 1. !! 200. !mmr 
+    dtt       = 200. !mmr 
     dt_out    = 1.e3 !mmr recheck 10e3
 
     write(*,*) "time_init = ", time_init 
@@ -202,7 +222,7 @@ program test_isostasy
             do i = 1, nx
                 if ( (xc(i)-xcntr)**2 + (yc(j)-ycntr)**2  .le. (r0)**2 ) H_ice(i,j) = h0
             end do
-            end do
+         end do
        
         case DEFAULT
 
@@ -211,7 +231,7 @@ program test_isostasy
             stop 
 
     end select
-
+    
     ! Inititalize state
     call isos_init_state(isos1,z_bed,H_ice,z_sl,z_bed_ref,H_ice_ref,z_sl_ref,time=time_init) 
 
@@ -347,6 +367,12 @@ contains
         call nc_write(filename,"w_VA",-isos%now%w2,units="m",long_name="Load", &                                        
              dim1="xc",dim2="yc",dim3="time",start=[1,1,n],ncid=ncid)                                            
         call nc_write(filename,"z_bed_EL",-isos%now%w1,units="m",long_name="Displacement (for ELVA only EL)", &
+             dim1="xc",dim2="yc",dim3="time",start=[1,1,n],ncid=ncid)                                           
+        call nc_write(filename,"eta_eff",isos%now%eta_eff,units="Pa s",long_name="Asthenosphere effective viscosity", &
+             dim1="xc",dim2="yc",dim3="time",start=[1,1,n],ncid=ncid)                                           
+        call nc_write(filename,"He_lith",isos%now%He_lith,units="km",long_name="Lithosphere effective thickness", &
+             dim1="xc",dim2="yc",dim3="time",start=[1,1,n],ncid=ncid)
+        call nc_write(filename,"D_lith",isos%now%D_lith,units="N m",long_name="Lithosphere effective rigidity", &
              dim1="xc",dim2="yc",dim3="time",start=[1,1,n],ncid=ncid)                                           
                                                         
 !mmr------------------------------------------------------------------------------------------------------------------------    
