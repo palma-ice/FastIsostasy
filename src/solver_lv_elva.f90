@@ -12,6 +12,7 @@ module solver_lv_elva
 !    public :: calc_lv_asthenosphere_viscous
     public :: calc_gaussian_viscosity
     public :: calc_gaussian_rigidity
+    public :: calc_effective_viscosity
   contains
 
 
@@ -215,16 +216,8 @@ module solver_lv_elva
 
         u0 = u
 
- !       print*,'hola u0', u0(101,101)
-
-        
         call calc_asthenosphere_viscous_params(kappa,kappa_p,kappa_q,beta,mu,D_lith,rho_a,g,dx)  ! recheck this belongs out of here (once)
 
-!!!!!!!!!!!!!!!
-!        print*,'Tell Jan I think we can make it much simpler because we have a prognostic equation'
-!hereiam        stop
-!!!!!!!!!!!!!!!
-        
         
 ! Calculate first derivatives wrt x and y
         
@@ -380,30 +373,6 @@ module solver_lv_elva
       end subroutine calc_horizontal_derivatives_2D
 
 
-      ! subroutine calc_effective_viscosity(eta_eff,eta_ratio,nlevels)
-
-      !   real(wp), intent(OUT)    :: eta_eff(:,:)
-      !   real(wp), intent(IN)     :: eta_ratio(:,:)
-      !   integer(wp), intent(IN)  :: nlevels
-
-      !   ! Local variables 
-      !   integer :: i, j, nx, ny, l
-
-      !   nx = size(eta_ratio,1)
-      !   ny = size(eta_ratio,2) 
-
-      !   eta_eff(:,:,nlevels) = eta(:,:,
-      !   do l = 1, nlevels
-
-      !      eta_ratio =  eta(:,:,l)/ eta(:,:,l+1)/
-      !      calc_effective_viscosity_scaling(r,eta_ratio,tc,kappa,level)
-
-      !      eta_eff(k) = eta_eff
-      !   enddo
-        
-      ! end subroutine calc_effective_viscosity
-
-
       subroutine calc_gaussian_viscosity(eta,dx,dy)
 
         real(wp), intent(IN) :: dx, dy
@@ -524,41 +493,111 @@ module solver_lv_elva
         return
         
       end subroutine calc_gaussian_rigidity
+
         
-      subroutine calc_effective_viscosity_scaling(r,eta_ratio,tc,kappa,level)
+      subroutine calc_effective_viscosity(eta_eff,eta_c,Tc,n_lev)
 
         implicit none
 
-        real(wp), intent(OUT)    :: r(:,:) 
-        real(wp), intent(IN)     :: eta_ratio(:,:)
-        real(wp), intent(IN)     :: tc(:,:) 
-        real(wp), intent(IN)     :: kappa 
-        integer(wp), intent(IN)  :: level
+        real(wp), intent(INOUT)  :: eta_eff(:,:)
+        real(wp), intent(IN)     :: eta_c
+        real(wp), intent(IN)     :: Tc 
+!        real(wp), intent(IN)     :: kappa 
+        integer(wp), intent(IN)  :: n_lev
        
+        real(wp), allocatable ::  R(:,:)
+        real(wp), allocatable ::  eta_ratio(:,:)
         real(wp), allocatable ::  eta_ratiom1(:,:)
         real(wp), allocatable ::  c(:,:)
         real(wp), allocatable ::  s(:,:)
+        real(wp), allocatable :: kappa(:,:)
 
         ! Local variables 
-        integer :: i, j, nx, ny 
+        integer :: i, j, nx, ny, l
 
-        nx = size(eta_ratio,1)
-        ny = size(eta_ratio,2) 
+        nx = size(eta_eff,1)
+        ny = size(eta_eff,2) 
 
+        allocate(R(nx,ny))
+        allocate(eta_ratio(nx,ny))
         allocate(eta_ratiom1(nx,ny))
         allocate(c(nx,ny))
         allocate(s(nx,ny))
-        
-        c = cosh(tc*kappa)
-        s = sinh(tc*kappa)
-        eta_ratiom1 = 1./eta_ratio
-        
-        r = (2.0 * eta_ratio * s + (1-eta_ratio**2) * (tc*kappa)**2 + eta_ratio**2 * s**2 + c**2 )/&
-             (eta_ratio + eta_ratiom1)* c * s + (eta_ratio + eta_ratiom1)*(tc*kappa) + s**2 + c**2
 
+        print*,'hola eta_eff - need to implement iteration' 
+        stop
+        
+        c = cosh(Tc*kappa)
+        s = sinh(Tc*kappa)
+        eta_ratio = eta_c/eta_eff
+        eta_ratiom1 = 1./eta_ratio
+
+
+
+        
+        ! call calc_kappa(eta_eff,kappa)  ! recheck this belongs out of here (once)
+
+        ! do l = n_lev, 1, -1
+
+        !    eta_eff = eta_eff
+
+        !    R = (2.0 * eta_ratio * s + (1-eta_ratio**2) * (Tc*kappa)**2 + eta_ratio**2 * s**2 + c**2 )/&
+        !      (eta_ratio + eta_ratiom1)* c * s + (eta_ratio + eta_ratiom1)*(Tc*kappa) + s**2 + c**2
+
+        !    eta_eff = eta_eff*R
+
+        ! enddo
+        
+
+        deallocate(R)
+        deallocate(eta_ratiom1)
+        deallocate(eta_ratio)
+        deallocate(c)
+        deallocate(s)
+
+        
         return
         
-      end subroutine calc_effective_viscosity_scaling
+      end subroutine calc_effective_viscosity
+
+
+      subroutine calc_kappa(field,kappa)
+
+        ! Calculate kappa and beta
+
+        real(wp), intent(IN)  :: field(:,:)
+        real(wp), allocatable, intent(OUT) :: kappa(:,:)
+
+        integer :: i, j, ic, jc, ip, iq, nx, ny
+
+        nx = size(field,1)
+        ny = size(field,2)
+
+        allocate(kappa(nx,ny))
+        
+        kappa = 0.0
+
+        ic = (nx-1)/2 + 1
+        jc = (ny-1)/2 + 1
+
+        do i = 1, nx
+           if (i.le.ic) then 
+              ip = i-1
+           else
+              ip = nx-i+1
+           end if
+           do j = 1, ny
+              if (j.le.jc) then
+                 iq = j-1  
+              else
+                 iq = ny-j+1
+              end if
+              kappa(i,j)  = (ip*ip + iq*iq)**0.5
+           end do
+        end do
+
+
+        end subroutine calc_kappa
       
  end module solver_lv_elva
 

@@ -29,7 +29,7 @@ module isostasy
   contains
     
     !mmr2 subroutine isos_init(isos,filename,group,nx,ny,dx,E,nu,rho_ice,rho_sw,rho_a,g,r_earth,m_earth)
-      subroutine isos_init(isos,filename,group,nx,ny,dx,E,nu,rho_ice,rho_sw,rho_a,g,r_earth,m_earth,visc_method,rigidity_method) !mmr2
+      subroutine isos_init(isos,filename,group,nx,ny,dx,E,nu,rho_ice,rho_sw,rho_a,g,r_earth,m_earth,visc_method,eta_c,T_c,n_lev,rigidity_method) !mmr2
 
         implicit none 
 
@@ -47,14 +47,24 @@ module isostasy
         real(wp), intent(IN), optional :: g 
         real(wp), intent(IN), optional :: r_earth 
         real(wp), intent(IN), optional :: m_earth
-        character(len=*), intent(IN), optional :: visc_method
-        character(len=*), intent(IN), optional :: rigidity_method
 
+!mmr2
+        ! Viscous asthenosphere-related parameters        
+        character(len=*), intent(IN), optional :: visc_method
+        real(wp), intent(IN), optional :: eta_c               
+        real(wp), intent(IN), optional :: T_c                 
+        integer, intent(IN), optional  :: n_lev
+        
+        !Lithosphere effective thickness (and therefore ridigidity)       
+        character(len=*), intent(IN), optional :: rigidity_method
+!mmr2
+        
         ! Local variables
         real(wp) :: radius_fac
         real(wp) :: filter_scaling
         real(wp) :: D_lith_const
 
+        
         ! First, load parameters from parameter file `filename`
         call isos_par_load(isos%par,filename,group)
         
@@ -67,8 +77,11 @@ module isostasy
         if (present(g))         isos%par%g       = g 
         if (present(r_earth))   isos%par%r_earth = r_earth 
         if (present(m_earth))   isos%par%m_earth = m_earth
-        if (present(visc_method))       isos%par%visc_method = visc_method
+         if (present(visc_method))      isos%par%visc_method = visc_method
         if (present(rigidity_method))   isos%par%rigidity_method = rigidity_method
+        if (present(eta_c))             isos%par%eta_c = eta_c
+        if (present(T_c))               isos%par%T_c   = T_c
+        if (present(n_lev))             isos%par%n_lev = n_lev
         
 
         ! Store grid information
@@ -140,21 +153,19 @@ module isostasy
                 
                 select case(trim(isos%par%visc_method))
 
+                case("uniform")
+
+                    isos%now%eta_eff    = isos%par%visc         ! [Pa s]
+
                 case("gaussian_plus")
 
                    call calc_gaussian_viscosity(isos%now%eta_eff,dx=isos%par%dx,dy=isos%par%dx) 
                    
-                case("constant")
-
-                   ! do nothing, eta was set above
-                   isos%now%eta_eff    = isos%par%visc         ! [Pa s]
-!                   print*,'hola eta' , isos%now%eta_eff
-!                   stop
 
                 case DEFAULT
 
                    ! do nothing, eta was set above
-                   print*,'hola eta stop now' 
+                   print*,'what is the default?' 
                    stop
 
                 end select
@@ -164,6 +175,11 @@ module isostasy
                 
                 select case(trim(isos%par%rigidity_method))
 
+                case("uniform")
+
+                   isos%now%D_lith   = D_lith_const         ! [Pa s]
+                   isos%now%He_lith  = isos%par%He_lith              ! [km]
+
                 case("gaussian_plus")
 
 !                   isos%par%He_lith = 250.0 !km
@@ -172,20 +188,11 @@ module isostasy
 
                    isos%now%D_lith = (isos%par%E*1e9) * (isos%now%He_lith*1e3)**3 / (12.0*(1.0-isos%par%nu**2))
 
-!                  print*,'hola gaussian plus'
-!                   stop
                    
-                case("constant")
-
-                   ! do nothing, eta was set above
-                   isos%now%D_lith   = D_lith_const         ! [Pa s]
- !                  print*,'hola eta' , isos%now%D_lith
-                   stop
-
                 case DEFAULT
 
                    ! do nothing, eta was set above
-                   print*,'hola D_lith' 
+                   print*,'what is the default?' 
                    stop
 
                 end select
@@ -361,7 +368,7 @@ end if
                 ! viscous half-space asthenosphere overlain by                                       
                 ! elastic plate lithosphere with uniform constants                                          
 if (.FALSE.) then
-    ! Use LL solution, since elastisity is contained in viscous asthenosphere solution? 
+    ! Use LL solution, since elasticity is contained in viscous asthenosphere solution? 
 
                 ! Local lithosphere
                 call calc_litho_local(isos%now%w0,isos%now%q0,z_bed_ref,H_ice_ref,z_sl_ref, &
@@ -375,9 +382,14 @@ else
 end if 
                 ! Set the asthenospheric displacement equal to this reference displacement to start
                 isos%now%w2 = isos%now%w0 
+                !mmr
 
-                ! Calculate effective viscosity
-!mmr2 hereiam                call calc_effective_viscosity(isos%now%eta_eff,isos%par%visc,3)
+
+                ! Calculate effective viscosity (eta_eff,eta_channel,Tc,kappa,level)
+                call calc_effective_viscosity(isos%now%eta_eff,isos%par%eta_c,isos%par%T_c,1_wp*isos%par%n_lev) !hereiam set channel viscosity
+
+                print*,'hola effective three-layer-viscosity'
+                stop
 !mmr2
                 
 !mmr2 recheck - calculate plans here forth and back?
@@ -642,8 +654,14 @@ end if
         call nml_read(filename,group,"r_earth",         par%r_earth)
         call nml_read(filename,group,"m_earth",         par%m_earth)
 
-        ! Laterally variable asthenosphere viscosity !mmr2
-        call nml_read(filename,group,"visc_method",      par%visc_method) !mmr2
+        ! Viscous asthenosphere-related parameters
+        call nml_read(filename,group,"visc_method",     par%visc_method) !mmr2
+        call nml_read(filename,group,"eta_c",           par%eta_c)              
+        call nml_read(filename,group,"T_c",             par%T_c)
+        call nml_read(filename,group,"n_lev",           par%n_lev)                 
+
+
+        ! Lithosphere effective thickness (and therefore ridigidity)
         call nml_read(filename,group,"rigidity_method",  par%rigidity_method) !mmr2
 
         return

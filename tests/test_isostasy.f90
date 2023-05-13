@@ -74,14 +74,13 @@ program test_isostasy
 
  ! === Define viscosity field to be used ====
 
-    visc_method = "constant"
+    visc_method = "uniform"
     
     write(*,*) "viscosity field method = ", trim(visc_method)
 
 ! === Define rigidity field to be used ====
 
-!    visc_method = "constant"
-    rigidity_method = "gauss_plus"
+    visc_method = "uniform"
     
     write(*,*) "rigidity method = ", trim(rigidity_method)
 
@@ -172,7 +171,7 @@ program test_isostasy
 
     ! Initialize bedrock model (allocate fields)  
     call isos_init(isos1,path_par,"isostasy",nx,ny,dx) 
-    
+
     ! Define ice thickness field based on experiment being run...
     
     select case(trim(experiment))
@@ -231,9 +230,10 @@ program test_isostasy
             stop 
 
     end select
-    
+   
     ! Inititalize state
     call isos_init_state(isos1,z_bed,H_ice,z_sl,z_bed_ref,H_ice_ref,z_sl_ref,time=time_init) 
+
 
     ! Initialize writing output
     call isos_write_init(isos1,xc,yc,file_out,time_init)

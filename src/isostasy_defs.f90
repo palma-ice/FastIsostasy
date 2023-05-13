@@ -19,10 +19,6 @@ module isostasy_defs
         real(wp)           :: He_lith           ! [km] Effective elastic thickness of lithosphere
         real(wp)           :: visc              ! [Pa s] Asthenosphere viscosity (constant)
         real(wp)           :: tau               ! [yr] Asthenospheric relaxation constant
-        !mmr2
-        character(len=56)  :: visc_method           ! [-] Method use to prescribe asthenosphere's viscosity field
-        character(len=56)  :: rigidity_method       ! [-] Method use to prescribe lithosphere's rigidity field
-        !mmr2
 
         ! Physical constants
         real(wp) :: E 
@@ -34,14 +30,22 @@ module isostasy_defs
         real(wp) :: g 
         real(wp) :: r_earth 
         real(wp) :: m_earth
-
+        !mmr2
+        character(len=56)  :: visc_method       ! [-] Method use to prescribe asthenosphere's viscosity field
+        real(wp)           :: eta_c             ! [Pa s]  Viscosity in channel between elastic lithosphere and viscous asthenosphere (for LV-ELVA only)
+        real(wp)           :: T_c               ! [km]    Thickness of channel between elastic lithosphere and viscous asthenosphere (for LV-ELVA only)
+        integer            :: n_lev             ! [-]     Number of layers within viscous asthenosphere (for LV-ELVA only)
+        
+        character(len=56)  :: rigidity_method   ! [-] Method use to prescribe lithosphere's rigidity field
+ 
+        !mmr2
         ! Internal parameters 
         integer  :: nx
         integer  :: ny
         real(wp) :: dx                        ! [m] Horizontal resolution                           
         real(wp) :: L_w                       ! [m] Lithosphere flexural length scale (for method=2)
         integer  :: nr                        ! [-] Radius of neighborhood for convolution, in number of grid points        
-        real(wp) :: mu                        ! [1/m] 2pi/L                                         
+        real(wp) :: mu                        ! [1/m] 2pi/L
         
         real(wp) :: time_lith                 ! [yr] Current model time of last update of equilibrium lithospheric displacement
         real(wp) :: time_step                 ! [yr] Current model time of last update of bedrock uplift

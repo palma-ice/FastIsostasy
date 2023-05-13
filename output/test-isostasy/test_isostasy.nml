@@ -17,9 +17,13 @@
     r_earth         = 6.378e6               ! [m]  Earth's radius, Coulon et al (2021) 
     m_earth         = 5.972e24              ! [kg] Earth's mass,   Coulon et al (2021) 
 
-    ! Laterally variable asthenosphere viscosity
-    visc_method     = constant         ! constant | gaussian_minus
+    ! Viscous asthenosphere-related parameters 
+    visc_method     = uniform               ! uniform | gaussian_plus
+    !Channel viscosity
+    eta_c     = 1.e21                       ! [Pa s] Channel viscosity 
+    T_c       = 1.e2                        ! [km]   Channel width
+    n_lev     = 3                           ! [-]    Number of layers
 
-    ! Laterally variable lithosphere effective thickness (and therefore ridigidity)
-    rigidity_method = gaussian_plus         ! constant | gaussian_minus
+    ! Lithosphere effective thickness (and therefore ridigidity)
+    rigidity_method = uniform               ! uniform | gaussian_plus
 /
