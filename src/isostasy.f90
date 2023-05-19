@@ -157,9 +157,16 @@ module isostasy
 
                     isos%now%eta_eff    = isos%par%visc         ! [Pa s]
 
-                case("gaussian_plus")
 
-                   call calc_gaussian_viscosity(isos%now%eta_eff,dx=isos%par%dx,dy=isos%par%dx) 
+                 case("gaussian_plus")
+
+                   call calc_gaussian_viscosity(isos%now%eta_eff,isos%par%visc,+1._wp,dx=isos%par%dx,dy=isos%par%dx) 
+
+                case("gaussian_minus")
+
+                   isos%par%visc = isos%par%visc*1.e2
+                   
+                   call calc_gaussian_viscosity(isos%now%eta_eff,isos%par%visc,-1._wp,dx=isos%par%dx,dy=isos%par%dx) 
                    
 
                 case DEFAULT
@@ -178,15 +185,23 @@ module isostasy
                 case("uniform")
 
                    isos%now%D_lith   = D_lith_const         ! [Pa s]
-                   isos%now%He_lith  = isos%par%He_lith              ! [km]
+                   isos%now%He_lith  = isos%par%He_lith     ! [km]
 
                 case("gaussian_plus")
 
-!                   isos%par%He_lith = 250.0 !km
-                   
-                   call calc_gaussian_rigidity(isos%now%He_lith,isos%par%He_lith,dx=isos%par%dx,dy=isos%par%dx) 
+                   isos%par%He_lith = 100.0 !isos%par%He_lith  !km
 
-                   isos%now%D_lith = (isos%par%E*1e9) * (isos%now%He_lith*1e3)**3 / (12.0*(1.0-isos%par%nu**2))
+                   call calc_gaussian_rigidity(isos%now%He_lith,0.5*isos%par%He_lith, 0.5*isos%par%He_lith, sign=1._wp,dx=isos%par%dx,dy=isos%par%dx) 
+
+                   isos%now%D_lith = (isos%par%E*1.e9) * (isos%now%He_lith*1.e3)**3 / (12.0*(1.0-isos%par%nu**2))
+
+                case("gaussian_minus")
+
+                   isos%par%He_lith = 100.0 !isos%par%He_lith  !km
+
+                   call calc_gaussian_rigidity(isos%now%He_lith,1.5*isos%par%He_lith, isos%par%He_lith, sign=-1._wp,dx=isos%par%dx,dy=isos%par%dx) 
+
+                   isos%now%D_lith = (isos%par%E*1.e9) * (isos%now%He_lith*1.e3)**3 / (12.0*(1.0-isos%par%nu**2))
 
                    
                 case DEFAULT
@@ -385,11 +400,11 @@ end if
                 !mmr
 
 
-                ! Calculate effective viscosity (eta_eff,eta_channel,Tc,kappa,level)
-                call calc_effective_viscosity(isos%now%eta_eff,isos%par%eta_c,isos%par%T_c,1_wp*isos%par%n_lev) !hereiam set channel viscosity
-
-                print*,'hola effective three-layer-viscosity'
-                stop
+! hereiam                ! Calculate effective viscosity (eta_eff,eta_channel,Tc,kappa,level)
+!                
+!               call calc_effective_viscosity(isos%now%eta_eff,isos%par%eta_c,isos%par%T_c,1_wp*isos%par%n_lev,isos%par%dx,isos%par%dx)
+!                print*,'hola effective three-layer-viscosity'
+!                stop
 !mmr2
                 
 !mmr2 recheck - calculate plans here forth and back?

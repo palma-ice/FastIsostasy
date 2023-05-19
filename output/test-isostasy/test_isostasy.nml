@@ -18,12 +18,13 @@
     m_earth         = 5.972e24              ! [kg] Earth's mass,   Coulon et al (2021) 
 
     ! Viscous asthenosphere-related parameters 
-    visc_method     = uniform               ! uniform | gaussian_plus
+    visc_method     = uniform         ! uniform | gaussian_plus | gaussian_minus
+
     !Channel viscosity
     eta_c     = 1.e21                       ! [Pa s] Channel viscosity 
     T_c       = 1.e2                        ! [km]   Channel width
     n_lev     = 3                           ! [-]    Number of layers
 
     ! Lithosphere effective thickness (and therefore ridigidity)
-    rigidity_method = uniform               ! uniform | gaussian_plus
+    rigidity_method = gaussian_plus         ! uniform | gaussian_plus | gaussian_minus
 /

@@ -281,12 +281,19 @@ module solver_lv_elva
         call calc_fft_forward_r2r(f,f_hat)
 
         kappa(1,1) = 1.         
+
+! original case (Jans, as in main.pdf)
+!        
         prod_hat = f_hat/kappa/mu
-
         call calc_fft_backward_r2r(prod_hat,prod)
-
-       
         dudt = prod/(2.0*eta)  ! [m/s]
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! new case!
+!        prod_hat = f_hat/kappa/mu/eta
+!        call calc_fft_backward_r2r(prod_hat,prod)
+!        dudt = prod/2.  ! [m/s]
+!!!!!!!!!!!!!!!!!!!!!!!!!!!
         
         dudt  = dudt - 0.25*(dudt(1,1)+dudt(l,m)+dudt(1,m)+dudt(l,1)) 
         
@@ -373,11 +380,11 @@ module solver_lv_elva
       end subroutine calc_horizontal_derivatives_2D
 
 
-      subroutine calc_gaussian_viscosity(eta,dx,dy)
+      subroutine calc_gaussian_viscosity(eta,eta_0,sign,dx,dy)
 
-        real(wp), intent(IN) :: dx, dy
-        real(wp), intent(INOUT) :: eta(:,:)
-        real(wp) :: Lx, Ly, L, det_eta_sigma
+        real(wp), intent(OUT) :: eta(:,:)
+        real(wp), intent(IN) :: eta_0, sign, dx, dy
+        real(wp) :: Lx, Ly, L, det_eta_sigma, f
         real(wp) :: xcntr, ycntr, xmax, xmin, ymax, ymin
 
         real(wp), allocatable :: xc(:), yc(:)
@@ -415,28 +422,30 @@ module solver_lv_elva
         Ly = ymax - ymin
         L = (Lx + Ly) / 2.0
 
-        eta_sigma_m1 = reshape ([ 0.5*(4./L)**2,  0.0_wp &
-             , 0.0_wp,  0.5*(4./L)**2], shape = shape(eta_sigma_m1))
-        
-        det_eta_sigma = (L/4.)**2
-
+        eta_sigma_m1 = reshape ([ (2.0/L)**2,  0.0_wp, 0.0_wp,  (2.0/L)**2], shape = shape(eta_sigma_m1))
+        det_eta_sigma = L**4/16.0 ! in m**4 
         do i = 1, nx
            do j = 1, ny
-! mmr2 crude attempt in asthenosphere. Note viscosity has to be large enough so model does not go unstable              
-              !              eta(i,j) =  1.e+21 * exp(-0.5*dot_product([xc(i),yc(j)]-[xcntr,ycntr], matmul(eta_sigma_m1, [xc(i),yc(j)]-[xcntr,ycntr]) )) & / (2.0*pi*det_eta_sigma**0.5)
-              eta(i,j) =  1.e+21 * exp(-0.1*dot_product([xc(i),yc(j)]-[xcntr,ycntr], matmul(eta_sigma_m1, [xc(i),yc(j)]-[xcntr,ycntr]) ))
-              !&/ (2.0*pi*det_eta_sigma**0.5)
+              f = exp(-0.5*dot_product([xc(i),yc(j)]-[xcntr,ycntr], matmul(eta_sigma_m1, [xc(i),yc(j)]-[xcntr,ycntr]) ))
+              
+              !/(2.0*pi*det_eta_sigma**0.5)
+!              eta(i,j) = eta_0  + 10.**(sign * f)
+!              eta(i,j) = 10.**(21. + sign * f)
+              eta(i,j) = eta_0 * 10**(sign * f)
+
+!              print*,'hola', i,j, eta(i,j), sign, f, 10.**(sign * f)
            enddo
         enddo
 
+!        stop
         
         return
         
       end subroutine calc_gaussian_viscosity
 
-      subroutine calc_gaussian_rigidity(He_lith,He_lith_0,dx,dy)
+      subroutine calc_gaussian_rigidity(He_lith,He_lith_0, He_lith_1,sign,dx,dy)
 
-        real(wp), intent(IN) :: He_lith_0, dx, dy
+        real(wp), intent(IN) :: He_lith_0, He_lith_1,sign, dx, dy
         real(wp), intent(OUT) :: He_lith(:,:)
         real(wp) :: Lx, Ly, L, det_He_lith_sigma
         real(wp) :: xcntr, ycntr, xmax, xmin, ymax, ymin
@@ -474,17 +483,14 @@ module solver_lv_elva
 
         Lx = xmax - xmin
         Ly = ymax - ymin
-        L = (Lx + Ly) / 2.0
+        L = (Lx + Ly)/ 2.0
 
-        He_lith_sigma_m1 = reshape ([ 0.5*(4./L)**2,  0.0_wp &
-             , 0.0_wp,  0.5*(4./L)**2], shape = shape(He_lith_sigma_m1))
-        
-        det_He_lith_sigma = (L/4.)**2
-
+        He_lith_sigma_m1 = reshape ([ (2.0/L)**2,  0.0_wp, 0.0_wp,  (2.0/L)**2], shape = shape(He_lith_sigma_m1))
+        det_He_lith_sigma = L**4/16.0 ! in m**4
         do i = 1, nx
            do j = 1, ny
-              He_lith(i,j) = He_lith_0  *exp(-0.1*dot_product([xc(i),yc(j)]-[xcntr,ycntr], matmul(He_lith_sigma_m1, [xc(i),yc(j)]-[xcntr,ycntr]) )) !/(2.0*pi*det_He_lith_sigma**0.5)
-!mmr2              He_lith(i,j) = He_lith_0 *exp(-0.5*dot_product([xc(i),yc(j)]-[xcntr,ycntr], matmul(He_lith_sigma_m1, [xc(i),yc(j)]-[xcntr,ycntr]) )) !/(2.0*pi*det_He_lith_sigma**0.5)
+              He_lith(i,j) = He_lith_0 +  sign*He_lith_1 * exp(-0.5*dot_product([xc(i),yc(j)]-[xcntr,ycntr], matmul(He_lith_sigma_m1, [xc(i),yc(j)]-[xcntr,ycntr]) ))
+              !/(2.0*pi*det_He_lith_sigma**0.5)
            enddo
         enddo
 
@@ -495,58 +501,113 @@ module solver_lv_elva
       end subroutine calc_gaussian_rigidity
 
         
-      subroutine calc_effective_viscosity(eta_eff,eta_c,Tc,n_lev)
+      subroutine calc_effective_viscosity(eta_eff,eta_c,Tc,n_lev,dx,dy)
 
         implicit none
 
         real(wp), intent(INOUT)  :: eta_eff(:,:)
         real(wp), intent(IN)     :: eta_c
         real(wp), intent(IN)     :: Tc 
-!        real(wp), intent(IN)     :: kappa 
-        integer(wp), intent(IN)  :: n_lev
-       
+        integer(wp), intent(IN)  :: n_lev               
+        real(wp), intent(IN)     :: dx, dy
+        
+        real(wp) :: Lx, Ly, L
+        real(wp) :: xcntr, ycntr, xmax, xmin, ymax, ymin
+        real(wp), allocatable :: xc(:), yc(:)
+
         real(wp), allocatable ::  R(:,:)
+        real(wp), allocatable ::  eta(:,:,:)
         real(wp), allocatable ::  eta_ratio(:,:)
         real(wp), allocatable ::  eta_ratiom1(:,:)
         real(wp), allocatable ::  c(:,:)
         real(wp), allocatable ::  s(:,:)
         real(wp), allocatable :: kappa(:,:)
-
-        ! Local variables 
-        integer :: i, j, nx, ny, l
+       
+        integer  :: i, j, k, nx, ny
 
         nx = size(eta_eff,1)
         ny = size(eta_eff,2) 
-
+        
+        allocate(xc(nx))
+        allocate(yc(ny))        
         allocate(R(nx,ny))
         allocate(eta_ratio(nx,ny))
         allocate(eta_ratiom1(nx,ny))
         allocate(c(nx,ny))
         allocate(s(nx,ny))
+        allocate(eta(nx,ny,n_lev))
 
-        print*,'hola eta_eff - need to implement iteration' 
-        stop
+        allocate(kappa(nx,ny))
+        
+        do i = 1, nx
+           xc(i) = dx*(i-1)
+        end do
+        xmin = xc(1)
+        xmax = xc(nx)
+
+        do j = 1, ny
+           yc(j) = dy*(j-1)
+        enddo
+        ymin = yc(1)
+        ymax = yc(ny)
+
+        
+        xcntr = (xmax+xmin)/2.0
+        ycntr = (ymax+ymin)/2.0
+
+        Lx = xmax - xmin
+        Ly = ymax - ymin
+        L = (Lx + Ly) / 2.0
+
+        kappa = 2*pi/L
+        !        call calc_kappa(eta_eff,kappa)  ! recheck this belongs out of here (once)
+
         
         c = cosh(Tc*kappa)
         s = sinh(Tc*kappa)
-        eta_ratio = eta_c/eta_eff
-        eta_ratiom1 = 1./eta_ratio
-
-
-
         
-        ! call calc_kappa(eta_eff,kappa)  ! recheck this belongs out of here (once)
 
-        ! do l = n_lev, 1, -1
 
-        !    eta_eff = eta_eff
 
-        !    R = (2.0 * eta_ratio * s + (1-eta_ratio**2) * (Tc*kappa)**2 + eta_ratio**2 * s**2 + c**2 )/&
-        !      (eta_ratio + eta_ratiom1)* c * s + (eta_ratio + eta_ratiom1)*(Tc*kappa) + s**2 + c**2
+!        print*,'hola eta_eff - need to implement iteration'        
+!        stop
 
-        !    eta_eff = eta_eff*R
 
-        ! enddo
+
+    !  # Recursion has to start with half space = n-th layer:
+    ! effective_viscosity = layers_viscosity[:, :, end]
+    ! # p1, p2 = plan_fft(effective_viscosity), plan_ifft(effective_viscosity)
+    ! @inbounds for i in axes(layers_viscosity, 3)[1:end-1]
+    !     channel_viscosity = layers_viscosity[:, :, end - i]
+    !     channel_thickness = layers_thickness[:, :, end - i + 1]
+    !     viscosity_ratio = get_viscosity_ratio(channel_viscosity, effective_viscosity)
+    !     viscosity_scaling = three_layer_scaling(
+    !         Omega,
+    !         # pseudodiff,
+    !         viscosity_ratio,
+    !         channel_thickness,
+    !     )
+    !     effective_viscosity .*= viscosity_scaling
+    ! end
+    ! return effective_viscosity
+
+        eta(:,:,1)  = eta_c
+! set by viscous half space        eta_eff(:,:,n_lev)  = eta_eff(:,:,)
+
+
+        eta_eff(:,:) = eta(:,:,n_lev)
+
+        do k = 1, n_lev-1
+
+           eta_ratio = eta_c/eta_eff
+           eta_ratiom1 = 1./eta_ratio
+
+               R = (2.0 * eta_ratio * s + (1-eta_ratio**2) * (Tc*kappa)**2 + eta_ratio**2 * s**2 + c**2 )/&
+                (eta_ratio + eta_ratiom1)* c * s + (eta_ratio + eta_ratiom1)*(Tc*kappa) + s**2 + c**2
+
+!           eta_eff(:,:) = R*eta_eff(:,:,k+1)
+
+        enddo
         
 
         deallocate(R)
