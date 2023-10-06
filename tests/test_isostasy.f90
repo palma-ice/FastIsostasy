@@ -12,8 +12,11 @@ program test_isostasy
     character(len=512) :: path_par
     character(len=512) :: file_out 
 
-    character(len=56)  :: experiment 
-
+    character(len=56)  :: experiment
+!mmr2
+    character(len=56)  :: visc_method
+    character(len=56)  :: rigidity_method
+!mmr2
     real(wp) :: time 
     real(wp) :: time_init 
     real(wp) :: time_end 
@@ -64,28 +67,44 @@ program test_isostasy
     
     write(*,*) "experiment = ", trim(experiment)
 
+!mmr2 ----------------------------------------------
+
+ ! === Define viscosity field to be used ====
+
+    visc_method = "uniform"
+    
+    write(*,*) "viscosity field method = ", trim(visc_method)
+
+! === Define rigidity field to be used ====
+
+    visc_method = "uniform"
+    
+    write(*,*) "rigidity method = ", trim(rigidity_method)
+
+!mmr2------------------------------------------------
+    
     ! === Define simulation time ========
 
     time_init = 0.0
-    time_end  = 30e3
-    dtt       = 200.0
-    dt_out    = 10e3
+    time_end  = 1.e5 !30e3
+    dtt       = 1.e3 !mmr 
+    dt_out    = 1.e3 !mmr recheck 10e3
 
     write(*,*) "time_init = ", time_init 
     write(*,*) "time_end  = ", time_end 
     write(*,*) "dtt       = ", dtt 
-    write(*,*) "dt_out    = ", dt_out 
+    write(*,*) "dt_out    = ", dt_out
 
     ! === Define grid information ============
 
     dx = 20.0e3
 
-    xmin = -2000.0e3
+    xmin = -2000.0e3 !mmr2 -2000.0e3
     xmax = abs(xmin)
     nx   = int( (xmax-xmin) / dx ) + 1
 
     dy = dx
-    ymin = -4000.0e3
+    ymin = xmin !mmr -2000.0e3
     ymax = abs(ymin)
     ny   = int( (ymax-ymin) / dy ) + 1
 
@@ -135,7 +154,7 @@ program test_isostasy
 
     ! Initialize bedrock model (allocate fields)  
     call isos_init(isos1,path_par,"isostasy",nx,ny,dx) 
-    
+
     ! Define ice thickness field based on experiment being run...
     
     select case(trim(experiment))
@@ -158,7 +177,8 @@ program test_isostasy
             mask(2*int(nx/3.0)+1:nx,:) = 2.0 
 
             ! Define tau field using the mask
-            call isos_set_field(isos1%now%tau,[1e2,1e3,3e3],[0.0_wp,1.0_wp,2.0_wp],mask,dx,sigma=150e3)
+!mmr2            call isos_set_field(isos1%now%tau,[1e2,1e3,3e3],[0.0_wp,1.0_wp,2.0_wp],mask,dx,sigma=150e3)
+            call isos_set_field(isos1%now%tau,[1.e2_wp,1.e3_wp,3.e3_wp],[0.0_wp,1.0_wp,2.0_wp],mask,dx,sigma=150.e3_wp) !mmr2
 
         case("point_load")
             ! Define ice thickness only in one grid point 
@@ -181,7 +201,7 @@ program test_isostasy
             do i = 1, nx
                 if ( (xc(i)-xcntr)**2 + (yc(j)-ycntr)**2  .le. (r0)**2 ) H_ice(i,j) = h0
             end do
-            end do
+         end do
        
         case DEFAULT
 
@@ -190,9 +210,10 @@ program test_isostasy
             stop 
 
     end select
-
+   
     ! Inititalize state
     call isos_init_state(isos1,z_bed,H_ice,z_sl,z_bed_ref,H_ice_ref,z_sl_ref,time=time_init) 
+
 
     ! Initialize writing output
     call isos_write_init(isos1,xc,yc,file_out,time_init)
@@ -217,10 +238,10 @@ program test_isostasy
             select case(trim(experiment))
 
                 case("elva_disk")
-                    
-                    ! Calculate analytical solution to elva_disk
-                   call isosbench_elva_disk(z_bed_bench,r0,h0,eta,isos1%par%dx,isos1%now%D_lith(1,1), &
-                                                           isos1%par%rho_ice,isos1%par%rho_a,isos1%par%g,time)
+!mmr2 comment this to spare time                    
+!mmr2                    ! Calculate analytical solution to elva_disk
+!mmr2                   call isosbench_elva_disk(z_bed_bench,r0,h0,eta,isos1%par%dx,isos1%now%D_lith(1,1), &
+!mmr2                                                           isos1%par%rho_ice,isos1%par%rho_a,isos1%par%g,time)
 
                     ! Write to file 
                     call isos_write_step(isos1,file_out,time,H_ice,z_sl,z_bed_bench)
@@ -324,9 +345,15 @@ contains
              dim1="xc",dim2="yc",dim3="time",start=[1,1,n],ncid=ncid)                                            
         call nc_write(filename,"w1",-isos%now%w1,units="m",long_name="Displacement (for ELVA only EL)", &
              dim1="xc",dim2="yc",dim3="time",start=[1,1,n],ncid=ncid)                                           
-        call nc_write(filename,"w2",-isos%now%w2,units="m",long_name="Displacement (for ELVA only VA)", &                                        
-             dim1="xc",dim2="yc",dim3="time",start=[1,1,n],ncid=ncid)                                            
-        
+        call nc_write(filename,"eta_eff",isos%now%eta_eff,units="Pa s",long_name="Asthenosphere effective viscosity", &
+             dim1="xc",dim2="yc",dim3="time",start=[1,1,n],ncid=ncid)                                           
+        call nc_write(filename,"He_lith",isos%now%He_lith,units="km",long_name="Lithosphere effective thickness", &
+             dim1="xc",dim2="yc",dim3="time",start=[1,1,n],ncid=ncid)
+        call nc_write(filename,"D_lith",isos%now%D_lith,units="N m",long_name="Lithosphere effective rigidity", &
+             dim1="xc",dim2="yc",dim3="time",start=[1,1,n],ncid=ncid)                                           
+                                                        
+!mmr------------------------------------------------------------------------------------------------------------------------    
+
         if (present(z_bed_bench)) then 
             ! Compare with benchmark solution 
 
