@@ -13,7 +13,45 @@ parallel ?= 0
 ## COMPILER CONFIGURATION ##
 # (should be loaded from config directory)
 
-<COMPILER_CONFIGURATION>
+#FC = mpif90
+FC = gfortran 
+
+#INC_NC  = -I/opt/local/include
+#LIB_NC  = -L/opt/local/lib -lnetcdff -L/opt/local/lib -Wl,-headerpad_max_install_names -Wl,-syslibroot,/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.14.sdk -arch x86_64 -lnetcdf -lnetcdf
+
+INC_NC  = -I/opt/local/include
+LIB_NC  = -L/opt/local/lib -lnetcdff -L/opt/local/lib -Wl,-headerpad_max_install_names -Wl,-syslibroot,/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX11.3.sdk -lnetcdf -lnetcdf
+
+
+#LISROOT = /Users/robinson/apps/lis/lis
+#INC_LIS = -I${LISROOT}/include 
+#LIB_LIS = -L${LISROOT}/lib -llis
+LISROOT = 
+INC_LIS = 
+LIB_LIS =
+
+INC_FFTW = -I/usr/local/include
+LIB_FFTW = -L/usr/local/lib -lfftw3 -lm
+
+FFLAGS  = -ffree-line-length-none -I$(objdir) -J$(objdir)
+
+ifeq ($(parallel), 1)
+    # Overwrite default choices with openmp relevant choices 
+
+    LISROOT = /Users/montoya/apps/lis/lis-omp
+    INC_LIS = -I${LISROOT}/include 
+    LIB_LIS = -L${LISROOT}/lib/ -llis
+
+    FFLAGS  = -I$(objdir) -J$(objdir) -m64 -ffree-line-length-none -fomit-frame-pointer -fopenmp 
+
+endif 
+
+LFLAGS  = $(LIB_NC) $(LIB_LIS) $(LIB_FFTW)
+
+DFLAGS_NODEBUG = -O2
+DFLAGS_DEBUG   = -w -g -p -ggdb -ffpe-trap=invalid,zero,overflow,underflow -fbacktrace -fcheck=all
+DFLAGS_PROFILE = -O2 -pg
+
 
 # Determine whether to use normal flags or debugging flags
 DFLAGS   = $(DFLAGS_NODEBUG)
@@ -36,10 +74,13 @@ endif
 $(objdir)/isostasy_defs.o: $(srcdir)/isostasy_defs.f90
 	$(FC) $(DFLAGS) $(FFLAGS) -c -o $@ $<
 
-$(objdir)/isostasy.o: $(srcdir)/isostasy.f90 $(objdir)/isostasy_defs.o $(objdir)/solver_elva.o $(objdir)/nml.o
+$(objdir)/isostasy.o: $(srcdir)/isostasy.f90 $(objdir)/isostasy_defs.o $(objdir)/solver_elva.o $(objdir)/solver_lv_elva.o $(objdir)/nml.o
 	$(FC) $(DFLAGS) $(FFLAGS) -c -o $@ $<
 
 $(objdir)/solver_elva.o: $(srcdir)/solver_elva.f90 $(objdir)/isostasy_defs.o $(objdir)/nml.o
+	$(FC) $(DFLAGS) $(FFLAGS) -c -o $@ $<
+
+$(objdir)/solver_lv_elva.o: $(srcdir)/solver_lv_elva.f90 $(objdir)/isostasy_defs.o $(objdir)/nml.o
 	$(FC) $(DFLAGS) $(FFLAGS) -c -o $@ $<
 
 $(objdir)/isostasy_benchmarks.o: $(srcdir)/isostasy_benchmarks.f90 $(objdir)/isostasy_defs.o
@@ -53,7 +94,8 @@ $(objdir)/nml.o: $(srcdir)/nml.f90
 
 isostasy_libs = 		$(objdir)/isostasy_defs.o \
 						$(objdir)/isostasy.o \
-						$(objdir)/solver_elva.o
+						$(objdir)/solver_elva.o \
+						$(objdir)/solver_lv_elva.o \
 
 ###############################################
 ##
