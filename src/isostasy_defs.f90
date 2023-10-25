@@ -7,7 +7,7 @@ module isostasy_defs
     integer,  parameter :: sp  = kind(1.0)
 
     ! Choose the precision of the library (sp,dp)
-    integer,  parameter :: wp = dp ! sp dp mmr2 
+    integer,  parameter :: wp = sp
 
     real(wp), parameter :: pi = 3.14159265359
 
