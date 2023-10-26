@@ -13,24 +13,22 @@ program test_isostasy
     character(len=512) :: file_out 
 
     character(len=56)  :: experiment
-!mmr2
     character(len=56)  :: visc_method
     character(len=56)  :: rigidity_method
-!mmr2
+
     real(wp) :: time 
     real(wp) :: time_init 
     real(wp) :: time_end 
     real(wp) :: dtt
     real(wp) :: dt_out 
-    integer  :: n, nt 
+    integer  :: n, nt
+    integer  :: ncx, ncy, nct
 
     real(wp) :: r0, h0, eta 
 
-    integer  :: i, j, nx, ny 
+    integer  :: i, j, nx, ny
     real(wp) :: xmin, xmax, dx
-!mmr----------------------------------------------------------------------------------------------------------------------
     real(wp) :: ymin, ymax, dy
-!mmr------------------------------------------------------------------------------------------------------------------------
     real(wp) :: xcntr, ycntr                        
     real(wp), allocatable :: xc(:)
     real(wp), allocatable :: yc(:)
@@ -44,7 +42,9 @@ program test_isostasy
     real(wp), allocatable :: z_sl(:,:) 
     
     real(wp), allocatable :: mask(:,:)
-    real(wp), allocatable :: z_bed_bench(:,:) 
+    real(wp), allocatable :: z_bed_bench(:,:)
+
+    character(len=256) :: fldr_path, file_path
 
     type(isos_class) :: isos1
 
@@ -65,12 +65,22 @@ program test_isostasy
 
     !experiment = "constant_thickness"
     !experiment = "variable_tau"
-    !experiment = "point_load"          
-    experiment = "elva_disk"
+    !experiment = "point_load"
+
+    
+!    experiment = "test1"   ! Benchmark: analytical -  Bueler et al. (2007)    
+    experiment = "test2"   ! Benchmark: Spada et al. (2011) disc
+    
+!    experiment = "test3a"  ! Gaussian reduction of lithospheric thickness at centre
+!    experiment = "test3b"  ! Gaussian increase of lithospheric thickness at centre
+!    experiment = "test3c"  ! Gaussian reduction of viscosity at centre
+!    experiment = "test3d"  ! Gaussian increase of viscosity at centre
+
+!    experiment = "test4"    
+    
     
     write(*,*) "experiment = ", trim(experiment)
 
-!mmr2 ----------------------------------------------
 
  ! === Define viscosity field to be used ====
 
@@ -80,18 +90,22 @@ program test_isostasy
 
 ! === Define rigidity field to be used ====
 
-    visc_method = "uniform"
+    rigidity_method = "uniform"
     
     write(*,*) "rigidity method = ", trim(rigidity_method)
 
-!mmr2------------------------------------------------
     
     ! === Define simulation time ========
 
     time_init = 0.0
-    time_end  = 1.e5 !30e3
-    dtt       = 1.e3 !mmr 
-    dt_out    = 1.e3 !mmr recheck 10e3
+    time_end  = 128.e3 ! 50e3 
+    dtt       = 200. !1. !0.5 ! 200 recheck adaptative time step and convolution (with FFT) !!!   
+    dt_out    = 1.e3 !200. !1.e3 !mmr  10e3
+
+
+    ! hereiam
+    print*,'save results and increase timestep; try test2 again;  try test1 again; try test3; try convolution with FFT'
+!    stop
 
     write(*,*) "time_init = ", time_init 
     write(*,*) "time_end  = ", time_end 
@@ -100,45 +114,30 @@ program test_isostasy
 
     ! === Define grid information ============
 
-    dx = 20.0e3
+    dx = 50.e3 !20.e3 !50.e3 !25.e3 recheck
 
-    xmin = -2000.0e3 !mmr2 -2000.0e3
+    xmin = -3000.e3 
     xmax = abs(xmin)
     nx   = int( (xmax-xmin) / dx ) + 1
-!mmr-------------------------------------------------------------------------------------------------
-    !    ny = nx
     dy = dx
-    ymin = xmin !mmr -2000.0e3
+    ymin = xmin 
     ymax = abs(ymin)
     ny   = int( (ymax-ymin) / dy ) + 1
-!mmr--------------------------------------------------------------------------------------------------
 
     allocate(xc(nx))
-!mmr--------------------------------------------------------------------------------------------------
-!mmr    allocate(yc(nx))
     allocate(yc(ny))
-!mmr--------------------------------------------------------------------------------------------------    
 
     do i = 1, nx 
         xc(i) = xmin + (i-1)*dx 
     end do
 
-!mmr--------------------------------------------------------------------------------------------------
-!mmr    ny = nx
-!mmr    yc = xc
-    !ny = nx-20
-    !yc = xc(11:nx-10)
-    
     do j = 1, ny
        yc(j) = ymin + (j-1)*dy
     end do
-!mmr--------------------------------------------------------------------------------------------------
 
     write(*,*) "Grid info: " 
     write(*,*) "dx = ", dx
-!mmr--------------------------------------------------------------------------------------------------
     write(*,*) "dy = ", dy
-!mmr--------------------------------------------------------------------------------------------------
     write(*,*) "nx, ny = ", nx, ny 
     write(*,*) "range(xc): ", minval(xc), maxval(xc) 
     write(*,*) "range(yc): ", minval(yc), maxval(yc) 
@@ -194,8 +193,8 @@ program test_isostasy
             mask(2*int(nx/3.0)+1:nx,:) = 2.0 
 
             ! Define tau field using the mask
-!mmr2            call isos_set_field(isos1%now%tau,[1e2,1e3,3e3],[0.0_wp,1.0_wp,2.0_wp],mask,dx,sigma=150e3)
-            call isos_set_field(isos1%now%tau,[1.e2_wp,1.e3_wp,3.e3_wp],[0.0_wp,1.0_wp,2.0_wp],mask,dx,sigma=150.e3_wp) !mmr2
+!mmr           call isos_set_field(isos1%now%tau,[1e2,1e3,3e3],[0.0_wp,1.0_wp,2.0_wp],mask,dx,sigma=150e3)
+            call isos_set_field(isos1%now%tau,[1.e2_wp,1.e3_wp,3.e3_wp],[0.0_wp,1.0_wp,2.0_wp],mask,dx,sigma=150.e3_wp) 
 
         case("point_load")
             ! Define ice thickness only in one grid point 
@@ -203,38 +202,123 @@ program test_isostasy
             H_ice = 0.0 
             H_ice(int((nx-1)/2),int((ny-1)/2)) = 1000.0 
 
-         case("elva_disk")
-            ! Define ice thickness only in a circle of radius 1000 km and thickness 1000 m
+         case("test1","test3a","test3b","test3c","test3d")
+            
+            ! Bueler et al. (2007): ice disk in a circle of radius 1000 km and thickness 1000 m
 
-            r0  = 1000.0e3 ! [m] recheck - include into routine?
+            r0  = 1000.0e3 ! [m] 
             h0  = 1000.0   ! [m] 
             eta = 1.e+21   ! [Pa s]
         
             H_ice = 0.
             xcntr = (xmax+xmin)/2.0
-!mmr----------------------------------------------------------------
-!mmr            ycntr = xcntr
             ycntr = (ymax+ymin)/2.
-!mmr----------------------------------------------------------------
 
             do j = 1, ny
-            do i = 1, nx
-                if ( (xc(i)-xcntr)**2 + (yc(j)-ycntr)**2  .le. (r0)**2 ) H_ice(i,j) = h0
+               do i = 1, nx
+                  if ( (xc(i)-xcntr)**2 + (yc(j)-ycntr)**2  .le. (r0)**2 ) H_ice(i,j) = h0
+               end do
             end do
-         end do
-       
+
+
+      case("test2")
+
+         ! Spada et al. (2011)
+         
+            r0 = 6.378e6*10.*3.1416/180. 
+
+            h0  = 1000.0   ! [m] 
+            eta = 1.e+21   ! [Pa s]
+        
+            H_ice = 0.
+            xcntr = (xmax+xmin)/2.0
+            ycntr = (ymax+ymin)/2.
+
+            do j = 1, ny
+               do i = 1, nx
+                  if ( (xc(i)-xcntr)**2 + (yc(j)-ycntr)**2  .le. (r0)**2 ) H_ice(i,j) = h0
+                end do
+            end do
+
+               case("test4")
+
+! ICE6G_D
+! Comment on “An Assessment of the ICE-6G_C (VM5a) Glacial Isostatic Adjustment Model” by Purcell et al.
+! W. Richard Peltier, Donald F. Argus, Rosemarie Drummond
+! https://agupubs.onlinelibrary.wiley.com/doi/full/10.1002/2016JB013844
+         
+            r0 = 6.378e6*10.*3.1416/180. 
+
+            h0  = 1000.0   ! [m] 
+            eta = 1.e+21   ! [Pa s]
+        
+            H_ice = 0.
+!            xcntr = (xmax+xmin)/2.0
+!            ycntr = (ymax+ymin)/2.
+
+!            do j = 1, ny
+!               do i = 1, nx
+!                  if ( (xc(i)-xcntr)**2 + (yc(j)-ycntr)**2  .le. (r0)**2 ) H_ice(i,j) = h0
+!               end do
+            !           end do
+            
+            ! Read in H_ice
+!            file_path = trim(fldr_path)//"/yelmo2D.nc"
+
+            file_path = "/Users/montoya/work/nadcom23/data/Peltier/jgrb52450-sup-0005-data_s5.nc"
+
+            
+            nct = nc_size(file_path,"Time")
+            ncx = nc_size(file_path,"Lon")
+            ncy = nc_size(file_path,"Lat")
+
+
+            print*,'hola', nct, ncx, ncy
+            
+            call nc_read(file_path,"IceT",H_ice,start=[1,1,nct],count=[ncx,ncy,1])
+
+
+            if (time_end.lt.nt) then
+
+               print*,'Need to increase time_end to read full data length'
+               stop
+               
+            endif
+
+
+            if (ncx.ne.nx) then
+                           
+               print*,'ncx not equal to nx'
+               stop
+               
+            endif
+
+            if (ncy.ne.ny) then
+                           
+               print*,'ncx not equal to nx'
+               stop
+               
+            endif
+
+
+            print*,'hola stopping now'
+            stop
+            
+
+            
         case DEFAULT
 
             write(*,*) "Error: experiment name not recognized."
             write(*,*) "experiment = ", trim(experiment)
             stop 
 
-    end select
-   
+         end select
+
+         
     ! Inititalize state
     call isos_init_state(isos1,z_bed,H_ice,z_sl,z_bed_ref,H_ice_ref,z_sl_ref,time=time_init) 
 
-
+    
     ! Initialize writing output
     call isos_write_init(isos1,xc,yc,file_out,time_init)
 
@@ -242,6 +326,7 @@ program test_isostasy
     ! Determine total number of iterations to run
     nt = ceiling((time_end-time_init)/dtt) + 1 
 
+    
     ! Advance isostasy model
     do n = 1, nt 
 
@@ -257,12 +342,15 @@ program test_isostasy
             ! Calculate benchmark solutions when available and write to file
             select case(trim(experiment))
 
-                case("elva_disk")
-!mmr2 comment this to spare time                    
-!mmr2                    ! Calculate analytical solution to elva_disk
-!mmr2                   call isosbench_elva_disk(z_bed_bench,r0,h0,eta,isos1%par%dx,isos1%now%D_lith(1,1), &
-!mmr2                                                           isos1%par%rho_ice,isos1%par%rho_a,isos1%par%g,time)
+            case("test1")
 
+                      ! Calculate analytical solution to elva_disk
+
+! mmr: comment this to spare time; enable for test1 only
+                       call isosbench_elva_disk(z_bed_bench,r0,h0,eta,isos1%par%dx,isos1%now%D_lith(1,1), &
+                           isos1%par%rho_ice,isos1%par%rho_a,isos1%par%g,time)
+!mmr
+                   
                     ! Write to file 
                     call isos_write_step(isos1,file_out,time,H_ice,z_sl,z_bed_bench)
 
@@ -317,10 +405,14 @@ contains
                         dim1="xc",dim2="yc",start=[1,1]) 
 
         call nc_write(filename,"kei",isos%now%kei,units="",long_name="Kelvin function filter", &
-                        dim1="xf",dim2="yf",start=[1,1]) 
-        call nc_write(filename,"G0",isos%now%G0,units="",long_name="Regional elastic plate filter", &
-                        dim1="xf",dim2="yf",start=[1,1]) 
+             dim1="xf",dim2="yf",start=[1,1])
 
+        call nc_write(filename,"G0",isos%now%G0,units="",long_name="Regional elastic plate filter", &
+             dim1="xf",dim2="yf",start=[1,1])
+        
+       call nc_write(filename,"GN",isos%now%GN,units="",long_name="Geoid's elastic plate filter", &
+                        dim1="xf",dim2="yf",start=[1,1]) 
+        
         return
 
     end subroutine isos_write_init
@@ -358,15 +450,14 @@ contains
         call nc_write(filename,"z_sl",z_sl,units="m",long_name="Sea level elevation", &
               dim1="xc",dim2="yc",dim3="time",start=[1,1,n],ncid=ncid)
         call nc_write(filename,"z_bed",isos%now%z_bed,units="m",long_name="Bedrock elevation", &
-             dim1="xc",dim2="yc",dim3="time",start=[1,1,n],ncid=ncid) 
+             dim1="xc",dim2="yc",dim3="time",start=[1,1,n],ncid=ncid)
         call nc_write(filename,"dzbdt",isos%now%dzbdt,units="m/yr",long_name="Bedrock elevation change", &
              dim1="xc",dim2="yc",dim3="time",start=[1,1,n],ncid=ncid)
-!mmr------------------------------------------------------------------------------------------------------------------------        
         call nc_write(filename,"q_load",isos%now%q1,units="N/m2",long_name="Load", &                                        
              dim1="xc",dim2="yc",dim3="time",start=[1,1,n],ncid=ncid)                                            
-        call nc_write(filename,"w_VA",-isos%now%w2,units="m",long_name="Load", &                                        
+        call nc_write(filename,"w_VA",-isos%now%w2,units="m",long_name="Displacement (viscous)", &                                        
              dim1="xc",dim2="yc",dim3="time",start=[1,1,n],ncid=ncid)                                            
-        call nc_write(filename,"z_bed_EL",-isos%now%w1,units="m",long_name="Displacement (for ELVA only EL)", &
+        call nc_write(filename,"z_bed_EL",-isos%now%w1,units="m",long_name="Displacement (elastic)", &
              dim1="xc",dim2="yc",dim3="time",start=[1,1,n],ncid=ncid)                                           
         call nc_write(filename,"eta_eff",isos%now%eta_eff,units="Pa s",long_name="Asthenosphere effective viscosity", &
              dim1="xc",dim2="yc",dim3="time",start=[1,1,n],ncid=ncid)                                           
@@ -374,8 +465,9 @@ contains
              dim1="xc",dim2="yc",dim3="time",start=[1,1,n],ncid=ncid)
         call nc_write(filename,"D_lith",isos%now%D_lith,units="N m",long_name="Lithosphere effective rigidity", &
              dim1="xc",dim2="yc",dim3="time",start=[1,1,n],ncid=ncid)                                           
-                                                        
-!mmr------------------------------------------------------------------------------------------------------------------------    
+        call nc_write(filename,"w_geoid",-isos%now%wn,units="m",long_name="Geoid displacement", &                                        
+             dim1="xc",dim2="yc",dim3="time",start=[1,1,n],ncid=ncid)                                            
+
 
         if (present(z_bed_bench)) then 
             ! Compare with benchmark solution 

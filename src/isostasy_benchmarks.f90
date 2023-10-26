@@ -153,10 +153,8 @@ contains
         real(wp), allocatable               :: dist2c(:,:)
         
         nk = int((kappa_max-kappa_min)/dk)
-!mmr------------------------------------------------------------------------------------------------------------------------    
-!mmr        nl = int(nx*sqrt(2.)/2) + 2
         nl = int(max(nx,ny)*sqrt(2.)/2) + 2
-!mmr------------------------------------------------------------------------------------------------------------------------    
+
         allocate(kappa_mod(nk+1))
         allocate(dist2c(nx,ny))
         allocate(r(nl))
@@ -232,7 +230,7 @@ contains
         
         integer(kind=4)               :: i, j, k, l, nx, ny, nk, nl
 
-        real(wp), parameter :: tol = 1.e-3  ! error tolerance
+        real(wp), parameter :: tol = 1.e-6 !  error tolerance
         
         nx = size(w,1)
         ny = size(w,2)

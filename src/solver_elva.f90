@@ -7,7 +7,6 @@ module solver_elva
     private
     public :: calc_asthenosphere_viscous_square
     public :: calc_asthenosphere_viscous
-    !mmr2
     public :: extend_array 
     public :: reduce_array
     public :: calc_asthenosphere_viscous_params
@@ -16,8 +15,6 @@ module solver_elva
     public :: calc_fft_backward_c2c
     public :: calc_fft_forward_c2c
     
-    !mmr2
-
 contains
 
     subroutine calc_asthenosphere_viscous_square(dzbdt,w,q,D_lith,eta,rho_a,g,dx,dt)
@@ -260,8 +257,8 @@ contains
                     iq = ny-j+1
                 end if
                 kappa(i,j)  = (ip*ip + iq*iq)**0.5
-                kappa_p(i,j) = ip !mmr2
-                kappa_q(i,j) = iq !mmr2
+                kappa_p(i,j) = ip 
+                kappa_q(i,j) = iq 
                 beta(i,j)   = rho_a*g + D_lith(i,j)*(mu**4)*kappa(i,j)**4
             end do
         end do
@@ -362,7 +359,6 @@ contains
         plan = fftw_plan_r2r_2d(m,n,in_aux,out_aux,FFTW_DHT,FFTW_DHT,FFTW_ESTIMATE)
 
         call fftw_execute_r2r(plan, in_aux, out_aux)
-!mmr      call fftw_destroy_plan(plan)
         out = real(out_aux/sqrt(m*n*1.))
 
         if (print_check) then
@@ -416,7 +412,6 @@ contains
         plan = fftw_plan_r2r_2d(m,n,in_aux,out_aux,FFTW_DHT,FFTW_DHT,FFTW_ESTIMATE)
 
         call fftw_execute_r2r(plan, in_aux, out_aux)
-!mmr      call fftw_destroy_plan(plan)
         out = real(out_aux/sqrt(m*n*1.)) 
 
         if (print_check) then

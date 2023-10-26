@@ -7,7 +7,7 @@ module isostasy_defs
     integer,  parameter :: sp  = kind(1.0)
 
     ! Choose the precision of the library (sp,dp)
-    integer,  parameter :: wp = dp ! sp dp mmr2 
+    integer,  parameter :: wp = dp ! sp dp mmr 
 
     real(wp), parameter :: pi = 3.14159265359
 
@@ -30,15 +30,13 @@ module isostasy_defs
         real(wp) :: g 
         real(wp) :: r_earth 
         real(wp) :: m_earth
-        !mmr2
         character(len=56)  :: visc_method       ! [-] Method use to prescribe asthenosphere's viscosity field
-        real(wp)           :: eta_c             ! [Pa s]  Viscosity in channel between elastic lithosphere and viscous asthenosphere (for LV-ELVA only)
-        real(wp)           :: T_c               ! [km]    Thickness of channel between elastic lithosphere and viscous asthenosphere (for LV-ELVA only)
+        real(wp)           :: visc_c             ! [Pa s]  Viscosity in channel between elastic lithosphere and viscous asthenosphere (for LV-ELVA only)
+        real(wp)           :: thck_c               ! [km]    Thickness of channel between elastic lithosphere and viscous asthenosphere (for LV-ELVA only)
         integer            :: n_lev             ! [-]     Number of layers within viscous asthenosphere (for LV-ELVA only)
         
         character(len=56)  :: rigidity_method   ! [-] Method use to prescribe lithosphere's rigidity field
  
-        !mmr2
         ! Internal parameters 
         integer  :: nx
         integer  :: ny
@@ -58,11 +56,10 @@ module isostasy_defs
         real(wp), allocatable :: D_lith(:,:)        ! [N-m] Lithosphere flexural rigidity
         real(wp), allocatable :: eta_eff(:,:)       ! [Pa-s] Effective asthenosphere viscosity
         real(wp), allocatable :: tau(:,:)           ! [yr] Asthenospheric relaxation timescale field
-
-  !mmr2      real(wp), allocatable :: visc_field(:,:)    ! [yr] Asthenospheric  viscosity
         
         real(wp), allocatable :: kei(:,:)           ! Kelvin function filter values 
         real(wp), allocatable :: G0(:,:)            ! Green's function values
+        real(wp), allocatable :: GN(:,:)            ! Green's function for geoid values
        
         real(wp), allocatable :: z_bed(:,:)         ! Bedrock elevation         [m]
         real(wp), allocatable :: dzbdt(:,:)         ! Rate of bedrock uplift    [m/a]
@@ -72,6 +69,8 @@ module isostasy_defs
         real(wp), allocatable :: q1(:,:)            ! Current load          
         real(wp), allocatable :: w1(:,:)            ! Current equilibrium displacement
         real(wp), allocatable :: w2(:,:)            ! Current viscous equilibrium displacement (ELVA)
+
+        real(wp), allocatable :: wn(:,:)            ! Geoid displacement (ELVA)
         
     end type isos_state_class
 
