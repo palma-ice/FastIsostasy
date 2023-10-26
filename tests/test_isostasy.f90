@@ -49,8 +49,7 @@ program test_isostasy
     type(isos_class) :: isos1
 
     ! === Define runtime information =========
-    ! program runs from yelmox/
-    ! executable is defined in libyelmox/bin/test_isostasy.x 
+    ! executable is defined in libisostasy/bin/test_isostasy.x 
     ! output directory should be predefined: output/test-isostasy
 
     outfldr = "output/test-isostasy"
