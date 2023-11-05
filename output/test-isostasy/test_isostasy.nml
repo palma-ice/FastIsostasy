@@ -1,8 +1,8 @@
 &isostasy
-    method          = 6                     ! 0: constant lithospheric displacement; 1: LLRA; 2: ELRA, 3: EGIA, 4: ELVA, 5: LV-ELVA test1, 6: LV-ELVA test2; 7: LV-ELVA test3
-    dt_step         = 10. !1.          ! [yr] Max. timestep to recalculate bedrock uplift and rate of change | 1. for test1 | 10?? for test2 
-    dt_lith         = 50. !1.          ! [yr] Min. timestep to recalculate equilibrium lithospheric displacement | 1. for test1 | 10? for test2 
-    He_lith         = 70. !88.              ! [km] Effective elastic thickness lithosphere | 88 km for test1 | 70 km for test2
+    method          = 8                     ! 0: constant lithospheric displacement; 1: LLRA; 2: ELRA, 3: EGIA, 4: ELVA, 5: LV-ELVA test1, 6: LV-ELVA test2; 7: LV-ELVA test3 ; 8: LV-ELVA test4
+    dt_step         = 0.5 !10. !1.          ! [yr] Max. timestep to recalculate bedrock uplift and rate of change | 1. for test1 | 10?? for test2 
+    dt_lith         = 0.5 !50. !1.          ! [yr] Min. timestep to recalculate equilibrium lithospheric displacement | 1. for test1 | 10? for test2 
+    He_lith         = 240. !255. !70. !88.              ! [km] Effective elastic thickness lithosphere | 88 km for test1 | 70 km for test2
     visc            = 2.e21 ! 1.e21                ! [Pa s] Asthenosphere's viscosity, visc=1e21 for Bueler et al (2007)| 1.e21 for test1 | 2.e21 for test2 
     tau             = 200.0                 ! [yr] Relaxation time 
 
@@ -26,5 +26,5 @@
     n_lev      = 3                          !  [-]    Number of layers (including lithosphere)
 
     ! Lithosphere effective thickness (and therefore ridigidity)
-    rigidity_method = uniform             ! uniform | gaussian_plus | gaussian_minus
+    rigidity_method = uniform             ! uniform | gaussian_plus | gaussian_minus | default
 /

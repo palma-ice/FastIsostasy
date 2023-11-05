@@ -10,7 +10,8 @@ module solver_lv_elva
     public :: calc_lv_asthenosphere_viscous_square
     public :: calc_gaussian_viscosity
     public :: calc_gaussian_rigidity
-    public :: calc_effective_viscosity
+    public :: calc_effective_viscosity_test3
+    public :: calc_effective_viscosity_3d
   contains
 
 
@@ -523,7 +524,7 @@ module solver_lv_elva
       end subroutine calc_gaussian_rigidity
 
         
-      subroutine calc_effective_viscosity(eta_eff,visc_c,thck_c,He_lith,n_lev,nu,dx,dy)
+      subroutine calc_effective_viscosity_test3(eta_eff,visc_c,thck_c,He_lith,n_lev,nu,dx,dy)
 
         implicit none
 
@@ -657,7 +658,138 @@ module solver_lv_elva
      
         return
         
-      end subroutine calc_effective_viscosity
+      end subroutine calc_effective_viscosity_test3
+
+      subroutine calc_effective_viscosity_3d(eta_eff,eta,nu,dx,dy)
+
+        implicit none
+
+        real(wp), intent(INOUT)  :: eta_eff(:,:)
+        real(wp), intent(IN)     :: eta(:,:,:)
+        real(wp), intent(IN)     :: nu, dx, dy
+        
+        real(wp) :: Lx, Ly, L
+        real(wp) :: xcntr, ycntr, xmax, xmin, ymax, ymin
+        real(wp), allocatable :: xc(:), yc(:)
+
+        real(wp), allocatable ::  R(:,:)
+        real(wp), allocatable ::  eta_ratio(:,:)
+        real(wp), allocatable ::  eta_c(:,:)
+        real(wp), allocatable ::  dz(:,:,:)
+        real(wp), allocatable ::  dz_c(:,:)
+        real(wp), allocatable ::  eta_ratiom1(:,:)
+        real(wp), allocatable ::  c(:,:)
+        real(wp), allocatable ::  s(:,:)
+        real(wp), allocatable :: kappa(:,:)
+       
+        integer  :: i, j, k, nx, ny, n_lev
+
+        nx = size(eta_eff,1)
+        ny = size(eta_eff,2)
+
+        n_lev = size(eta,3)
+        
+        allocate(xc(nx))
+        allocate(yc(ny))        
+        allocate(R(nx,ny))
+        allocate(eta_ratio(nx,ny))
+        allocate(eta_ratiom1(nx,ny))
+        allocate(c(nx,ny))
+        allocate(s(nx,ny))
+        allocate(eta_c(nx,ny))
+        allocate(dz_c(nx,ny))
+        allocate(dz(nx,ny,n_lev))
+        allocate(kappa(nx,ny))
+
+! mmr recheck this 
+
+        dz = 100.0*1.e3
+
+
+        if (n_lev.lt.2) then
+
+           print*,'n_lev should be at least 2'
+           stop
+           
+!        else if (n_lev.gt.3) then
+!           print*,'Option n_lev > 3 not enabled for viscosity yet'
+!           stop
+
+        else if (n_lev.ge.3) then
+
+        
+        do i = 1, nx
+           xc(i) = dx*(i-1)
+        end do
+        xmin = xc(1)
+        xmax = xc(nx)
+
+        do j = 1, ny
+           yc(j) = dy*(j-1)
+        enddo
+        ymin = yc(1)
+        ymax = yc(ny)
+
+        
+        xcntr = (xmax+xmin)/2.0
+        ycntr = (ymax+ymin)/2.0
+
+        Lx = xmax - xmin
+        Ly = ymax - ymin
+        L = (Lx + Ly) / 2.0
+
+        kappa = 2*pi/L 
+                
+       
+        ! Start with n-th layer: viscous half space
+        
+        eta_eff(:,:) = eta(:,:,n_lev)
+        
+        do k = 1, n_lev-1
+
+           eta_c = eta(:,:,n_lev-1)
+           dz_c = 100.*1.e3 !dz(:,:,n_lev-k+1)
+          
+           eta_ratio = eta_c/eta_eff
+           eta_ratiom1 = 1./eta_ratio
+
+           c = cosh(dz_c*kappa)
+           s = sinh(dz_c*kappa)
+
+           R = (2.0 * eta_ratio * c * s + (1-eta_ratio**2) * (dz_c*kappa)**2 + (eta_ratio*s)**2 + c**2 )/&
+                ((eta_ratio + eta_ratiom1)* c * s + (eta_ratio - eta_ratiom1)*dz_c*kappa + s**2 + c**2)
+           
+           eta_eff = R*eta_c
+           
+        end do
+
+     else
+
+        print*,'n_lev = ', n_lev
+       
+        stop
+
+     endif
+     
+     eta_eff    = eta_eff  * (1.5/(1. + nu))         ! [Pa s]
+
+        
+        deallocate(xc)
+        deallocate(yc)        
+        deallocate(R)
+        deallocate(eta_ratio)
+        deallocate(eta_ratiom1)
+        deallocate(c)
+        deallocate(s)
+!        deallocate(eta)
+        deallocate(eta_c)
+        deallocate(dz_c)
+        deallocate(dz)
+        deallocate(kappa)
+     
+        return
+        
+      end subroutine calc_effective_viscosity_3d
 
 
 

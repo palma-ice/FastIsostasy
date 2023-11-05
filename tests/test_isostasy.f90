@@ -5,7 +5,8 @@ program test_isostasy
     use isostasy_defs, only : sp, dp, wp
     use isostasy 
     use isostasy_benchmarks
-
+    use ice
+    
     implicit none
     
     character(len=512) :: outfldr
@@ -16,7 +17,7 @@ program test_isostasy
     character(len=56)  :: visc_method
     character(len=56)  :: rigidity_method
 
-    real(wp) :: time 
+    real(wp) :: time, time_bp 
     real(wp) :: time_init 
     real(wp) :: time_end 
     real(wp) :: dtt
@@ -26,7 +27,8 @@ program test_isostasy
 
     real(wp) :: r0, h0, eta 
 
-    integer  :: i, j, nx, ny
+    integer  :: i, j, nx, ny, slice_time
+    real(wp) :: time_now
     real(wp) :: xmin, xmax, dx
     real(wp) :: ymin, ymax, dy
     real(wp) :: xcntr, ycntr                        
@@ -38,15 +40,16 @@ program test_isostasy
     real(wp), allocatable :: z_sl_ref(:,:) 
     
     real(wp), allocatable :: z_bed(:,:) 
-    real(wp), allocatable :: H_ice(:,:) 
+    real(wp), allocatable :: H_ice(:,:),  T_ice(:,:,:), time_ice(:) 
     real(wp), allocatable :: z_sl(:,:) 
     
     real(wp), allocatable :: mask(:,:)
     real(wp), allocatable :: z_bed_bench(:,:)
 
-    character(len=256) :: fldr_path, file_path
+    character(len=256) :: fldr_path, filename
 
     type(isos_class) :: isos1
+    type(ice_class) :: ice
 
     ! === Define runtime information =========
     ! executable is defined in libisostasy/bin/test_isostasy.x 
@@ -68,14 +71,14 @@ program test_isostasy
 
     
 !    experiment = "test1"   ! Benchmark: analytical -  Bueler et al. (2007)    
-    experiment = "test2"   ! Benchmark: Spada et al. (2011) disc
+!    experiment = "test2"   ! Benchmark: Spada et al. (2011) disc
     
 !    experiment = "test3a"  ! Gaussian reduction of lithospheric thickness at centre
 !    experiment = "test3b"  ! Gaussian increase of lithospheric thickness at centre
 !    experiment = "test3c"  ! Gaussian reduction of viscosity at centre
 !    experiment = "test3d"  ! Gaussian increase of viscosity at centre
 
-!    experiment = "test4"    
+    experiment = "test4"    
     
     
     write(*,*) "experiment = ", trim(experiment)
@@ -96,15 +99,10 @@ program test_isostasy
     
     ! === Define simulation time ========
 
-    time_init = 0.0
-    time_end  = 128.e3 ! 50e3 
-    dtt       = 200. !1. !0.5 ! 200 recheck adaptative time step and convolution (with FFT) !!!   
-    dt_out    = 1.e3 !200. !1.e3 !mmr  10e3
-
-
-    ! hereiam
-    print*,'save results and increase timestep; try test2 again;  try test1 again; try test3; try convolution with FFT'
-!    stop
+    time_init = -128.e3 !0.0
+    time_end  = 0. !128.e3 ! 50e3 
+    dtt       = 0.5 !1. !200. !1. !0.5 ! 200 recheck adaptative time step and convolution (with FFT) !!!   
+    dt_out    = 10. !1. !1.e3 !200. !1.e3 !mmr  10e3
 
     write(*,*) "time_init = ", time_init 
     write(*,*) "time_end  = ", time_end 
@@ -113,9 +111,10 @@ program test_isostasy
 
     ! === Define grid information ============
 
-    dx = 50.e3 !20.e3 !50.e3 !25.e3 recheck
+    dx = 32.e3 !50.e3 !20.e3 !50.e3 !25.e3 recheck
 
-    xmin = -3000.e3 
+!    xmin = -3000.e3
+    xmin = -3040.e3 !-dx*(191-1)/2 for test4
     xmax = abs(xmin)
     nx   = int( (xmax-xmin) / dx ) + 1
     dy = dx
@@ -152,7 +151,8 @@ program test_isostasy
     
     allocate(z_bed_bench(nx,ny))
 
-    allocate(mask(nx,ny)) 
+    allocate(mask(nx,ny))
+
 
     z_bed_ref   = 0.0 
     H_ice_ref   = 0.0 
@@ -165,7 +165,6 @@ program test_isostasy
     z_bed_bench = z_bed 
 
     write(*,*) "Initial fields defined."
-
 
     ! Initialize bedrock model (allocate fields)  
     call isos_init(isos1,path_par,"isostasy",nx,ny,dx) 
@@ -239,7 +238,7 @@ program test_isostasy
                 end do
             end do
 
-               case("test4")
+         case("test4")
 
 ! ICE6G_D
 ! Comment on “An Assessment of the ICE-6G_C (VM5a) Glacial Isostatic Adjustment Model” by Purcell et al.
@@ -252,29 +251,14 @@ program test_isostasy
             eta = 1.e+21   ! [Pa s]
         
             H_ice = 0.
-!            xcntr = (xmax+xmin)/2.0
-!            ycntr = (ymax+ymin)/2.
 
-!            do j = 1, ny
-!               do i = 1, nx
-!                  if ( (xc(i)-xcntr)**2 + (yc(j)-ycntr)**2  .le. (r0)**2 ) H_ice(i,j) = h0
-!               end do
-            !           end do
-            
             ! Read in H_ice
-!            file_path = trim(fldr_path)//"/yelmo2D.nc"
 
-            file_path = "/Users/montoya/work/nadcom23/data/Peltier/jgrb52450-sup-0005-data_s5.nc"
-
+            filename = "/Users/montoya/work/ice_data/Antarctica/ANT-32KM/ANT-32KM_ICE-6G_D.nc"
             
-            nct = nc_size(file_path,"Time")
-            ncx = nc_size(file_path,"Lon")
-            ncy = nc_size(file_path,"Lat")
-
-
-            print*,'hola', nct, ncx, ncy
-            
-            call nc_read(file_path,"IceT",H_ice,start=[1,1,nct],count=[ncx,ncy,1])
+            nct = nc_size(filename,"time")
+            ncx = nc_size(filename,"xc")
+            ncy = nc_size(filename,"yc")
 
 
             if (time_end.lt.nt) then
@@ -299,10 +283,19 @@ program test_isostasy
                
             endif
 
-
-            print*,'hola stopping now'
-            stop
+            allocate(T_ice(ncx,ncy,nct))
+            allocate(time_ice(nct))
+            call nc_read(filename,"IceT",T_ice,start=[1,1,1],count=[ncx,ncy,nct])
+            T_ice = max(T_ice, 0.)
+            ! Initialize H_ice
             
+            
+           H_ice = T_ice(:,:,1)
+
+           do i = 1, nct
+              time_ice(i) = (i - nct - 1)*1.e3
+!              print*,'hola', T_ice(90,90,i), time_ice(i)
+           enddo
 
             
         case DEFAULT
@@ -330,10 +323,25 @@ program test_isostasy
     do n = 1, nt 
 
         ! Advance time 
-        time = time_init + (n-1)*dtt 
+       time = time_init + (n-1)*dtt
 
+       !  T_ice has 128 time steps, from -128 ka to zero
+       
+       slice_time = int((time-time_init)/1.e3 + 1)
+
+!       H_ice = T_ice(:,:,slice_time) 
+
+       ! do time interpolation here - hereiam
+
+       call interp_linear(time_ice,T_ice,time,H_ice) 
+       
+       
+!        print*,'hola H_ice', H_ice(90,90), time
+!        stop
+        
         ! Update bedrock
         call isos_update(isos1,H_ice,z_sl,time)
+
 
         if (mod(time,dt_out) .eq. 0.0) then
             ! Write output for this timestep
@@ -485,5 +493,44 @@ contains
 
     end subroutine isos_write_step
 
+
+    subroutine interp_linear(x,y,xout,yout)
+        ! Simple linear interpolation of a point
+
+        implicit none
+
+        real(wp), dimension(:), intent(IN) :: x 
+        real(wp), dimension(:,:,:), intent(IN) :: y
+        real(wp), intent(IN) :: xout
+        real(wp), dimension(:,:),intent(OUT) :: yout
+        integer  :: i, j, n, nout
+        real(wp) :: alph
+
+        n    = size(x)
+
+        if (xout .lt. x(1)) then
+            yout = y(:,:,1)
+        else if (xout .gt. x(n)) then
+            yout = y(:,:,n)
+        else
+            do j = 1, n
+                if (x(j) .ge. xout) exit
+            end do
+
+            if (j .eq. 1) then
+                yout = y(:,:,1)
+            else if (j .eq. n+1) then
+                yout = y(:,:,n)
+            else
+               alph = (xout - x(j-1)) / (x(j) - x(j-1))
+                yout = y(:,:,j-1) + alph*(y(:,:,j) - y(:,:,j-1))
+!               print*,'hola', xout, alph, yout(90,90), y(90,90,j), y(90,90,j-1)
+             end if
+        end if
+
+        return
+    
+      end subroutine interp_linear
+    
 end program test_isostasy
 

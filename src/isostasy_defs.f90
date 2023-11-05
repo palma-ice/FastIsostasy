@@ -54,6 +54,7 @@ module isostasy_defs
         
         real(wp), allocatable :: He_lith(:,:)       ! [m]  Effective elastic thickness of the lithosphere
         real(wp), allocatable :: D_lith(:,:)        ! [N-m] Lithosphere flexural rigidity
+        real(wp), allocatable :: eta(:,:,:)           ! [Pa-s]3D mantle viscosity
         real(wp), allocatable :: eta_eff(:,:)       ! [Pa-s] Effective asthenosphere viscosity
         real(wp), allocatable :: tau(:,:)           ! [yr] Asthenospheric relaxation timescale field
         
