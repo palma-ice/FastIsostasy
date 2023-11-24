@@ -147,7 +147,8 @@ module isostasy
                 ! Populate 2D D_lith field to have it available
                 isos%now%D_lith = D_lith_const
 
-
+                isos%now%eta_eff    = isos%par%visc                                     
+                
         case(5,6,7)
 
                 ! LV-ELVA method is being used, which allows for a non-constant
@@ -296,12 +297,13 @@ module isostasy
                 ! further out from the depression near the center. 
                 ! Note: previous implementation stopped at 400km, hard coded.
 
-                isos%par%nr =  100 !23 ! spare int(radius_fac*isos%par%L_w/isos%par%dx)+1 !mmr spare 100
+                isos%par%nr =  10 ! recheck 100 !23 ! spare int(radius_fac*isos%par%L_w/isos%par%dx)+1 !mmr spare 100
                 
                 ! Now, initialize isos variables 
                 call isos_allocate(isos%now,isos%par%nx,isos%par%ny,5,nr=isos%par%nr)
 !mmr spare time            
                 ! Calculate the Green function (Farrell 1972) to determine elastic displacement & visco-elastic coupling (test4)
+                ! recheck - comment for stability
                 call calc_ge_filter_2D(isos%now%G0,dx=isos%par%dx,dy=isos%par%dx)
 
                 ! Calculate the geoid's Green function (Coulon et al. 2021) to determine geoid displacement (test2,test4)
@@ -331,7 +333,6 @@ module isostasy
                
                 call calc_effective_viscosity_3d(isos%now%eta_eff,isos%now%eta,isos%par%nu,isos%par%dx,isos%par%dx)
 
-                isos%now%eta_eff = log10(isos%now%eta_eff)
                 end select 
 
 
@@ -348,7 +349,9 @@ module isostasy
                 filename_laty = "/Users/montoya/work/ice_data/Antarctica/ANT-32KM/ANT-32KM_latyparams.nc"
                  
                 call nc_read(filename_laty,"lithos_thck",isos%now%He_lith,start=[1,1],count=[isos%par%nx,isos%par%ny])
-                isos%now%He_lith = isos%now%He_lith*1.e-3 ! convert to km
+!!!                isos%now%He_lith = isos%now%He_lith*1.e-3 ! convert to km
+                ! recheck delete
+                isos%now%He_lith = 0.1   *   isos%now%He_lith*1.e-3 ! convert to km ! recheck for stability!!!
                 isos%now%D_lith = (isos%par%E*1e9) * (isos%now%He_lith*1e3)**3 / (12.0*(1.0-isos%par%nu**2))
 
                 end select 
@@ -357,7 +360,8 @@ module isostasy
 
 
                 ! Set the asthenospheric displacement equal to this reference displacement to start
-                isos%now%w2 = isos%now%w0 
+                isos%now%w2 = isos%now%w0
+
     
                 write(*,*) "isos_init:: summary"
                 write(*,*) "    E           : ", isos%par%E 
@@ -525,6 +529,7 @@ else
 end if 
 
                 ! Set the asthenospheric displacement equal to this reference displacement to start
+                isos%now%w0 = 0.
                 isos%now%w2 = isos%now%w0 
                 
              case(5,6,7) 
@@ -766,7 +771,7 @@ end if
                     ! elastic plate lithosphere with uniform constants                                                      
                     
                     ! Local lithosphere (LL)
-                    ! (update every time because it is cheap)
+                    ! (update every time because it is cheap - recheck)
                     ! Note: calculate the local lithospheric load here because 
                     ! the EL component is contained in the ELVA model solution
                     ! q1 will be used (the load), while w1 will not be used further.
@@ -1264,6 +1269,9 @@ end if
 
          end do
         end do
+
+
+        print*,'hola calling ge filter !!!!'
         
         return 
       end subroutine calc_GE_filter_2D
@@ -1473,8 +1481,9 @@ end if
         
         ! Convolve the estimated point load with the regional
         ! filter to obtain the distributed load w1. 
-!mmrspare
-        call convolve_load_elastic_plate(w1,q1,G0)
+
+! recheck for stability        call convolve_load_elastic_plate(w1,q1,G0)
+        call convolve_load_elastic_plate_fft(w1,q1,G0) ! hereiam
 
         return
 
@@ -1615,14 +1624,14 @@ end if
         allocate(w_reg_hat(-nr:nr,-nr:nr))
 
         allocate(q_ext(1:2*nr+1,1:2*nr+1))
-        allocate(q_ext_hat(1:2*nr+1,1:2*nr+1))
+       allocate(q_ext_hat(1:2*nr+1,1:2*nr+1))
 
         allocate(w_ext(1:2*nr+1,1:2*nr+1))
         
         q_ext = q1_ext
 
         
-        ! w_reg = 0.
+        w_reg = 0.
 
         ! ! Fourier transform G0
 
@@ -1634,8 +1643,8 @@ end if
 
         ! ! Multiply both
 
-        w_reg_hat = q_ext_hat ! G0_hat * q_ext_hat
-
+        w_reg_hat =  G0_hat * q_ext_hat
+              
         ! ! Invert product
 
         call calc_fft_backward_r2r(w_reg_hat,w_ext)

@@ -228,70 +228,82 @@ module solver_lv_elva
         call calc_asthenosphere_viscous_params(kappa,kappa_p,kappa_q,beta,mu,D_lith,rho_a,g,dx)  ! recheck this belongs out of here (once)
 
 !mmr recheck - try with finite differences too
-        
+
+        ! Finite differences
+
+        finite_difs = .true.
+
+        if (finite_difs) then
+           
 ! Calculate first derivatives wrt x and y
         
-!        call calc_horizontal_derivatives_2D(u_x,u_y,u,dx,dy)    ! recheck this calculation
+        call calc_horizontal_derivatives_2D(u_x,u_y,u,dx,dy)    ! recheck this calculation
 
 ! Calculate second derivatives wrt x and y. Note u_xy should be ideally identical to u_yx
         
-!        call calc_horizontal_derivatives_2D(u_xx,u_xy,u_x,dx,dy)
-!        call calc_horizontal_derivatives_2D(u_yx,u_yy,u_y,dx,dy)
+        call calc_horizontal_derivatives_2D(u_xx,u_xy,u_x,dx,dy)
+        call calc_horizontal_derivatives_2D(u_yx,u_yy,u_y,dx,dy)
         
 
-        call calc_fft_forward_r2r(u,u_hat)
+        else
+           
+           call calc_fft_forward_r2r(u,u_hat)
 
-        u_xx_hat = kappa_p**2 * mu**2 * u_hat
-        u_yy_hat = kappa_q**2 * mu**2 * u_hat
-        u_xy_hat = kappa * mu**2 * u_hat
-        
-        call calc_fft_backward_r2r(u_xx_hat,u_xx)
-        call calc_fft_backward_r2r(u_yy_hat,u_yy)
-        call calc_fft_backward_r2r(u_xy_hat,u_xy)
+           u_xx_hat = kappa_p**2 * mu**2 * u_hat
+           u_yy_hat = kappa_q**2 * mu**2 * u_hat
+           u_xy_hat = kappa * mu**2 * u_hat
+
+           call calc_fft_backward_r2r(u_xx_hat,u_xx)
+           call calc_fft_backward_r2r(u_yy_hat,u_yy)
+           call calc_fft_backward_r2r(u_xy_hat,u_xy)
          
-     
+        endif
+        
 !  Ventsel and Krauthammer (2001): Thin Plates and Shells. Theory, Analysis, and Applications
 
         
         mxx = -D_lith*(u_xx + nu*u_yy) 
         myy = -D_lith*(u_yy + nu*u_xx) 
         mxy = -D_lith*(1.0-nu)*u_xy    
- 
-        ! Finite differences
 
-        finite_difs = .false.
+         ! Finite differences
+
+        finite_difs = .true.
 
         if (finite_difs) then
 
             
-        mm = mxx
-        call calc_horizontal_derivatives_2D(mm_x,mm_y,mm,dx,dy)
-        call calc_horizontal_derivatives_2D(mm_xx,mm_xy,mm_x,dx,dy)
+           mm = mxx
+           call calc_horizontal_derivatives_2D(mm_x,mm_y,mm,dx,dy)
+           call calc_horizontal_derivatives_2D(mm_xx,mm_xy,mm_x,dx,dy)
 
-        mm_xy = 0.
-        mm = mxy
-        call calc_horizontal_derivatives_2D(mm_x,mm_y,mm,dx,dy)
-        call calc_horizontal_derivatives_2D(mm_xx,mm_xy,mm_x,dx,dy)
+           mm_xy = 0.
+           mm = mxy
+           call calc_horizontal_derivatives_2D(mm_x,mm_y,mm,dx,dy)
+           call calc_horizontal_derivatives_2D(mm_xx,mm_xy,mm_x,dx,dy)
+           !
+           mm = myy
+           !        mm_yx = 0.
+           call calc_horizontal_derivatives_2D(mm_x,mm_y,mm,dx,dy)
+           call calc_horizontal_derivatives_2D(mm_xy,mm_yy,mm_y,dx,dy)
 
-        mm = myy
-        call calc_horizontal_derivatives_2D(mm_x,mm_y,mm,dx,dy)
-        call calc_horizontal_derivatives_2D(mm_yx,mm_yy,mm_y,dx,dy)
-
+!        stop
+        
         else 
 
            ! mmr Calculate second derivatives with FFT
            
-        call calc_fft_forward_r2r(mxx,mxx_hat)
-        call calc_fft_forward_r2r(myy,myy_hat)
-        call calc_fft_forward_r2r(mxy,mxy_hat)
+           call calc_fft_forward_r2r(mxx,mxx_hat)
+           call calc_fft_forward_r2r(myy,myy_hat)
+           call calc_fft_forward_r2r(mxy,mxy_hat)
 
-        mm_xx_hat = kappa_p**2 * mu**2 * mxx_hat
-        mm_yy_hat = kappa_q**2 * mu**2 * myy_hat
-        mm_xy_hat = kappa * mu**2 * mxy_hat
-        
-        call calc_fft_backward_r2r(mm_xx_hat,mm_xx)
-        call calc_fft_backward_r2r(mm_yy_hat,mm_yy)
-        call calc_fft_backward_r2r(mm_xy_hat,mm_xy)
+           mm_xx_hat = kappa_p**2 * mu**2 * mxx_hat
+           mm_yy_hat = kappa_q**2 * mu**2 * myy_hat
+           mm_xy_hat = kappa * mu**2 * mxy_hat
+
+           call calc_fft_backward_r2r(mm_xx_hat,mm_xx)
+           call calc_fft_backward_r2r(mm_yy_hat,mm_yy)
+           call calc_fft_backward_r2r(mm_xy_hat,mm_xy)
                          
      endif
   

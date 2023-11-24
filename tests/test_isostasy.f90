@@ -101,8 +101,8 @@ program test_isostasy
 
     time_init = -128.e3 !0.0
     time_end  = 0. !128.e3 ! 50e3 
-    dtt       = 0.5 !1. !200. !1. !0.5 ! 200 recheck adaptative time step and convolution (with FFT) !!!   
-    dt_out    = 10. !1. !1.e3 !200. !1.e3 !mmr  10e3
+    dtt       = 1.0 !1. !200. !1. !0.5 ! 200 recheck adaptative time step and convolution (with FFT) !!!   
+    dt_out    = 1. !10. !1. !1.e3 !200. !1.e3 !mmr  10e3
 
     write(*,*) "time_init = ", time_init 
     write(*,*) "time_end  = ", time_end 
