@@ -40,7 +40,7 @@ program test_isostasy
     real(wp), allocatable :: z_sl_ref(:,:) 
     
     real(wp), allocatable :: z_bed(:,:) 
-    real(wp), allocatable :: H_ice(:,:),  T_ice(:,:,:), time_ice(:) 
+    real(wp), allocatable :: H_ice(:,:),  T_ice(:,:,:), z_bed_ice(:,:,:), time_ice(:), xc_ice(:), yc_ice(:)
     real(wp), allocatable :: z_sl(:,:) 
     
     real(wp), allocatable :: mask(:,:)
@@ -69,8 +69,27 @@ program test_isostasy
     !experiment = "variable_tau"
     !experiment = "point_load"
 
-    
-!    experiment = "test1"   ! Benchmark: analytical -  Bueler et al. (2007)    
+
+!    experiment = "test0" ! 1000 m radius ice disk of 1000 m heights, solved with ELRA (case=2)
+!    time_init = 0. 
+!    time_end  = 2000 
+!    dtt       = 10. 
+!    dt_out    = 100. 
+!    dx = 50.e3 
+!    xmin = -3000.e3 
+!    ymin = xmin !* 2
+
+
+! ELVA (case=4)
+!    experiment = "test1" ! 1000 m radius ice disk of 1000 m heights, solved with ELVA Benchmark: analytical (Bueler et al. 2007); dtt = 1; dtout = 1000. ; time_end = 50.e3 
+!    time_init = 0. 
+!    time_end  = 50.e3 
+!    dtt       = 10.0 
+!    dt_out    = 1.e3
+!    dx = 50.e3 
+!    xmin = -3000.e3 
+!    ymin = xmin 
+
 !    experiment = "test2"   ! Benchmark: Spada et al. (2011) disc
     
 !    experiment = "test3a"  ! Gaussian reduction of lithospheric thickness at centre
@@ -78,9 +97,25 @@ program test_isostasy
 !    experiment = "test3c"  ! Gaussian reduction of viscosity at centre
 !    experiment = "test3d"  ! Gaussian increase of viscosity at centre
 
-    experiment = "test4"    
-    
-    
+    experiment = "test4" ! ice6g_d First elva, then lv-elva
+    time_init = -128.e3 
+    time_end  = 0.
+    dtt       = 1.0  
+    dt_out    = 1.e3 
+    dx = 32.e3 
+    xmin = -3040.e3 
+    ymin = xmin
+
+!    experiment = "test5"  ! Lucía's Greenland ice-sheet load (since 15 ka)
+!    time_init = 0. 
+!    time_end  = 15.e3 
+!    dtt       = 1.0  
+!    dt_out    = 1.e3 
+!    dx = 16.e3 
+!    xmin = -840.e3 
+!    ymin = -1440.e3
+
+
     write(*,*) "experiment = ", trim(experiment)
 
 
@@ -99,10 +134,10 @@ program test_isostasy
     
     ! === Define simulation time ========
 
-    time_init = -128.e3 !0.0
-    time_end  = 0. !128.e3 ! 50e3 
-    dtt       = 1.0 !1. !200. !1. !0.5 ! 200 recheck adaptative time step and convolution (with FFT) !!!   
-    dt_out    = 1. !10. !1. !1.e3 !200. !1.e3 !mmr  10e3
+!    time_init = 0. ! -128.e3 !0.0
+!    time_end  = 15. !e3 !50.e3 !0. !50.e3 !0. !128.e3 ! 50e3 
+!    dtt       = 1.0 !1. !200. !1. !0.5 ! 200 recheck adaptative time step and convolution (with FFT) !!!   
+!    dt_out    = 1.0 !1000. !10. !1. !1.e3 !200. !1.e3 !mmr  10e3
 
     write(*,*) "time_init = ", time_init 
     write(*,*) "time_end  = ", time_end 
@@ -111,16 +146,32 @@ program test_isostasy
 
     ! === Define grid information ============
 
-    dx = 32.e3 !50.e3 !20.e3 !50.e3 !25.e3 recheck
 
+
+    ! test1
+!    dx = 50.e3 !16.e3 ! 50.e3 !32.e3 !50.e3 !20.e3 !50.e3 !25.e3 recheck
 !    xmin = -3000.e3
-    xmin = -3040.e3 !-dx*(191-1)/2 for test4
+!    ymin = xmin !* 2
+    ! test 5
+!    dx = 16.e3 ! 50.e3 !32.e3 !50.e3 !20.e3 !50.e3 !25.e3 recheck
+!    xmin = -840.e3 !-3000.e3 !-3040.e3 !-dx*(191-1)/2 for test4
+!    ymin = -1440.e3 
+    
     xmax = abs(xmin)
+    if (mod((xmax-xmin),dx).ne.0.) then
+       print*,'you must have an integer number of points in x-domain'
+       stop
+    endif
+    
     nx   = int( (xmax-xmin) / dx ) + 1
     dy = dx
-    ymin = xmin 
     ymax = abs(ymin)
     ny   = int( (ymax-ymin) / dy ) + 1
+    
+    if (mod((ymax-ymin),dy).ne.0.) then
+       print*,'you must have an integer number of points in y-domain'
+       stop
+    endif
 
     allocate(xc(nx))
     allocate(yc(ny))
@@ -156,11 +207,11 @@ program test_isostasy
 
     z_bed_ref   = 0.0 
     H_ice_ref   = 0.0 
-    z_sl_ref    = -1e3 
+    z_sl_ref    = 0.0 !-1e3 
     
     z_bed       = 0.0 
     H_ice       = 0.0  
-    z_sl        = -1e3 
+    z_sl        = 0.0 !-1e3 
     
     z_bed_bench = z_bed 
 
@@ -169,6 +220,7 @@ program test_isostasy
     ! Initialize bedrock model (allocate fields)  
     call isos_init(isos1,path_par,"isostasy",nx,ny,dx) 
 
+    
     ! Define ice thickness field based on experiment being run...
     
     select case(trim(experiment))
@@ -200,8 +252,8 @@ program test_isostasy
             H_ice = 0.0 
             H_ice(int((nx-1)/2),int((ny-1)/2)) = 1000.0 
 
-         case("test1","test3a","test3b","test3c","test3d")
-            
+         case("test0", "test1","test3a","test3b","test3c","test3d")
+
             ! Bueler et al. (2007): ice disk in a circle of radius 1000 km and thickness 1000 m
 
             r0  = 1000.0e3 ! [m] 
@@ -210,7 +262,8 @@ program test_isostasy
         
             H_ice = 0.
             xcntr = (xmax+xmin)/2.0
-            ycntr = (ymax+ymin)/2.
+            ycntr = (ymax+ymin)/2.0
+
 
             do j = 1, ny
                do i = 1, nx
@@ -218,7 +271,11 @@ program test_isostasy
                end do
             end do
 
+            allocate(T_ice(nx,ny,1))
+            allocate(time_ice(1))
 
+            T_ice(:,:,1) = H_ice(:,:)
+            
       case("test2")
 
          ! Spada et al. (2011)
@@ -244,7 +301,8 @@ program test_isostasy
 ! Comment on “An Assessment of the ICE-6G_C (VM5a) Glacial Isostatic Adjustment Model” by Purcell et al.
 ! W. Richard Peltier, Donald F. Argus, Rosemarie Drummond
 ! https://agupubs.onlinelibrary.wiley.com/doi/full/10.1002/2016JB013844
-         
+
+            
             r0 = 6.378e6*10.*3.1416/180. 
 
             h0  = 1000.0   ! [m] 
@@ -283,8 +341,10 @@ program test_isostasy
                
             endif
 
+
             allocate(T_ice(ncx,ncy,nct))
             allocate(time_ice(nct))
+            
             call nc_read(filename,"IceT",T_ice,start=[1,1,1],count=[ncx,ncy,nct])
             T_ice = max(T_ice, 0.)
             ! Initialize H_ice
@@ -297,7 +357,74 @@ program test_isostasy
 !              print*,'hola', T_ice(90,90,i), time_ice(i)
            enddo
 
+            z_bed_ref = 0.
+            H_ice_ref = 0.
+           
+        case("test5")
+
+           ! Lucías Greenland run
+           
+            r0 = 6.378e6*10.*3.1416/180. 
+
+            h0  = 1000.0   ! [m] 
+            eta = 1.e+21   ! [Pa s]
+        
+            H_ice = 0.
+
+            ! Read in H_ice
+
+            !            filename = "/Users/montoya/work/ice_data/Antarctica/ANT-32KM/ANT-32KM_ICE-6G_D.nc"
             
+            filename = "/Users/montoya/work/isostasy/cloned_isostasy/isostasy/input/gris_lgg/LGM_equilibrium_15kyr.nc"
+            
+            Nct = nc_size(filename,"time")
+            ncx = nc_size(filename,"xc")
+            ncy = nc_size(filename,"yc")
+
+
+            if (time_end.lt.nt) then
+
+               print*,'Need to increase time_end to read full data length'
+               stop
+               
+            endif
+
+
+            if (ncx.ne.nx) then
+                           
+               print*,'ncx not equal to nx'
+               stop
+               
+            endif
+
+            if (ncy.ne.ny) then
+                           
+               print*,'ncx not equal to nx'
+               stop
+               
+            endif
+            
+            allocate(z_bed_ice(ncx,ncy,nct))
+            allocate(T_ice(ncx,ncy,nct))
+                        
+            allocate(xc_ice(ncx))
+            allocate(yc_ice(ncy))
+            allocate(time_ice(nct))
+
+            call nc_read(filename,"z_bed",z_bed_ice,start=[1,1,1],count=[ncx,ncy,nct])
+            call nc_read(filename,"H_ice",T_ice,start=[1,1,1],count=[ncx,ncy,nct])
+            call nc_read(filename,"xc",xc_ice,start=[1],count=[ncx])
+            call nc_read(filename,"time",time_ice,start=[1],count=[nct])
+            call nc_read(filename,"yc",yc_ice,start=[1],count=[ncy])
+            
+
+            H_ice = T_ice(:,:,1)
+            z_bed = z_bed_ice(:,:,1)
+
+! mmr - recheck this for ELRA
+            H_ice_ref = 0. !T_ice(:,:,1)
+            z_bed_ref = 0. !z_bed_ice(:,:,1)
+           
         case DEFAULT
 
             write(*,*) "Error: experiment name not recognized."
@@ -322,23 +449,15 @@ program test_isostasy
     ! Advance isostasy model
     do n = 1, nt 
 
-        ! Advance time 
        time = time_init + (n-1)*dtt
-
-       !  T_ice has 128 time steps, from -128 ka to zero
-       
-       slice_time = int((time-time_init)/1.e3 + 1)
-
-!       H_ice = T_ice(:,:,slice_time) 
-
-       ! do time interpolation here - hereiam
 
        call interp_linear(time_ice,T_ice,time,H_ice) 
        
+! HEREIAM - recheck with Jan
+       H_ice = H_ice - H_ice_ref ! mmr at least this has to be activated I think
+       z_bed = z_bed - z_bed_ref
+
        
-!        print*,'hola H_ice', H_ice(90,90), time
-!        stop
-        
         ! Update bedrock
         call isos_update(isos1,H_ice,z_sl,time)
 
@@ -356,8 +475,7 @@ program test_isostasy
 ! mmr: comment this to spare time; enable for test1 only
                        call isosbench_elva_disk(z_bed_bench,r0,h0,eta,isos1%par%dx,isos1%now%D_lith(1,1), &
                            isos1%par%rho_ice,isos1%par%rho_a,isos1%par%g,time)
-!mmr
-                   
+
                     ! Write to file 
                     call isos_write_step(isos1,file_out,time,H_ice,z_sl,z_bed_bench)
 
@@ -372,7 +490,7 @@ program test_isostasy
             
         end if 
 
-        write(*,*) "time = ", time 
+        write(*,*) "time = ", time
 
     end do 
 
@@ -418,8 +536,8 @@ contains
              dim1="xf",dim2="yf",start=[1,1])
         
        call nc_write(filename,"GN",isos%now%GN,units="",long_name="Geoid's elastic plate filter", &
-                        dim1="xf",dim2="yf",start=[1,1]) 
-        
+            dim1="xf",dim2="yf",start=[1,1])
+
         return
 
     end subroutine isos_write_init
@@ -462,6 +580,9 @@ contains
              dim1="xc",dim2="yc",dim3="time",start=[1,1,n],ncid=ncid)
         call nc_write(filename,"q_load",isos%now%q1,units="N/m2",long_name="Load", &                                        
              dim1="xc",dim2="yc",dim3="time",start=[1,1,n],ncid=ncid)                                            
+
+        if (.TRUE.) then ! recheck mmr - done to spare time, delete
+        
         call nc_write(filename,"w_VA",-isos%now%w2,units="m",long_name="Displacement (viscous)", &                                        
              dim1="xc",dim2="yc",dim3="time",start=[1,1,n],ncid=ncid)                                            
         call nc_write(filename,"z_bed_EL",-isos%now%w1,units="m",long_name="Displacement (elastic)", &
@@ -475,17 +596,16 @@ contains
         call nc_write(filename,"w_geoid",-isos%now%wn,units="m",long_name="Geoid displacement", &                                        
              dim1="xc",dim2="yc",dim3="time",start=[1,1,n],ncid=ncid)                                            
 
-
         if (present(z_bed_bench)) then 
             ! Compare with benchmark solution 
-
             call nc_write(filename,"z_bed_bench",z_bed_bench,units="m",long_name="Benchmark bedrock elevation", &        
                 dim1="xc",dim2="yc",dim3="time",start=[1,1,n],ncid=ncid)                                                  
             call nc_write(filename,"err_z_bed",isos%now%z_bed - z_bed_bench,units="m",long_name="Error in bedrock elevation", & 
                 dim1="xc",dim2="yc",dim3="time",start=[1,1,n],ncid=ncid)  
-
         end if 
 
+     endif
+     
         ! Close the netcdf file
         call nc_close(ncid)
 

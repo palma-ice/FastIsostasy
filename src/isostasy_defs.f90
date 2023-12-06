@@ -31,12 +31,14 @@ module isostasy_defs
         real(wp) :: r_earth 
         real(wp) :: m_earth
         character(len=56)  :: visc_method       ! [-] Method use to prescribe asthenosphere's viscosity field
-        real(wp)           :: visc_c             ! [Pa s]  Viscosity in channel between elastic lithosphere and viscous asthenosphere (for LV-ELVA only)
-        real(wp)           :: thck_c               ! [km]    Thickness of channel between elastic lithosphere and viscous asthenosphere (for LV-ELVA only)
+        real(wp)           :: visc_c            ! [Pa s]  Viscosity in channel between elastic lithosphere and viscous asthenosphere (for LV-ELVA only)
+        real(wp)           :: thck_c            ! [km]    Thickness of channel between elastic lithosphere and viscous asthenosphere (for LV-ELVA only)
         integer            :: n_lev             ! [-]     Number of layers within viscous asthenosphere (for LV-ELVA only)
-        
+        logical            :: effective_visc    ! [-] Calculate effective viscosity 
+        logical            :: visco_elastic_coupling ![-] Include visco-elastic coupling
         character(len=56)  :: rigidity_method   ! [-] Method use to prescribe lithosphere's rigidity field
- 
+        logical            :: geoid_method      ! [-] Calculate geoid
+        
         ! Internal parameters 
         integer  :: nx
         integer  :: ny

@@ -11,7 +11,6 @@ module isostasy
 
     use isostasy_defs, only : sp, dp, wp, pi, isos_param_class, isos_state_class, isos_class
     
-    use solver_elva
     use solver_lv_elva
     use ncio
 
@@ -30,7 +29,7 @@ module isostasy
   contains
     
     !mmr subroutine isos_init(isos,filename,group,nx,ny,dx,E,nu,rho_ice,rho_sw,rho_a,g,r_earth,m_earth)
-      subroutine isos_init(isos,filename,group,nx,ny,dx,E,nu,rho_ice,rho_sw,rho_a,g,r_earth,m_earth,visc_method,visc_c,thck_c,n_lev,rigidity_method) 
+      subroutine isos_init(isos,filename,group,nx,ny,dx,E,nu,rho_ice,rho_sw,rho_a,g,r_earth,m_earth,visc_method,visc_c,thck_c,n_lev,effective_visc,visco_elastic_coupling,rigidity_method,geoid_method) 
 
         implicit none 
 
@@ -54,9 +53,14 @@ module isostasy
         real(wp), intent(IN), optional :: visc_c               
         real(wp), intent(IN), optional :: thck_c                 
         integer, intent(IN), optional  :: n_lev
+        logical, intent(IN), optional :: effective_visc
+        logical, intent(IN), optional :: visco_elastic_coupling
         
         !Lithosphere effective thickness (and therefore ridigidity)       
         character(len=*), intent(IN), optional :: rigidity_method
+
+        !Geoid
+        logical, intent(IN), optional :: geoid_method
         
         ! Local variables
 
@@ -82,21 +86,26 @@ module isostasy
         
         if (present(visc_method))        isos%par%visc_method      = visc_method
 
-        if (present(rigidity_method))   isos%par%rigidity_method   = rigidity_method
         if (present(visc_c))            isos%par%visc_c            = visc_c   
         if (present(thck_c))            isos%par%thck_c            = thck_c
         if (present(n_lev))             isos%par%n_lev             = n_lev
+        if (present(effective_visc))        isos%par%effective_visc      = effective_visc
+        if (present(visco_elastic_coupling))        isos%par%visco_elastic_coupling      = visco_elastic_coupling
+
+        if (present(rigidity_method))   isos%par%rigidity_method   = rigidity_method
+        if (present(geoid_method))   isos%par%geoid_method   = geoid_method
 
         ! Store grid information
         isos%par%nx = nx
         isos%par%ny = ny
         isos%par%dx = dx
 
+
         select case(isos%par%method)
 
 
-        case(2,4)
-                ! ELRA or ELVA method is being used, which require a constant
+        case(2) ! 
+                ! ELRA is being used, which require a constant
                 ! value of L_w, D_Lith and thus He_lith everywhere 
                 
                 ! Calculate the flexural rigidity based on the 
@@ -146,14 +155,14 @@ module isostasy
 
                 ! Populate 2D D_lith field to have it available
                 isos%now%D_lith = D_lith_const
-
                 isos%now%eta_eff    = isos%par%visc                                     
                 
-        case(5,6,7)
+        case(4)
 
                 ! LV-ELVA method is being used, which allows for a non-constant
+                ! value of L_w, D_Lith and thus He_lith  
+                ! ELVA is a particular case of LV-ELVA with constant values
                 ! value of L_w, D_Lith and thus He_lith everywhere 
-                
                 ! Calculate the flexural rigidity based on the 
                 ! effective elastic thickness of the lithosphere (He_lith),
                 ! Young's modulus and Poisson's ratio. See Coulon et al. (2021) Eq. 5 & 6.
@@ -187,15 +196,29 @@ module isostasy
                 isos%par%nr =  100 !23 ! spare int(radius_fac*isos%par%L_w/isos%par%dx)+1 !mmr spare 100
                 
                 ! Now, initialize isos variables 
-                call isos_allocate(isos%now,isos%par%nx,isos%par%ny,1,nr=isos%par%nr)
-!mmr spare time            
+                if (isos%par%effective_visc) then
+                   call isos_allocate(isos%now,isos%par%nx,isos%par%ny,5,nr=isos%par%nr)
+                   print*,'stopping: do not hard code number of levels'
+                else
+                     call isos_allocate(isos%now,isos%par%nx,isos%par%ny,1,nr=isos%par%nr)
+                endif
+                !mmr spare time
+
+                if (isos%par%visco_elastic_coupling) then
+                   
                 ! Calculate the Green function (Farrell 1972) to determine elastic displacement & visco-elastic coupling
                 ! (for test3, for test1 we ignore the elastic displacement)
-                call calc_ge_filter_2D(isos%now%G0,dx=isos%par%dx,dy=isos%par%dx)
+                call calc_ge_filter_2D(isos%now%G0,dx=isos%par%dx,dy=isos%par%dx) ! recheck, this is for v
+
+             endif
+             
+                if (isos%par%geoid_method) then
 
                 ! Calculate the geoid's Green function (Coulon et al. 2021) to determine geoid displacement (test2)
                 call calc_gn_filter_2D(isos%now%GN,isos%par%m_earth,isos%par%r_earth, dx=isos%par%dx,dy=isos%par%dx)
-!mmr   
+
+                endif
+              
                 ! Populate 2D D_lith field to have it available
                 isos%now%D_lith = D_lith_const
 
@@ -214,7 +237,27 @@ module isostasy
 
                 case("gaussian_minus")
 
-                   call calc_gaussian_viscosity(isos%now%eta_eff,isos%par%visc,-1._wp,dx=isos%par%dx,dy=isos%par%dx) 
+                   call calc_gaussian_viscosity(isos%now%eta_eff,isos%par%visc,-1._wp,dx=isos%par%dx,dy=isos%par%dx)
+
+
+                case("ais")
+
+
+                   filename_laty = "/Users/montoya/work/ice_data/Antarctica/ANT-32KM/ANT-32KM_latyparams.nc"
+                   ! Recheck mmr - Jan interpolates
+ 
+                   call nc_read(filename_laty,"log10_mantle_visc",isos%now%eta,start=[1,1,1],count=[isos%par%nx,isos%par%ny,5]) 
+
+                   isos%now%eta = 10.**(isos%now%eta)
+
+                   
+                call calc_effective_viscosity_3d(isos%now%eta_eff,isos%now%eta,isos%par%nu,isos%par%dx,isos%par%dx)
+
+                print*,'filter or create data in coarser grid'
+!                stop
+                
+!                end select 
+
                    
                 case DEFAULT
 
@@ -249,7 +292,22 @@ module isostasy
                    call calc_gaussian_rigidity(isos%now%He_lith,1.5*isos%par%He_lith, isos%par%He_lith, sign=-1._wp,dx=isos%par%dx,dy=isos%par%dx) 
 
                    isos%now%D_lith = (isos%par%E*1.e9) * (isos%now%He_lith*1.e3)**3 / (12.0*(1.0-isos%par%nu**2))
-  
+
+
+                case("ais")
+
+                   filename_laty = "/Users/montoya/work/ice_data/Antarctica/ANT-32KM/ANT-32KM_latyparams.nc"
+
+                   call nc_read(filename_laty,"lithos_thck",isos%now%He_lith,start=[1,1],count=[isos%par%nx,isos%par%ny])
+
+                   isos%now%He_lith = isos%now%He_lith*1.e-3    *     0.1 !!!!!! convert to km ! recheck for stability!!!
+                   isos%now%D_lith = (isos%par%E*1e9) * (isos%now%He_lith*1e3)**3 / (12.0*(1.0-isos%par%nu**2))
+   
+
+                   filename_laty = "/Users/montoya/work/ice_data/Antarctica/ANT-32KM/ANT-32KM_latyparams.nc"
+
+                   
+   
                 case DEFAULT
 
                    ! do nothing, eta was set above
@@ -257,106 +315,6 @@ module isostasy
                    stop
 
                 end select
-
-                !..
-
-
-             case(8)
-
-
-                ! LV-ELVA method is being used, which allows for a non-constant
-                ! value of L_w, D_Lith and thus He_lith everywhere 
-                
-                ! Calculate the flexural rigidity based on the 
-                ! effective elastic thickness of the lithosphere (He_lith),
-                ! Young's modulus and Poisson's ratio. See Coulon et al. (2021) Eq. 5 & 6.
-                D_lith_const = (isos%par%E*1e9) * (isos%par%He_lith*1e3)**3 / (12.0*(1.0-isos%par%nu**2))
-
-                ! Calculate the flexural length scale
-                ! (Coulon et al, 2021, Eq. in text after Eq. 3)
-                ! Note: will be on the order of 100km
-                isos%par%L_w = (D_lith_const / (isos%par%rho_a*isos%par%g))**0.25 
-
-                ! Modify the relative radius to use for the regional filter
-                ! depending on whether we want to include the forbulge at
-                ! large radii. Large radius makes the code run slower though too. 
-                ! Set filter_scaling to < 1.0 to adjust for values of 
-                ! radius_fac <~ 5.0 
-
-                ! Larger radius, no filter scaling needed
-                ! radius_fac      = 6.0 
-                ! filter_scaling  = 1.0 
-
-                ! Smaller radius, filter scaling to improve accuracy
-                radius_fac      = 10.   !mmr recheck (larger so nr is also larger, higher resolution for elastic Green function) - 4.0 
-                filter_scaling  = 0.91  !mmr recheck
-
-                ! Calculate radius of grid points to use for regional elastic plate filter
-                ! See Farrell(1972) for methodology. It seems that this value
-                ! should be 5-6x radius of relative stiffness to capture the forebuldge
-                ! further out from the depression near the center. 
-                ! Note: previous implementation stopped at 400km, hard coded.
-
-                isos%par%nr =  10 ! recheck 100 !23 ! spare int(radius_fac*isos%par%L_w/isos%par%dx)+1 !mmr spare 100
-                
-                ! Now, initialize isos variables 
-                call isos_allocate(isos%now,isos%par%nx,isos%par%ny,5,nr=isos%par%nr)
-!mmr spare time            
-                ! Calculate the Green function (Farrell 1972) to determine elastic displacement & visco-elastic coupling (test4)
-                ! recheck - comment for stability
-                call calc_ge_filter_2D(isos%now%G0,dx=isos%par%dx,dy=isos%par%dx)
-
-                ! Calculate the geoid's Green function (Coulon et al. 2021) to determine geoid displacement (test2,test4)
-!mmr recheck to spare time                 call calc_gn_filter_2D(isos%now%GN,isos%par%m_earth,isos%par%r_earth, dx=isos%par%dx,dy=isos%par%dx)
-!mmr   
-                ! Populate 2D D_lith field to have it available
-                isos%now%D_lith = D_lith_const
-
-
-                ! Select asthenosphere viscosity method
-                
-                select case(trim(isos%par%visc_method))
-
-                case("uniform")
-
-                   isos%now%eta_eff    = isos%par%visc                                     
-      
-                case DEFAULT
-
-
-                filename_laty = "/Users/montoya/work/ice_data/Antarctica/ANT-32KM/ANT-32KM_latyparams.nc"
-
-                ! recheck mmr - Jan interpolates
-                
-                call nc_read(filename_laty,"log10_mantle_visc",isos%now%eta,start=[1,1,1],count=[isos%par%nx,isos%par%ny,5]) 
-                isos%now%eta = 10.**(isos%now%eta)
-               
-                call calc_effective_viscosity_3d(isos%now%eta_eff,isos%now%eta,isos%par%nu,isos%par%dx,isos%par%dx)
-
-                end select 
-
-
-                select case(trim(isos%par%rigidity_method))
-
-                case("uniform")
-
-                   isos%now%D_lith   = D_lith_const         ! [Pa s]
-                   isos%now%He_lith  = isos%par%He_lith     ! [km]
-
-      
-                case DEFAULT
-
-                filename_laty = "/Users/montoya/work/ice_data/Antarctica/ANT-32KM/ANT-32KM_latyparams.nc"
-                 
-                call nc_read(filename_laty,"lithos_thck",isos%now%He_lith,start=[1,1],count=[isos%par%nx,isos%par%ny])
-!!!                isos%now%He_lith = isos%now%He_lith*1.e-3 ! convert to km
-                ! recheck delete
-                isos%now%He_lith = 0.1   *   isos%now%He_lith*1.e-3 ! convert to km ! recheck for stability!!!
-                isos%now%D_lith = (isos%par%E*1e9) * (isos%now%He_lith*1e3)**3 / (12.0*(1.0-isos%par%nu**2))
-
-                end select 
-
-                !..
 
 
                 ! Set the asthenospheric displacement equal to this reference displacement to start
@@ -435,6 +393,7 @@ module isostasy
         
         write(*,*) "isos_init:: complete." 
 
+        
         return 
 
     end subroutine isos_init
@@ -480,7 +439,7 @@ module isostasy
             case(2)
                 ! 2: ELRA - Elastic lithosphere, relaxing asthenosphere
 
-               ! Elastic lithospher
+               ! Elastic lithosphere
                
                 call calc_litho_regional(isos%now%w0,isos%now%q0,z_bed_ref,H_ice_ref,z_sl_ref,isos%now%G0, &
                      isos%par%rho_ice,isos%par%rho_sw,isos%par%rho_a,isos%par%g)
@@ -497,8 +456,7 @@ module isostasy
 
                 ! Elastic lithosphere
                 !call calc_litho_regional(isos%now%w0,isos%now%q0,z_bed_ref,H_ice_ref,z_sl_ref,isos%now%G0, &
-                
-                                            ! isos%par%rho_ice,isos%par%rho_sw,isos%par%rho_a,isos%par%g)
+                ! isos%par%rho_ice,isos%par%rho_sw,isos%par%rho_a,isos%par%g)
                 
                 write(*,*) "isos_init_state:: Error: method=3 not implemented yet."
                 stop
@@ -507,7 +465,7 @@ module isostasy
                 ! ELVA - viscous half-space asthenosphere overlain by                                       
                 ! elastic plate lithosphere with uniform constants                                          
 
-if (.FALSE.) then
+!if (.FALSE.) then
     ! Use LL solution, since elasticity is contained in viscous asthenosphere solution? 
 
                 ! Local lithosphere
@@ -516,56 +474,27 @@ if (.FALSE.) then
                 call calc_litho_local(isos%now%w0,isos%now%q0,z_bed,H_ice,z_sl, &
                                             isos%par%rho_ice,isos%par%rho_sw,isos%par%rho_a,isos%par%g)
                 
-else
-    ! Use EL solution, since this is the reference bedrock elevation for the reference loads
-
-                ! Elastic lithosphere
-                !call calc_litho_regional(isos%now%w0,isos%now%q0,z_bed_ref,H_ice_ref,z_sl_ref,isos%now%G0, &
-                !                           isos%par%rho_ice,isos%par%rho_sw,isos%par%rho_a,isos%par%g)
-                call calc_litho_regional(isos%now%w0,isos%now%q0,z_bed,H_ice,z_sl,isos%now%G0, &
-                                            isos%par%rho_ice,isos%par%rho_sw,isos%par%rho_a,isos%par%g)
-
-
-end if 
+!else
+!    ! Use EL solution, since this is the reference bedrock elevation for the reference loads
+!
+!                ! Elastic lithosphere
+!                !call calc_litho_regional(isos%now%w0,isos%now%q0,z_bed_ref,H_ice_ref,z_sl_ref,isos%now%G0, &
+!                !                           isos%par%rho_ice,isos%par%rho_sw,isos%par%rho_a,isos%par%g)
+!                call calc_litho_regional(isos%now%w0,isos%now%q0,z_bed,H_ice,z_sl,isos%now%G0, &
+!                                            isos%par%rho_ice,isos%par%rho_sw,isos%par%rho_a,isos%par%g)
+!
+!
+!end if 
 
                 ! Set the asthenospheric displacement equal to this reference displacement to start
                 isos%now%w0 = 0.
                 isos%now%w2 = isos%now%w0 
                 
-             case(5,6,7) 
-                ! LV-ELVA - laterally-variable viscosity
-                ! viscous half-space asthenosphere overlain by                                       
-                ! elastic plate lithosphere with uniform constants                                          
-
-                ! Elastic lithosphere
-                call calc_litho_regional(isos%now%w0,isos%now%q0,z_bed_ref,H_ice_ref,z_sl_ref,isos%now%G0, &
-                     isos%par%rho_ice,isos%par%rho_sw,isos%par%rho_a,isos%par%g)
-
-                ! Set the asthenospheric displacement equal to this reference displacement to start
-                isos%now%w2 = isos%now%w0 
-                !mmr
-
-                !recheck - do this here or in isos_init?
                 
-                call calc_effective_viscosity_test3(isos%now%eta_eff,isos%par%visc_c,isos%par%thck_c,isos%now%He_lith,&
-                     isos%par%n_lev,isos%par%nu,isos%par%dx,isos%par%dx)
-
-             case(8) 
-                ! LV-ELVA - laterally-variable viscosity
-                ! viscous half-space asthenosphere overlain by                                       
-                ! elastic plate lithosphere with uniform constants                                          
-                
-                ! Elastic lithosphere
-                call calc_litho_regional(isos%now%w0,isos%now%q0,z_bed_ref,H_ice_ref,z_sl_ref,isos%now%G0, &
-                     isos%par%rho_ice,isos%par%rho_sw,isos%par%rho_a,isos%par%g)
-
-                ! Set the asthenospheric displacement equal to this reference displacement to start
-                 isos%now%w2 = isos%now%w0 
-
-                 !recheck - do this here or in isos_init?
-                 
-                ! call calc_effective_viscosity_3d(isos%now%eta_eff,isos%now%eta,isos%now%He_lith,&
-                !      isos%par%n_lev,isos%par%nu,isos%par%dx,isos%par%dx)
+                if (isos%par%effective_visc)  then
+                   call calc_effective_viscosity_test3(isos%now%eta_eff,isos%par%visc_c,isos%par%thck_c,isos%now%He_lith,&
+                        isos%par%n_lev,isos%par%nu,isos%par%dx,isos%par%dx)
+                endif
 
                 
          end select 
@@ -660,7 +589,7 @@ end if
                     call calc_asthenosphere_relax(isos%now%dzbdt,isos%now%z_bed,isos%now%z_bed_ref, &
                                                     w_b=isos%now%w1-isos%now%w0,tau=isos%now%tau)
 
-                case(2)
+                 case(2)
                     ! Elastic lithosphere, relaxing asthenosphere (ELRA)
                     
                     ! Elastic lithosphere (EL)
@@ -671,7 +600,10 @@ end if
 
                     ! Relaxing asthenosphere (RA)
                     call calc_asthenosphere_relax(isos%now%dzbdt,isos%now%z_bed,isos%now%z_bed_ref, &
-                                                    w_b=isos%now%w1-isos%now%w0,tau=isos%now%tau)
+                         w_b=isos%now%w1-isos%now%w0,tau=isos%now%tau)
+                    
+! mmr recheck - why not simply this?               call calc_asthenosphere_relax(isos%now%dzbdt,isos%now%z_bed,isos%now%z_bed_ref, &
+!                         w_b=isos%now%w1,tau=isos%now%tau)
 
                 case(3) 
                     ! Elementary GIA model (spatially varying ELRA with geoid - to do!)
@@ -698,92 +630,35 @@ end if
                     ! Note: calculate the local lithospheric load here because 
                     ! the EL component is contained in the ELVA model solution
                     ! q1 will be used (the load), while w1 will not be used further.
-                    call calc_litho_local(isos%now%w1,isos%now%q1,isos%now%z_bed,H_ice,z_sl, &
-                                                    isos%par%rho_ice,isos%par%rho_sw,isos%par%rho_a,isos%par%g)
-                    
-                    ! Viscous (half-space) asthenosphere
-                    call calc_asthenosphere_viscous_square(isos%now%dzbdt,isos%now%w2,isos%now%q1,isos%now%D_lith, &
-                                                            isos%now%eta_eff,isos%par%rho_a,isos%par%g,isos%par%dx,dt_now)
- 
-                 case(5) 
-                    ! LV-ELVA - laterally-variable viscosity
-                    ! viscous half-space asthenosphere overlain by                                                   
-                    ! elastic plate lithosphere with uniform constants                                                      
-
-                    if (time.lt.1.) &  
-                    call calc_litho_regional(isos%now%w1,isos%now%q1,isos%now%z_bed,H_ice,z_sl,isos%now%G0, & 
-                    isos%par%rho_ice,isos%par%rho_sw,isos%par%rho_a,isos%par%g)
+!                    if (time.lt.1.) &
+                    call calc_load_local(isos%now%q1,isos%now%z_bed,H_ice,z_sl, &
+                                                    isos%par%rho_ice,isos%par%rho_sw,isos%par%g)
 
                     ! Ignores elastic displacement in viscoelastic response 
-                    isos%now%w1 = 0.0 
-                    
+                    isos%now%w1 = 0.0
+!mmmrlv     Something better (rectang), something worse (noise)           
+!                    call calc_asthenosphere_viscous_square(isos%now%dzbdt,isos%now%w2,isos%now%q1,isos%now%D_lith, &
+!                         isos%par%visc,isos%par%rho_a,isos%par%g,isos%par%dx,dt_now)
+
                     call calc_lv_asthenosphere_viscous_square(isos%now%dzbdt,isos%now%w2,isos%now%w1,isos%now%q1,isos%par%nu,isos%now%D_lith, &
                          isos%now%eta_eff,isos%par%rho_a,isos%par%g,isos%par%dx,dt_now)
 
-                    ! mmr spare in test1
-                    ! call calc_geoid_displacement(isos%now%wn,-isos%now%q1/isos%par%g - isos%now%w2*isos%par%rho_a - isos%now%w1*2600, isos%now%GN)
+ 
+                 case(5) 
 
-                 case(6) 
                     ! LV-ELVA - laterally-variable viscosity
                     ! viscous half-space asthenosphere overlain by                                                   
-                    ! elastic plate lithosphere with uniform constants                                                      
+                    ! elastic plate lithosphere with uniform constants
+                    ! plus geoid
                     
-                    ! Local lithosphere (LL)
-                    ! (update every time because it is cheap)
-                    ! Note: calculate the local lithospheric load here because 
-                    ! the EL component is contained in the ELVA model solution
-                    ! q1 will be used (the load), while w1 will not be used further.
+                    call calc_load_local(isos%now%q1,isos%now%z_bed,H_ice,z_sl, &
+                                                    isos%par%rho_ice,isos%par%rho_sw,isos%par%g)
 
-                                        
-                    if (time.lt.1.) &  ! recheck - done to spare computing time but should be calculated every time step
-                    call calc_litho_regional(isos%now%w1,isos%now%q1,isos%now%z_bed,H_ice,z_sl,isos%now%G0, & 
-                    isos%par%rho_ice,isos%par%rho_sw,isos%par%rho_a,isos%par%g)
-
+                    
                     call calc_lv_asthenosphere_viscous_square(isos%now%dzbdt,isos%now%w2,isos%now%w1,isos%now%q1,isos%par%nu,isos%now%D_lith, &
                          isos%now%eta_eff,isos%par%rho_a,isos%par%g,isos%par%dx,dt_now)
 
                    call calc_geoid_displacement(isos%now%wn,-isos%now%q1/isos%par%g - isos%now%w2*isos%par%rho_a - isos%now%w1*2600, isos%now%GN)
-
-                case(7) 
-                    ! LV-ELVA - laterally-variable viscosity
-                    ! viscous half-space asthenosphere overlain by                                                   
-                    ! elastic plate lithosphere with uniform constants                                                      
-                    
-                    ! Local lithosphere (LL)
-                    ! (update every time because it is cheap)
-                    ! Note: calculate the local lithospheric load here because 
-                    ! the EL component is contained in the ELVA model solution
-                    ! q1 will be used (the load), while w1 will not be used further.
-
-                                        
-                    if (time.lt.1.) &  ! recheck - done to spare computing time but should be calculated every time step
-                    call calc_litho_regional(isos%now%w1,isos%now%q1,isos%now%z_bed,H_ice,z_sl,isos%now%G0, & 
-                    isos%par%rho_ice,isos%par%rho_sw,isos%par%rho_a,isos%par%g)
-
-                    call calc_lv_asthenosphere_viscous_square(isos%now%dzbdt,isos%now%w2,isos%now%w1,isos%now%q1,isos%par%nu,isos%now%D_lith, &
-                         isos%now%eta_eff,isos%par%rho_a,isos%par%g,isos%par%dx,dt_now)
-
-                    isos%now%wn = 0.
-
-                case(8) 
-                    ! LV-ELVA - laterally-variable viscosity
-                    ! viscous half-space asthenosphere overlain by                                                   
-                    ! elastic plate lithosphere with uniform constants                                                      
-                    
-                    ! Local lithosphere (LL)
-                    ! (update every time because it is cheap - recheck)
-                    ! Note: calculate the local lithospheric load here because 
-                    ! the EL component is contained in the ELVA model solution
-                    ! q1 will be used (the load), while w1 will not be used further.
-                                        
-                    call calc_litho_regional(isos%now%w1,isos%now%q1,isos%now%z_bed,H_ice,z_sl,isos%now%G0, & 
-                    isos%par%rho_ice,isos%par%rho_sw,isos%par%rho_a,isos%par%g)
-
-                    call calc_lv_asthenosphere_viscous_square(isos%now%dzbdt,isos%now%w2,isos%now%w1,isos%now%q1,isos%par%nu,isos%now%D_lith, &
-                         isos%now%eta_eff,isos%par%rho_a,isos%par%g,isos%par%dx,dt_now)
-
-                    !recheck (replace)
-                    isos%now%wn = 0. ! recheck - activate call calc_geoid_displacement(isos%now%wn,-isos%now%q1/isos%par%g - isos%now%w2*isos%par%rho_a - isos%now%w1*2600, isos%now%GN)
 
                  end select
 
@@ -810,8 +685,8 @@ end if
             end if
 
             ! Write a summary to check timestepping
-            !            write(*,*) "isos: ", n, time, dt_now, isos%par%time_step, isos%par%time_lith
-            print*, "isos hola: ", n, time, dt_now, isos%now%z_bed(90,90), isos%now%dzbdt(90,90)
+!            write(*,*) "isos: ", n, time, dt_now, isos%par%time_step, isos%par%time_lith 
+
 
             if ( abs(time-isos%par%time_step) .lt. 1e-5) then 
                 ! Desired time has reached, exit the loop 
@@ -870,13 +745,17 @@ end if
         call nml_read(filename,group,"visc_method",     par%visc_method) 
         call nml_read(filename,group,"visc_c",          par%visc_c)              
         call nml_read(filename,group,"thck_c",          par%thck_c)
-        call nml_read(filename,group,"n_lev",           par%n_lev)                 
-
+        call nml_read(filename,group,"n_lev",           par%n_lev)
+        call nml_read(filename,group,"effective_visc",  par%effective_visc) 
 
         ! Lithosphere effective thickness (and therefore ridigidity)
         call nml_read(filename,group,"rigidity_method",  par%rigidity_method) 
 
+        ! Calculate geoid
+        call nml_read(filename,group,"geoid_method",  par%geoid_method) 
+
         return
+
 
     end subroutine isos_par_load
 
@@ -1418,6 +1297,7 @@ end if
         real(wp), intent(IN)  :: tau
 
         dzbdt = -((z_bed-z_bed_ref) + w_b) / tau
+!mmr    recheck - why not simply this?    dzbdt = -(z_bed - (-w_b)) / tau  
         
         return
 
@@ -1457,8 +1337,40 @@ end if
 
         return 
 
-    end subroutine calc_litho_local
+      end subroutine calc_litho_local
+      
+    elemental subroutine calc_load_local(q,z_bed,H_ice,z_sl,rho_ice,rho_sw,g)
+        ! Calculate the local lithospheric loading from ice or ocean weight 
+        ! in units of [Pa] and local equilibrium displacement w [m].
 
+        implicit none 
+
+        real(wp), intent(OUT) :: q
+        real(wp), intent(IN)  :: z_bed
+        real(wp), intent(IN)  :: H_ice
+        real(wp), intent(IN)  :: z_sl 
+        real(wp), intent(IN)  :: rho_ice
+        real(wp), intent(IN)  :: rho_sw
+        real(wp), intent(IN)  :: g 
+
+        if (rho_ice*H_ice.ge.rho_sw*(z_sl-z_bed)) then   
+           
+            ! Ice or land
+
+            q = rho_ice*g*H_ice
+
+        else
+            ! Ocean
+
+           q = rho_sw*g*(z_sl-z_bed) 
+
+        end if
+
+        return 
+        
+      end subroutine calc_load_local
+
+    
     subroutine calc_litho_regional(w1,q1,z_bed,H_ice,z_sl,G0,rho_ice,rho_sw,rho_a,g)
         ! Calculate the load on the lithosphere as
         ! distributed on an elastic plate. 
@@ -1482,12 +1394,15 @@ end if
         ! Convolve the estimated point load with the regional
         ! filter to obtain the distributed load w1. 
 
-! recheck for stability        call convolve_load_elastic_plate(w1,q1,G0)
-        call convolve_load_elastic_plate_fft(w1,q1,G0) ! hereiam
+        ! recheck for stability
+        call convolve_load_elastic_plate(w1,q1,G0)
+        ! RECHECK THISS!!!!!        call convolve_load_elastic_plate_fft(w1,q1,G0) ! hereoam ToDo
 
         return
 
-    end subroutine calc_litho_regional
+      end subroutine calc_litho_regional
+
+      
 
     subroutine convolve_load_elastic_plate(w1,q1,G0)
         ! Spread the load q1 [Pa] from each point in the grid
@@ -1683,9 +1598,9 @@ end if
       nx = size(wn,1)
       ny = size(wn,2)
       
-!      call convolve_load_elastic_plate(wn,q,GN)
+      call convolve_load_elastic_plate(wn,q,GN)
       
-      call convolve_load_elastic_plate_fft(wn,q,GN)
+!      call convolve_load_elastic_plate_fft(wn,q,GN)
 
         wn  = wn - 0.25*(wn(1,1)+wn(nx,ny)+wn(1,ny)+wn(nx,1))
         
