@@ -27,7 +27,7 @@ program test_isostasy
 
     real(wp) :: r0, h0, eta 
 
-    integer  :: i, j, nx, ny, slice_time
+    integer  :: i, j, nx, ny, nz, slice_time
     real(wp) :: time_now
     real(wp) :: xmin, xmax, dx
     real(wp) :: ymin, ymax, dy
@@ -79,7 +79,6 @@ program test_isostasy
 !    xmin = -3000.e3 
 !    ymin = xmin !* 2
 
-
 ! ELVA (case=4)
 !    experiment = "test1" ! 1000 m radius ice disk of 1000 m heights, solved with ELVA Benchmark: analytical (Bueler et al. 2007); dtt = 1; dtout = 1000. ; time_end = 50.e3 
 !    time_init = 0. 
@@ -88,7 +87,7 @@ program test_isostasy
 !    dt_out    = 1.e3
 !    dx = 50.e3 
 !    xmin = -3000.e3 
-!    ymin = xmin 
+    !    ymin = xmin
 
 !    experiment = "test2"   ! Benchmark: Spada et al. (2011) disc
     
@@ -113,7 +112,7 @@ program test_isostasy
 !    dt_out    = 1.e3 
 !    dx = 16.e3 
 !    xmin = -840.e3 
-!    ymin = -1440.e3
+    !    ymin = -1440.e3
 
 
     write(*,*) "experiment = ", trim(experiment)
@@ -317,7 +316,6 @@ program test_isostasy
             nct = nc_size(filename,"time")
             ncx = nc_size(filename,"xc")
             ncy = nc_size(filename,"yc")
-
 
             if (time_end.lt.nt) then
 

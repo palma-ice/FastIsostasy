@@ -29,7 +29,8 @@ module isostasy
   contains
     
     !mmr subroutine isos_init(isos,filename,group,nx,ny,dx,E,nu,rho_ice,rho_sw,rho_a,g,r_earth,m_earth)
-      subroutine isos_init(isos,filename,group,nx,ny,dx,E,nu,rho_ice,rho_sw,rho_a,g,r_earth,m_earth,visc_method,visc_c,thck_c,n_lev,effective_visc,visco_elastic_coupling,rigidity_method,geoid_method) 
+    subroutine isos_init(isos,filename,group,nx,ny,dx,E,nu,rho_ice,rho_sw,rho_a,g,r_earth,m_earth, &
+         visc_method,visc_c,thck_c,n_lev,effective_visc,visco_elastic_coupling,rigidity_method,geoid_method) 
 
         implicit none 
 
@@ -37,7 +38,7 @@ module isostasy
         character(len=*), intent(IN)  :: filename 
         character(len=*), intent(IN)  :: group 
         integer,  intent(IN)  :: nx
-        integer,  intent(IN)  :: ny 
+        integer,  intent(IN)  :: ny
         real(wp), intent(IN)  :: dx
         real(wp), intent(IN), optional :: E
         real(wp), intent(IN), optional :: nu
@@ -69,6 +70,9 @@ module isostasy
         real(wp) :: D_lith_const
 
         character*256 :: filename_laty
+
+        ! By default one level in asthenosphere
+        isos%par%n_lev = 1.        
 
         
         ! First, load parameters from parameter file `filename`
@@ -141,7 +145,7 @@ module isostasy
                 isos%par%nr =   int(radius_fac*isos%par%L_w/isos%par%dx)+1
                                 
                 ! Now, initialize isos variables 
-                call isos_allocate(isos%now,isos%par%nx,isos%par%ny,1,nr=isos%par%nr)
+                call isos_allocate(isos%now,isos%par%nx,isos%par%ny,isos%par%n_lev,nr=isos%par%nr)
             
                 ! Calculate the Kelvin function filter 
                 call calc_kei_filter_2D(isos%now%kei,L_w=isos%par%L_w,dx=isos%par%dx,dy=isos%par%dx)
@@ -195,22 +199,17 @@ module isostasy
 
                 isos%par%nr =  100 !23 ! spare int(radius_fac*isos%par%L_w/isos%par%dx)+1 !mmr spare 100
                 
-                ! Now, initialize isos variables 
-                if (isos%par%effective_visc) then
-                   call isos_allocate(isos%now,isos%par%nx,isos%par%ny,5,nr=isos%par%nr)
-                   print*,'stopping: do not hard code number of levels'
-                else
-                     call isos_allocate(isos%now,isos%par%nx,isos%par%ny,1,nr=isos%par%nr)
-                endif
-                !mmr spare time
+                ! Now, initialize isos variables
+                              
+                call isos_allocate(isos%now,isos%par%nx,isos%par%ny,isos%par%n_lev,nr=isos%par%nr)
 
                 if (isos%par%visco_elastic_coupling) then
                    
                 ! Calculate the Green function (Farrell 1972) to determine elastic displacement & visco-elastic coupling
                 ! (for test3, for test1 we ignore the elastic displacement)
-                call calc_ge_filter_2D(isos%now%G0,dx=isos%par%dx,dy=isos%par%dx) ! recheck, this is for v
+                   call calc_ge_filter_2D(isos%now%G0,dx=isos%par%dx,dy=isos%par%dx) ! recheck, this is for v
 
-             endif
+                endif
              
                 if (isos%par%geoid_method) then
 
@@ -245,8 +244,8 @@ module isostasy
 
                    filename_laty = "/Users/montoya/work/ice_data/Antarctica/ANT-32KM/ANT-32KM_latyparams.nc"
                    ! Recheck mmr - Jan interpolates
- 
-                   call nc_read(filename_laty,"log10_mantle_visc",isos%now%eta,start=[1,1,1],count=[isos%par%nx,isos%par%ny,5]) 
+
+                   call nc_read(filename_laty,"log10_mantle_visc",isos%now%eta,start=[1,1,1],count=[isos%par%nx,isos%par%ny,isos%par%n_lev]) 
 
                    isos%now%eta = 10.**(isos%now%eta)
 
@@ -356,7 +355,7 @@ module isostasy
                 isos%par%nr = 1 
 
                 ! Now, initialize isos variables 
-                call isos_allocate(isos%now,isos%par%nx,isos%par%ny,1,nr=isos%par%nr)
+                call isos_allocate(isos%now,isos%par%nx,isos%par%ny,isos%par%n_lev,nr=isos%par%nr)
                 
                 ! Set regional filter fields to zero (not used)
                 isos%now%kei = 0.0 
@@ -390,6 +389,7 @@ module isostasy
         ! Set time to very large value in the future 
         isos%par%time_lith = 1e10 
         isos%par%time_step = 1e10
+
         
         write(*,*) "isos_init:: complete." 
 
@@ -411,7 +411,7 @@ module isostasy
         real(wp), intent(IN) :: z_sl_ref(:,:)         ! [m] Reference sea level (associated with reference z_bed)
         real(wp), intent(IN) :: time                  ! [a] Initial time 
 
-        integer :: nx, ny, nz
+        integer :: nx, ny
 
 !        character*256 filename
         
@@ -491,11 +491,16 @@ module isostasy
                 isos%now%w2 = isos%now%w0 
                 
                 
-                if (isos%par%effective_visc)  then
-                   call calc_effective_viscosity_test3(isos%now%eta_eff,isos%par%visc_c,isos%par%thck_c,isos%now%He_lith,&
-                        isos%par%n_lev,isos%par%nu,isos%par%dx,isos%par%dx)
-                endif
+!                if (isos%par%effective_visc)  then
+!                   call calc_effective_viscosity_test3(isos%now%eta_eff,isos%par%visc_c,isos%par%thck_c,isos%now%He_lith,&
+!                        isos%par%n_lev,isos%par%nu,isos%par%dx,isos%par%dx)
+!                   call calc_effective_viscosity_3d(isos%now%eta_eff,isos%now%eta,isos%par%nu,isos%par%dx,isos%par%dx)
+!                   print*,'hola: stop here, unify calculations of effective viscosity'
+!                   stop
+!                endif
 
+                print*,'hola: stop, why are you calculating eta_eff here?'
+                stop
                 
          end select 
 

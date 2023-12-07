@@ -23,7 +23,7 @@
     !Channel viscosity (for test2)
     visc_c     = 1.e21                      ! [Pa s] Channel viscosity 
     thck_c     = 600.                       ! [km]   Channel thickness
-    n_lev      = 3                          !  [-]    Number of layers (including lithosphere)
+    n_lev      = 5                          !  [-]    Number of layers (including lithosphere)
 
     !Calculate effective viscosity (for test2, test4?)
     effective_visc = .true.                ! .true. | .false.
