@@ -26,18 +26,19 @@ module isostasy_defs
         real(wp) :: rho_ice 
         real(wp) :: rho_sw 
         real(wp) :: rho_w
-        real(wp) :: rho_a 
+        real(wp) :: rho_a
+        real(wp) :: rho_l 
         real(wp) :: g 
         real(wp) :: r_earth 
         real(wp) :: m_earth
+        logical            :: static_load       ! [-] Load static / transient
         character(len=56)  :: visc_method       ! [-] Method use to prescribe asthenosphere's viscosity field
         real(wp)           :: visc_c            ! [Pa s]  Viscosity in channel between elastic lithosphere and viscous asthenosphere (for LV-ELVA only)
         real(wp)           :: thck_c            ! [km]    Thickness of channel between elastic lithosphere and viscous asthenosphere (for LV-ELVA only)
         integer            :: n_lev             ! [-]     Number of layers within viscous asthenosphere (for LV-ELVA only)
-        logical            :: effective_visc    ! [-] Calculate effective viscosity 
-        logical            :: visco_elastic_coupling ![-] Include visco-elastic coupling
+        logical            :: viscoelastic_coupling ![-] Include visco-elastic coupling
         character(len=56)  :: rigidity_method   ! [-] Method use to prescribe lithosphere's rigidity field
-        logical            :: geoid_method      ! [-] Calculate geoid
+        logical            :: calc_geoid      ! [-] Calculate geoid
         
         ! Internal parameters 
         integer  :: nx
@@ -63,6 +64,7 @@ module isostasy_defs
         
         real(wp), allocatable :: kei(:,:)           ! Kelvin function filter values 
         real(wp), allocatable :: G0(:,:)            ! Green's function values
+        real(wp), allocatable :: GF(:,:)            ! Green's function values (Farrell 1972)
         real(wp), allocatable :: GN(:,:)            ! Green's function for geoid values
        
         real(wp), allocatable :: z_bed(:,:)         ! Bedrock elevation         [m]

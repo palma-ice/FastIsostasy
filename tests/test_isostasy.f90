@@ -51,17 +51,20 @@ program test_isostasy
     type(isos_class) :: isos1
     type(ice_class) :: ice
 
-    ! === Define runtime information =========
-    ! executable is defined in libisostasy/bin/test_isostasy.x 
-    ! output directory should be predefined: output/test-isostasy
+    ! mmr recheck
+    
+    ! ! === Define runtime information =========
+    ! ! executable is defined in libisostasy/bin/test_isostasy.x 
+    ! ! output directory should be predefined: output/test-isostasy
 
-    outfldr = "output/test-isostasy"
-    path_par = trim(outfldr)//"/"//"test_isostasy.nml" 
-    file_out = trim(outfldr)//"/"//"bedtest.nc"
+    ! outfldr = "output/test-isostasy"
+    ! path_par = trim(outfldr)//"/"//"test_isostasy.nml" 
+    ! file_out = trim(outfldr)//"/"//"bedtest.nc"
 
-    write(*,*) "outfldr: ",  trim(outfldr)
-    write(*,*) "path_par: ", trim(path_par)
-    write(*,*) "file_out: ", trim(file_out)
+    ! write(*,*) "outfldr: ",  trim(outfldr)
+    ! write(*,*) "path_par: ", trim(path_par)
+    ! write(*,*) "file_out: ", trim(file_out)
+
     
     ! === Define experiment to be run ====
 
@@ -80,30 +83,46 @@ program test_isostasy
 !    ymin = xmin !* 2
 
 ! ELVA (case=4)
-!    experiment = "test1" ! 1000 m radius ice disk of 1000 m heights, solved with ELVA Benchmark: analytical (Bueler et al. 2007); dtt = 1; dtout = 1000. ; time_end = 50.e3 
-!    time_init = 0. 
-!    time_end  = 50.e3 
-!    dtt       = 10.0 
-!    dt_out    = 1.e3
-!    dx = 50.e3 
-!    xmin = -3000.e3 
-    !    ymin = xmin
+   ! experiment = "test1" ! 1000 m radius ice disk of 1000 m heights, solved with ELVA Benchmark: analytical (Bueler et al. 2007); dtt = 1; dtout = 1000. ; time_end = 50.e3 
+   ! time_init = 0. 
+   ! time_end  = 50.e3 
+   ! dtt       = 10.0 
+   ! dt_out    = 1.e3
+   ! dx        = 50.e3 
+   ! xmin      = -3000.e3 
+   ! ymin      = xmin
 
-!    experiment = "test2"   ! Benchmark: Spada et al. (2011) disc
+!   experiment = "test2"   ! Benchmark: Spada et al. (2011) disc
+!   time_init = 0. 
+!   time_end  = 50.e3 
+!   dtt       = 10.0 
+!   dt_out    = 1.e3
+!   dx        = 50.e3 
+!   xmin      = -3000.e3 
+!   ymin      = xmin
+
     
-!    experiment = "test3a"  ! Gaussian reduction of lithospheric thickness at centre
-!    experiment = "test3b"  ! Gaussian increase of lithospheric thickness at centre
-!    experiment = "test3c"  ! Gaussian reduction of viscosity at centre
-!    experiment = "test3d"  ! Gaussian increase of viscosity at centre
+   ! experiment = "test3a"  ! Gaussian reduction of lithospheric thickness at centre
+   ! experiment = "test3b"  ! Gaussian increase of lithospheric thickness at centre
+   ! experiment = "test3c"  ! Gaussian reduction of viscosity at centre
+   ! experiment = "test3d"  ! Gaussian increase of viscosity at centre
 
-    experiment = "test4" ! ice6g_d First elva, then lv-elva
-    time_init = -128.e3 
-    time_end  = 0.
-    dtt       = 1.0  
-    dt_out    = 1.e3 
-    dx = 32.e3 
-    xmin = -3040.e3 
-    ymin = xmin
+    time_init = 0. 
+    time_end  = 50.e3 
+    dtt       = 1.0 
+    dt_out    = 1.e3
+    dx        = 50.e3 
+    xmin      = -3000.e3 
+    ymin      = xmin
+
+    ! experiment = "test4" ! ice6g_d 
+    ! time_init = -128.e3 
+    ! time_end  = 0.
+    ! dtt       = 1.0  
+    ! dt_out    = 1.e3 
+    ! dx = 32.e3 
+    ! xmin = -3040.e3 
+    ! ymin = xmin
 
 !    experiment = "test5"  ! Lucía's Greenland ice-sheet load (since 15 ka)
 !    time_init = 0. 
@@ -118,6 +137,19 @@ program test_isostasy
     write(*,*) "experiment = ", trim(experiment)
 
 
+
+    ! === Define runtime information =========
+    ! executable is defined in libisostasy/bin/test_isostasy.x 
+    ! output directory should be predefined: output/test-isostasy
+
+    outfldr = "output/test-isostasy"
+    path_par = trim(outfldr)//"/"//"test_isostasy_"//trim(experiment)//".nml" 
+    file_out = trim(outfldr)//"/"//"bedtest_"//trim(experiment)// ".nc"
+
+    write(*,*) "outfldr: ",  trim(outfldr)
+    write(*,*) "path_par: ", trim(path_par)
+    write(*,*) "file_out: ", trim(file_out)
+    
  ! === Define viscosity field to be used ====
 
     visc_method = "uniform"
@@ -133,11 +165,6 @@ program test_isostasy
     
     ! === Define simulation time ========
 
-!    time_init = 0. ! -128.e3 !0.0
-!    time_end  = 15. !e3 !50.e3 !0. !50.e3 !0. !128.e3 ! 50e3 
-!    dtt       = 1.0 !1. !200. !1. !0.5 ! 200 recheck adaptative time step and convolution (with FFT) !!!   
-!    dt_out    = 1.0 !1000. !10. !1. !1.e3 !200. !1.e3 !mmr  10e3
-
     write(*,*) "time_init = ", time_init 
     write(*,*) "time_end  = ", time_end 
     write(*,*) "dtt       = ", dtt 
@@ -145,16 +172,6 @@ program test_isostasy
 
     ! === Define grid information ============
 
-
-
-    ! test1
-!    dx = 50.e3 !16.e3 ! 50.e3 !32.e3 !50.e3 !20.e3 !50.e3 !25.e3 recheck
-!    xmin = -3000.e3
-!    ymin = xmin !* 2
-    ! test 5
-!    dx = 16.e3 ! 50.e3 !32.e3 !50.e3 !20.e3 !50.e3 !25.e3 recheck
-!    xmin = -840.e3 !-3000.e3 !-3040.e3 !-dx*(191-1)/2 for test4
-!    ymin = -1440.e3 
     
     xmax = abs(xmin)
     if (mod((xmax-xmin),dx).ne.0.) then
@@ -206,11 +223,11 @@ program test_isostasy
 
     z_bed_ref   = 0.0 
     H_ice_ref   = 0.0 
-    z_sl_ref    = 0.0 !-1e3 
+    z_sl_ref    = -1e3 !mmr test3a
     
     z_bed       = 0.0 
     H_ice       = 0.0  
-    z_sl        = 0.0 !-1e3 
+    z_sl        = -1e3 !mmr test3a
     
     z_bed_bench = z_bed 
 
@@ -243,6 +260,7 @@ program test_isostasy
 
             ! Define tau field using the mask
 !mmr           call isos_set_field(isos1%now%tau,[1e2,1e3,3e3],[0.0_wp,1.0_wp,2.0_wp],mask,dx,sigma=150e3)
+
             call isos_set_field(isos1%now%tau,[1.e2_wp,1.e3_wp,3.e3_wp],[0.0_wp,1.0_wp,2.0_wp],mask,dx,sigma=150.e3_wp) 
 
         case("point_load")
@@ -292,8 +310,13 @@ program test_isostasy
                do i = 1, nx
                   if ( (xc(i)-xcntr)**2 + (yc(j)-ycntr)**2  .le. (r0)**2 ) H_ice(i,j) = h0
                 end do
-            end do
+             end do
 
+             allocate(T_ice(nx,ny,1))
+             allocate(time_ice(1))
+            
+            T_ice(:,:,1) = H_ice(:,:)
+            
          case("test4")
 
 ! ICE6G_D
@@ -371,8 +394,6 @@ program test_isostasy
 
             ! Read in H_ice
 
-            !            filename = "/Users/montoya/work/ice_data/Antarctica/ANT-32KM/ANT-32KM_ICE-6G_D.nc"
-            
             filename = "/Users/montoya/work/isostasy/cloned_isostasy/isostasy/input/gris_lgg/LGM_equilibrium_15kyr.nc"
             
             Nct = nc_size(filename,"time")
@@ -430,7 +451,6 @@ program test_isostasy
             stop 
 
          end select
-
          
     ! Inititalize state
     call isos_init_state(isos1,z_bed,H_ice,z_sl,z_bed_ref,H_ice_ref,z_sl_ref,time=time_init) 
@@ -458,6 +478,8 @@ program test_isostasy
        
         ! Update bedrock
         call isos_update(isos1,H_ice,z_sl,time)
+
+    
 
 
         if (mod(time,dt_out) .eq. 0.0) then

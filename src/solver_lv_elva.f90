@@ -10,7 +10,7 @@ module solver_lv_elva
     public :: calc_lv_asthenosphere_viscous_square
     public :: calc_gaussian_viscosity
     public :: calc_gaussian_rigidity
-    public :: calc_effective_viscosity_test3
+    public :: calc_effective_viscosity_3layer_channel
     public :: calc_effective_viscosity_3d
     public :: extend_array 
     public :: reduce_array
@@ -23,7 +23,7 @@ module solver_lv_elva
   contains
 
     
-    subroutine calc_lv_asthenosphere_viscous_square(dzbdt,w,w_el,q,nu,D_lith,eta,rho_a,g,dx,dt)
+    subroutine calc_lv_asthenosphere_viscous_square(dzbdt,w,w_el,q,nu,D_lith,eta,rho_a,rho_l,g,dx,dt)
     
         ! Extend a given domain [nx,ny] so that it is square based on the 
         ! largest dimension of original data. 
@@ -39,7 +39,8 @@ module solver_lv_elva
         real(wp), intent(IN)    :: nu  
         real(wp), intent(IN)    :: D_lith(:,:)
         real(wp), intent(IN)    :: eta(:,:)   
-        real(wp), intent(IN)    :: rho_a 
+        real(wp), intent(IN)    :: rho_a
+        real(wp), intent(IN)    :: rho_l 
         real(wp), intent(IN)    :: g 
         real(wp), intent(IN)    :: dx
         real(wp), intent(IN)    :: dt
@@ -78,7 +79,7 @@ module solver_lv_elva
 
         ! Step 2: solve
 
-        call calc_lv_asthenosphere_viscous(sq_dzbdt,sq_w,sq_w_el,sq_q,nu,sq_D_lith,sq_eta,rho_a,g,dx,dt)
+        call calc_lv_asthenosphere_viscous(sq_dzbdt,sq_w,sq_w_el,sq_q,nu,sq_D_lith,sq_eta,rho_a,rho_l,g,dx,dt)
 
         ! Step 3: get solution on original grid
 
@@ -91,7 +92,7 @@ module solver_lv_elva
     end subroutine calc_lv_asthenosphere_viscous_square
 
 
-   subroutine calc_lv_asthenosphere_viscous(Dzbdt,u,u_el,q,nu,D_lith,eta,rho_a,g,dx,dt)
+   subroutine calc_lv_asthenosphere_viscous(dzbdt,u,u_el,q,nu,D_lith,eta,rho_a,rho_l,g,dx,dt)
         ! Calculate rate of change of vertical bedrock height
         ! from a viscous half-space asthenosphere.
         ! Contains viscous component only.
@@ -100,7 +101,7 @@ module solver_lv_elva
         implicit none
         include 'fftw3.f03'
 
-        real(wp), parameter :: epsilon = 1.e-2, rho_l = 2600.0 ! recheck - input in namelist
+        real(wp), parameter :: epsilon = 1.e-2 !, rho_l = 2600.0 ! recheck - input in namelist
         
         real(wp), intent(OUT)   :: dzbdt(:,:)
         real(wp), intent(INOUT) :: u(:,:)
@@ -109,7 +110,8 @@ module solver_lv_elva
         real(wp), intent(IN)    :: nu
         real(wp), intent(IN)    :: D_lith(:,:) 
         real(wp), intent(IN)    :: eta(:,:)   ! [Pa s] Viscosity, eta=1e21 by default. 
-        real(wp), intent(IN)    :: rho_a 
+        real(wp), intent(IN)    :: rho_a
+        real(wp), intent(IN)    :: rho_l
         real(wp), intent(IN)    :: g 
         real(wp), intent(IN)    :: dx
         real(wp), intent(IN)    :: dt
@@ -318,6 +320,9 @@ module solver_lv_elva
 
      p =  - q - rho_a*g*u -rho_l*g*u_el
 
+!     print*,'hola u_el', u_el(101,101), rho_l
+!     stop
+     
 ! mmr spare
      ! viscous only
 ! test1
@@ -539,14 +544,14 @@ module solver_lv_elva
       end subroutine calc_gaussian_rigidity
 
         
-      subroutine calc_effective_viscosity_test3(eta_eff,visc_c,thck_c,He_lith,n_lev,nu,dx,dy)
+      subroutine calc_effective_viscosity_3layer_channel(eta_eff,visc_c,thck_c,He_lith,n_lev,nu,dx,dy)
 
         implicit none
 
         real(wp), intent(INOUT)  :: eta_eff(:,:)
         real(wp), intent(IN)     :: visc_c
         real(wp), intent(IN)     :: thck_c
-        real(wp), intent(IN)     :: He_lith(:,:) 
+        real(wp), intent(IN)     :: He_lith !(:,:) 
         integer,  intent(IN)     :: n_lev               
         real(wp), intent(IN)     :: nu, dx, dy
         
@@ -673,7 +678,7 @@ module solver_lv_elva
      
         return
         
-      end subroutine calc_effective_viscosity_test3
+      end subroutine calc_effective_viscosity_3layer_channel
 
       subroutine calc_effective_viscosity_3d(eta_eff,eta,nu,dx,dy)
 
