@@ -59,7 +59,7 @@ module solver_lv_elva
 
         nx  = size(dzbdt,1)
         ny  = size(dzbdt,2)
-        nsq = max(nx,ny)
+        nsq = max(nx,ny) 
         
         allocate(sq_dzbdt(nsq,nsq))
         allocate(sq_w(nsq,nsq))
@@ -71,6 +71,7 @@ module solver_lv_elva
         ! Step 1: populate variables on a square grid
         
         sq_dzbdt = 0.0 
+        call extend_array(sq_dzbdt,dzbdt,fill_with="mirror",val=0.0_wp)
         call extend_array(sq_w,w,fill_with="mirror",val=0.0_wp)
         call extend_array(sq_w_el,w_el,fill_with="mirror",val=0.0_wp)
         call extend_array(sq_q,q,fill_with="mirror",val=0.0_wp)
@@ -101,10 +102,10 @@ module solver_lv_elva
         implicit none
         include 'fftw3.f03'
 
-        real(wp), parameter :: epsilon = 1.e-2 !, rho_l = 2600.0 ! recheck - input in namelist
+        real(wp), parameter :: epsilon = 1.e-2 
         
         real(wp), intent(OUT)   :: dzbdt(:,:)
-        real(wp), intent(INOUT) :: u(:,:)
+        real(wp), intent(IN)    :: u(:,:)
         real(wp), intent(IN)    :: u_el(:,:)
         real(wp), intent(IN)    :: q(:,:)
         real(wp), intent(IN)    :: nu
@@ -119,7 +120,7 @@ module solver_lv_elva
         ! Local variables
         integer  :: l, m, i, j
         real(wp) :: sec_per_year, dy ! mmr recheck - dy should be input
-        logical  :: fft_r2r, fft_c2c, finite_difs        
+        logical  :: fft_r2r, fft_c2c, finite_difs,  finite_difs_1, finite_difs_2
         
         real(wp), allocatable :: kappa(:,:)
         real(wp), allocatable :: kappa_p(:,:)
@@ -129,11 +130,12 @@ module solver_lv_elva
 
         real(wp), allocatable :: f(:,:)        
         real(wp), allocatable :: f_hat(:,:)    
-        real(wp), allocatable :: prod(:,:)     
-        real(wp), allocatable :: prod_hat(:,:) 
-        real(wp), allocatable :: mask(:,:)     
 
-        real(wp), allocatable :: u0(:,:)
+        real(wp), allocatable :: prod(:,:)     
+        real(wp), allocatable :: prod_hat(:,:)
+        
+        real(wp), allocatable :: p(:,:)
+
         real(wp), allocatable :: u_hat(:,:)
         
         real(wp), allocatable :: dudt(:,:)     
@@ -145,42 +147,37 @@ module solver_lv_elva
         real(wp), allocatable :: u_yy(:,:)
         real(wp), allocatable :: u_yx(:,:)
 
-
         real(wp), allocatable :: u_xx_hat(:,:)
         real(wp), allocatable :: u_xy_hat(:,:)
         real(wp), allocatable :: u_yy_hat(:,:)
+
+        real(wp), allocatable :: Mx(:,:) 
+        real(wp), allocatable :: My(:,:)
+
+        real(wp), allocatable :: Mxy(:,:)
+        real(wp), allocatable :: Mxy_x(:,:)
+        real(wp), allocatable :: Myx_y(:,:)
+
+        real(wp), allocatable :: Mx_hat(:,:)
+        real(wp), allocatable :: My_hat(:,:)
+        real(wp), allocatable :: Mxy_hat(:,:)
+
+        real(wp), allocatable :: Mx_xx(:,:)
+        real(wp), allocatable :: My_yy(:,:)
         
-        real(wp), allocatable :: mxx(:,:)
-        real(wp), allocatable :: mxy(:,:)
-        real(wp), allocatable :: myy(:,:)
+        real(wp), allocatable :: Mxy_xy(:,:)
+        real(wp), allocatable :: Mxy_yx(:,:)
 
-        real(wp), allocatable :: mxx_hat(:,:)
-        real(wp), allocatable :: mxy_hat(:,:)
-        real(wp), allocatable :: myy_hat(:,:)
-
-
-        real(wp), allocatable :: mm(:,:)
-        real(wp), allocatable :: mm_x(:,:)
-        real(wp), allocatable :: mm_y(:,:)
-        real(wp), allocatable :: mm_xx(:,:)
-        real(wp), allocatable :: mm_xy(:,:)
-        real(wp), allocatable :: mm_yx(:,:)
-        real(wp), allocatable :: mm_yy(:,:)
-
-
-        real(wp), allocatable :: mm_xx_hat(:,:)
-        real(wp), allocatable :: mm_xy_hat(:,:)
-        real(wp), allocatable :: mm_yy_hat(:,:)
-
-
-        real(wp), allocatable :: p(:,:)
+        real(wp), allocatable :: Mx_xx_hat(:,:)
+        real(wp), allocatable :: Mxy_xy_hat(:,:)
+        real(wp), allocatable :: My_yy_hat(:,:)
 
 
         character :: boundaries
 
         sec_per_year = 3600.0*24.0*365.0 ![s]
 
-        dy = dx !mmr - recheck dy should be input
+        dy = dx 
 
         l = size(dzbdt,1)
         m = size(dzbdt,2)
@@ -192,13 +189,13 @@ module solver_lv_elva
         allocate(beta(l,m))
 
         
-        allocate(u0(l,m))
         allocate(u_hat(l,m))
         allocate(f(l,m))
         allocate(f_hat(l,m))
+        
         allocate(prod(l,m))
         allocate(prod_hat(l,m))
-        allocate(mask(l,m))
+        
         allocate(dudt(l,m))
         
         allocate(u_x(l,m))
@@ -215,30 +212,29 @@ module solver_lv_elva
         allocate(u_yy_hat(l,m))
 
 
-        allocate(mm(l,m))
-        allocate(mm_x(l,m))
-        allocate(mm_y(l,m))
+        allocate(Mx(l,m))
+        allocate(My(l,m))
+        
+        allocate(Mxy_x(l,m))
+        allocate(Myx_y(l,m))
+        
 
+        allocate(Mx_xx(l,m))
+        allocate(My_yy(l,m))        
+        allocate(Mxy_xy(l,m))
+       
+        allocate(Mx_xx_hat(l,m))
+        allocate(Mxy_xy_hat(l,m))
+        allocate(My_yy_hat(l,m))
 
-        allocate(mm_xx(l,m))
-        allocate(mm_xy(l,m))
-        allocate(mm_yy(l,m))
-
-
-        allocate(mxx_hat(l,m))
-        allocate(mxy_hat(l,m))
-        allocate(myy_hat(l,m))
-
-        allocate(mm_xx_hat(l,m))
-        allocate(mm_xy_hat(l,m))
-        allocate(mm_yy_hat(l,m))
+        allocate(Mx_hat(l,m))
+        allocate(Mxy_hat(l,m))
+        allocate(My_hat(l,m))
 
         allocate(p(l,m))
         
        
         ! Initialize
-
-        u0 = u
 
         call calc_asthenosphere_viscous_params(kappa,kappa_p,kappa_q,beta,mu,D_lith,rho_a,g,dx)  ! recheck this belongs out of here (once)
 
@@ -246,19 +242,16 @@ module solver_lv_elva
 
         ! Finite differences
 
-        finite_difs = .false.
+        finite_difs = .true.
 
         if (finite_difs) then
-           
-! Calculate first derivatives wrt x and y
-        
-        call calc_horizontal_derivatives_2D(u_x,u_y,u,dx,dy)    ! recheck this calculation
 
-! Calculate second derivatives wrt x and y. Note u_xy should be ideally identical to u_yx
-        
-        call calc_horizontal_derivatives_2D(u_xx,u_xy,u_x,dx,dy)
-        call calc_horizontal_derivatives_2D(u_yx,u_yy,u_y,dx,dy)
-        
+           call calc_derivative_xx(u_xx,u,dx)
+           call calc_derivative_yy(u_yy,u,dy)
+           
+           call calc_derivative_x(u_x,u,dx)
+           call calc_derivative_y(u_xy,u_x,dy)
+
         else
            
            call calc_fft_forward_r2r(u,u_hat)
@@ -273,65 +266,45 @@ module solver_lv_elva
          
         endif
         
-!  Ventsel and Krauthammer (2001): Thin Plates and Shells. Theory, Analysis, and Applications
+        !  Ventsel and Krauthammer (2001): Thin Plates and Shells.
+        ! Theory, Analysis, and Applications. Eq (2.13, 2.23)
 
-        
-        mxx = -D_lith*(u_xx + nu*u_yy) 
-        myy = -D_lith*(u_yy + nu*u_xx) 
-        mxy = -D_lith*(1.0-nu)*u_xy    
+        Mx = -D_lith*(u_xx + nu*u_yy) 
+        My = -D_lith*(u_yy + nu*u_xx) 
+        Mxy = -D_lith*(1.0-nu)*u_xy    
 
          ! Finite differences
 
         if (finite_difs) then
-            
-           mm = mxx
-           call calc_horizontal_derivatives_2D(mm_x,mm_y,mm,dx,dy)
-           call calc_horizontal_derivatives_2D(mm_xx,mm_xy,mm_x,dx,dy)
 
-           mm_xy = 0.
-           mm = mxy
-           call calc_horizontal_derivatives_2D(mm_x,mm_y,mm,dx,dy)
-           call calc_horizontal_derivatives_2D(mm_xx,mm_xy,mm_x,dx,dy)
-           !
-           mm = myy
-           !        mm_yx = 0.
-           call calc_horizontal_derivatives_2D(mm_x,mm_y,mm,dx,dy)
-           call calc_horizontal_derivatives_2D(mm_xy,mm_yy,mm_y,dx,dy)
+           call calc_derivative_xx(Mx_xx,Mx,dx)
+           call calc_derivative_yy(My_yy,My,dy)
 
+           call calc_derivative_x(Mxy_x,Mxy,dx)
+           call calc_derivative_y(Mxy_xy,Mxy_x,dy)
+           
         else 
 
-           ! mmr Calculate second derivatives with FFT
-           
-           call calc_fft_forward_r2r(mxx,mxx_hat)
-           call calc_fft_forward_r2r(myy,myy_hat)
-           call calc_fft_forward_r2r(mxy,mxy_hat)
+           call calc_fft_forward_r2r(Mx,Mx_hat)
+           call calc_fft_forward_r2r(My,My_hat)
+           call calc_fft_forward_r2r(Mxy,Mxy_hat)
 
-           mm_xx_hat = kappa_p**2 * mu**2 * mxx_hat
-           mm_yy_hat = kappa_q**2 * mu**2 * myy_hat
-           mm_xy_hat = kappa * mu**2 * mxy_hat
+           Mx_xx_hat = kappa_p**2 * mu**2 * Mx_hat
+           My_yy_hat = kappa_q**2 * mu**2 * My_hat
+           Mxy_xy_hat = kappa * mu**2 * Mxy_hat
 
-           call calc_fft_backward_r2r(mm_xx_hat,mm_xx)
-           call calc_fft_backward_r2r(mm_yy_hat,mm_yy)
-           call calc_fft_backward_r2r(mm_xy_hat,mm_xy)
+           call calc_fft_backward_r2r(Mx_xx_hat,Mx_xx)
+           call calc_fft_backward_r2r(My_yy_hat,My_yy)
+           call calc_fft_backward_r2r(Mxy_xy_hat,Mxy_xy)
                          
      endif
   
      ! Viscous + elastic
+!     p =  - q - rho_a*g*u -rho_l*g*u_el
 
-     p =  - q - rho_a*g*u -rho_l*g*u_el
-
-!     print*,'hola u_el', u_el(101,101), rho_l
-!     stop
+     f = - q - rho_a*g*u + Mx_xx + 2.0*Mxy_xy + My_yy  - rho_l*g*u_el
      
-! mmr spare
-     ! viscous only
-! test1
-!     f = - q - rho_a*g*u + mm_xx + 2.0*mm_xy + mm_yy
-! viscous + elastic     
-     ! test2, test3
-     f = - q - rho_a*g*u -rho_l*g*u_el + mm_xx + 2.0*mm_xy + mm_yy
-     
-        kappa(1,1) = (kappa(1,2) + kappa(2,1)) / 2.0 ! 1.         
+     kappa(1,1) = (kappa(1,2) + kappa(2,1)) / 2.0 ! 1.         
 
 ! original case (Jans, as in main.pdf)
 !        
@@ -369,13 +342,12 @@ module solver_lv_elva
         deallocate(u_yy)
         deallocate(u_yx)
 
-        deallocate(mm)
-        deallocate(mm_x)
-        deallocate(mm_y)
+!        deallocate(Mx_x)
+!        deallocate(My_y)
 
-        deallocate(mm_xx)
-        deallocate(mm_xy)
-        deallocate(mm_yy)
+        deallocate(Mx_xx)
+        deallocate(Mxy_xy)
+        deallocate(My_yy)
 
         deallocate(p)
 
@@ -384,8 +356,155 @@ module solver_lv_elva
 
     end subroutine calc_lv_asthenosphere_viscous
 
+      
+   subroutine calc_derivative_x(dudx,u,dx)
+      ! Get simple horizontal derivatives wrt x
+  
+        implicit none
 
-   subroutine calc_horizontal_derivatives_2D(dudx,dudy,u,dx,dy)
+        real(wp), intent(OUT) :: dudx(:,:) 
+        real(wp), intent(IN)  :: u(:,:) 
+        real(wp), intent(IN)  :: dx 
+        
+        ! Local variables 
+        integer :: i, j, nx, ny 
+        integer :: im1, ip1
+
+        nx = size(u,1)
+        ny = size(u,2) 
+
+        dudx = 0.0
+            
+        do j = 1, ny 
+           do i = 2, nx-1
+
+              im1 = i-1
+              ip1 = i+1
+
+              dudx(i,j) = (u(ip1,j)-u(im1,j))/(2.0*dx)
+
+           end do
+        end do
+
+        dudx(nx,:) = (u(nx,:)-u(nx-1,:))/dx
+        dudx(1,:) = (u(2,:)-u(1,:))/dx
+
+        return
+
+      end subroutine calc_derivative_x
+
+         subroutine calc_derivative_y(dudy,u,dy)
+      ! Get simple horizontal derivatives
+  
+        implicit none
+
+        real(wp), intent(OUT) :: dudy(:,:) 
+        real(wp), intent(IN)  :: u(:,:) 
+        real(wp), intent(IN)  :: dy
+        
+        ! Local variables 
+        integer :: i, j, nx, ny 
+        integer :: jm1, jp1 
+
+        nx = size(u,1)
+        ny = size(u,2) 
+
+        dudy = 0.0
+
+            
+        do j = 2, ny-1  
+           do i = 1, nx
+
+              jm1 = j-1
+              jp1 = j+1
+
+              dudy(i,j) = (u(i,jp1)-u(i,jm1))/(2.0*dy)
+
+           end do
+        end do
+
+        dudy(:,ny) = (u(:,ny)-u(:,ny-1))/dy
+        dudy(:,1) = (u(:,2)-u(:,1))/dy
+                
+        return
+
+      end subroutine calc_derivative_y
+
+      subroutine calc_derivative_xx(uxx,u,dx)
+      ! Get simple horizontal derivatives
+  
+        implicit none
+
+        real(wp), intent(OUT) :: uxx(:,:) 
+        real(wp), intent(IN)  :: u(:,:) 
+        real(wp), intent(IN)  :: dx 
+        
+        ! Local variables 
+        integer :: i, j, nx, ny 
+        integer :: im1, ip1
+
+        nx = size(u,1)
+        ny = size(u,2) 
+
+        uxx = 0.0
+            
+        do j = 1, ny  
+           do i = 2, nx-1
+
+              im1 = i-1
+              ip1 = i+1
+
+              uxx(i,j) = (u(ip1,j)- 2*u(i,j) + u(im1,j))/(dx*dx)
+
+           end do
+        end do
+
+        uxx(1,:) = (u(3,:)-2*u(2,:)+u(1,:))/(dx*dx)
+        uxx(nx,:) = (u(nx,:) - 2*u(nx-1,:) + u(nx-2,:))/(dx*dx)
+                        
+        return
+
+      end subroutine calc_derivative_xx
+
+      subroutine calc_derivative_yy(uyy,u,dy)
+      ! Get simple horizontal derivatives
+  
+        implicit none
+
+        real(wp), intent(OUT) :: uyy(:,:) 
+        real(wp), intent(IN)  :: u(:,:) 
+        real(wp), intent(IN)  :: dy 
+        
+        ! Local variables 
+        integer :: i, j, nx, ny 
+        integer :: jm1, jp1 
+
+        nx = size(u,1)
+        ny = size(u,2) 
+
+        uyy = 0.0
+            
+        do j = 2, ny-1  
+           do i = 1, nx
+
+
+              jm1 = j-1
+              jp1 = j+1
+
+              uyy(i,j) = (u(i,jp1) - 2*u(i,j) + u(i,jm1))/(dy*dy)
+
+           end do
+        end do
+
+        uyy(:,1) = (u(:,3)-2*u(:,2)+u(:,1))/(dy*dy)
+        uyy(:,ny) = (u(:,ny) - 2*u(:,ny-1) + u(:,ny-2))/(dy*dy)
+                        
+        return
+
+      end subroutine calc_derivative_yy
+
+
+        subroutine calc_horizontal_derivatives_2D(dudx,dudy,u,dx,dy)
       ! Get simple horizontal derivatives
   
         implicit none

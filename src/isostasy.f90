@@ -302,14 +302,13 @@ module isostasy
 
                    isos%now%D_lith = (isos%par%E*1.e9) * (isos%now%He_lith*1.e3)**3 / (12.0*(1.0-isos%par%nu**2))
 
-
                 case("ais")
 
                    filename_laty = "/Users/montoya/work/ice_data/Antarctica/ANT-32KM/ANT-32KM_latyparams.nc"
 
                    call nc_read(filename_laty,"lithos_thck",isos%now%He_lith,start=[1,1],count=[isos%par%nx,isos%par%ny])
 
-                   isos%now%He_lith = isos%now%He_lith*1.e-3  * 0.1  ! recheck for stability!!!
+                   isos%now%He_lith = isos%now%He_lith*1.e-3   * 0.1  ! recheck for stability!!!
                    isos%now%D_lith = (isos%par%E*1e9) * (isos%now%He_lith*1e3)**3 / (12.0*(1.0-isos%par%nu**2))
    
                 case DEFAULT
@@ -528,7 +527,7 @@ module isostasy
 
         type(isos_class), intent(INOUT) :: isos 
         real(wp), intent(IN) :: H_ice(:,:)                  ! [m] Current ice thickness 
-        real(wp), intent(IN) :: z_sl(:,:)                   ! [m] Current sea level 
+        real(wp), intent(IN) :: z_sl(:,:)                   ! [m] Current sea level
         real(wp), intent(IN) :: time                        ! [a] Current time  
         real(wp), intent(IN), optional :: dzbdt_corr(:,:)   ! [m/yr] Basal topography adjustment rate (ie, to relax from low resolution to high resolution) 
 
@@ -621,11 +620,12 @@ module isostasy
                     ! the EL component is contained in the ELVA model solution
                     ! q1 will be used (the load), while w1 will not be used further.
 
-                    ! Ignores elastic displacement in viscoelastic response 
+
+!                    print*,'hola load0, dzbdt, w2', isos%now%q1(60,60), isos%now%dzbdt(60,60), isos%now%w2(60,60)
 
                     if (isos%par%viscoelastic_coupling) then
 
-                       if (isos%par%static_load) then
+                       if (isos%par%static_load) then ! calculate only once 
                           if (time.lt.1.) call calc_litho_regional(isos%now%w1,isos%now%q1,isos%now%z_bed,H_ice,z_sl,isos%now%GF, & ! recheck transient!
                                isos%par%rho_ice,isos%par%rho_sw,isos%par%rho_a,isos%par%rho_l, isos%par%g)
                        else
@@ -637,12 +637,16 @@ module isostasy
 
                        call calc_load_local(isos%now%q1,isos%now%z_bed,H_ice,z_sl, &
                             isos%par%rho_ice,isos%par%rho_sw,isos%par%g)                       
-!mmr recheck                       isos%now%w1 = 0.0
+                     endif
 
-                    endif
+!                    print*,'hola load1, dzbdt, w2', isos%now%q1(60,60), isos%now%dzbdt(60,60), isos%now%w2(60,60)
 
                     call calc_lv_asthenosphere_viscous_square(isos%now%dzbdt,isos%now%w2,isos%now%w1,isos%now%q1,isos%par%nu,isos%now%D_lith, &
                          isos%now%eta_eff,isos%par%rho_a,isos%par%rho_l,isos%par%g,isos%par%dx,dt_now)
+
+
+!                        print*,'hola load2, dzbdt, w2', isos%now%q1(60,60), isos%now%dzbdt(60,60), isos%now%w2(60,60)
+                   
 
                     if (isos%par%calc_geoid) then
                        call calc_geoid_displacement(isos%now%wn,-isos%now%q1/isos%par%g - isos%now%w2*isos%par%rho_a - isos%now%w1*isos%par%rho_l, isos%now%GN)
@@ -660,22 +664,28 @@ module isostasy
             ! Step 2: update bedrock elevation and current model time
             if (dt_now .gt. 0.0) then
 
-                isos%now%z_bed = isos%now%z_bed + isos%now%dzbdt*dt_now
+
+               isos%now%w2 = isos%now%w2 + isos%now%dzbdt*dt_now
+               
+               isos%now%z_bed = isos%now%z_bed + isos%now%dzbdt*dt_now
+
+
+!               print*,'hola dzbdt',  isos%now%dzbdt(60,60)
 
 !                ! Additionally apply bedrock adjustment field
 !               if (present(dzbdt_corr)) then 
 !                    isos%now%z_bed = isos%now%z_bed + dzbdt_corr*dt_now
 !                end if 
 
-!
-                isos%now%w2 = isos%now%z_bed
+
+!                isos%now%w2 = isos%now%z_bed 
                 
                 isos%par%time_step = isos%par%time_step + dt_now
                
             end if
 
             ! Write a summary to check timestepping
-!            write(*,*) "isos: ", n, time, dt_now, isos%par%time_step, isos%par%time_lith 
+!            write(*,*) "isos: ", n, time, dt_now, isos%par%time_step, isos%par%time_lith, isos%now%z_bed(60,60)
 
 
             if ( abs(time-isos%par%time_step) .lt. 1e-5) then 
