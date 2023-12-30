@@ -22,7 +22,7 @@
     m_earth         = 5.972e24              ! [kg] Earth's mass,   Coulon et al (2021) 
 
     ! Viscous asthenosphere-related parameters 
-    visc_method     = uniform               ! test1: uniform | test2: viscous_channel | test3a: uniform | test3b: uniform | test3c: gaussian_minus | test3d: gaussian_plus | test4: ais | test5: uniform
+    visc_method     = uniform               ! test1: uniform | test2: viscous_channel | test3a: uniform | test3b: uniform | test3c: gaussian_minus | test3d: gaussian_plus | test4: laty | test5: uniform
     
     !Channel viscosity (for test2, test4)
     visc_c     = 1.e21                      ! [Pa s] Channel viscosity 
@@ -33,7 +33,7 @@
     viscoelastic_coupling = .true.         ! test1: .false. | test2: .true. | test3*: .false. | test4: .false. | test5: .false.
     
     ! Lithosphere effective thickness (and therefore ridigidity)
-    rigidity_method = gaussian_plus         ! test1: uniform | test2: uniform | test3a: gaussian_minus | test3b: gaussian_plus | test3c: uniform | test3d: uniform | test4: ais | test: uniform
+    rigidity_method = gaussian_plus         ! test1: uniform | test2: uniform | test3a: gaussian_minus | test3b: gaussian_plus | test3c: uniform | test3d: uniform | test4: laty | test: uniform
 
     ! Calculate geoid (for test2, test4?)
     calc_geoid = .false.                    ! test1: .false. | test2: .true. | test3*: .false. | test4: .false. | test5: .false.

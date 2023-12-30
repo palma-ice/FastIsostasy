@@ -302,7 +302,7 @@ module solver_lv_elva
      ! Viscous + elastic
 !     p =  - q - rho_a*g*u -rho_l*g*u_el
 
-     f = - q - rho_a*g*u + Mx_xx + 2.0*Mxy_xy + My_yy  - rho_l*g*u_el
+     f = - q - rho_a*g*u  - rho_l*g*u_el + Mx_xx + 2.0*Mxy_xy + My_yy 
      
      kappa(1,1) = (kappa(1,2) + kappa(2,1)) / 2.0 ! 1.         
 

@@ -256,7 +256,7 @@ module isostasy
                    call calc_effective_viscosity_3layer_channel(isos%now%eta_eff,isos%par%visc_c,isos%par%thck_c,isos%par%He_lith,&
                         isos%par%n_lev,isos%par%nu,isos%par%dx,isos%par%dx)
 
-                case("ais")
+                case("laty")
 
 
                    filename_laty = "/Users/montoya/work/ice_data/Antarctica/ANT-32KM/ANT-32KM_latyparams.nc"
@@ -302,13 +302,13 @@ module isostasy
 
                    isos%now%D_lith = (isos%par%E*1.e9) * (isos%now%He_lith*1.e3)**3 / (12.0*(1.0-isos%par%nu**2))
 
-                case("ais")
+                case("laty")
 
                    filename_laty = "/Users/montoya/work/ice_data/Antarctica/ANT-32KM/ANT-32KM_latyparams.nc"
 
                    call nc_read(filename_laty,"lithos_thck",isos%now%He_lith,start=[1,1],count=[isos%par%nx,isos%par%ny])
 
-                   isos%now%He_lith = isos%now%He_lith*1.e-3   * 0.1  ! recheck for stability!!!
+                   isos%now%He_lith = isos%now%He_lith*1.e-3  ! * 0.1  ! recheck for stability!!!
                    isos%now%D_lith = (isos%par%E*1e9) * (isos%now%He_lith*1e3)**3 / (12.0*(1.0-isos%par%nu**2))
    
                 case DEFAULT
@@ -644,10 +644,8 @@ module isostasy
                     call calc_lv_asthenosphere_viscous_square(isos%now%dzbdt,isos%now%w2,isos%now%w1,isos%now%q1,isos%par%nu,isos%now%D_lith, &
                          isos%now%eta_eff,isos%par%rho_a,isos%par%rho_l,isos%par%g,isos%par%dx,dt_now)
 
-
 !                        print*,'hola load2, dzbdt, w2', isos%now%q1(60,60), isos%now%dzbdt(60,60), isos%now%w2(60,60)
                    
-
                     if (isos%par%calc_geoid) then
                        call calc_geoid_displacement(isos%now%wn,-isos%now%q1/isos%par%g - isos%now%w2*isos%par%rho_a - isos%now%w1*isos%par%rho_l, isos%now%GN)
                     else

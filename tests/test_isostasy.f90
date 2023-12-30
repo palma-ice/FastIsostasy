@@ -71,70 +71,93 @@ program test_isostasy
     !experiment = "constant_thickness"
     !experiment = "variable_tau"
     !experiment = "point_load"
-
-
-!    experiment = "test0" ! 1000 m radius ice disk of 1000 m heights, solved with ELRA (case=2)
-!    time_init = 0. 
-!    time_end  = 2000 
-!    dtt       = 10. 
-!    dt_out    = 100. 
-!    dx = 50.e3 
-!    xmin = -3000.e3 
-!    ymin = xmin !* 2
-
-!ELVA (case=4)
-  ! experiment = "test1" ! 1000 m radius ice disk of 1000 m heights, solved with ELVA Benchmark: analytical (Bueler et al. 2007); dtt = 1; dtout = 1000. ; time_end = 50.e3 
-  ! time_init = 0. 
-  ! time_end  = 50.e3 
-  ! dtt       = 1.0 
-  ! dt_out    = 1.e3
-  ! dx        = 50.e3 
-  ! xmin      = -3000.e3 
-  ! ymin      = xmin
-
-  experiment = "test2"   ! Benchmark: Spada et al. (2011) disc
-  time_init = 0. 
-  time_end  = 50.e3 
-  dtt       = 10.0 
-  dt_out    = 1.e3
-  dx        = 50.e3 
-  xmin      = -3000.e3 
-  ymin      = xmin
-
+    !  experiment = "test0" ! 1000 m radius ice disk of 1000 m heights, solved with ELRA (case=2)
     
-   !experiment = "test3a"  ! Gaussian reduction of lithospheric thickness at centre
-   ! experiment = "test3b"  ! Gaussian increase of lithospheric thickness at centre
-   ! experiment = "test3c"  ! Gaussian reduction of viscosity at centre
-   ! experiment = "test3d"  ! Gaussian increase of viscosity at centre
-
-    ! time_init = 0. 
-    ! time_end  = 50.e3 
-    ! dtt       = 1.0 
-    ! dt_out    = 1.e3
-    ! dx        = 50.e3 
-    ! xmin      = -3000.e3 
-    ! ymin      = xmin
-
-   ! experiment = "test4" ! ais ice6g_d 
-   ! time_init =  -128.e3 
-   ! time_end  = 0.
-   ! dtt       = 1.0  
-   ! dt_out    = 1.e3 
-   ! dx = 32.e3 
-   ! xmin = -3040.e3 
-   ! ymin = xmin
-
-     ! experiment = "test5"  ! Lucía's Greenland ice-sheet load (since 15 ka)
-     ! time_init = 0. 
-     ! time_end  = 15.e3 
-     ! dtt       = 1.0   
-     ! dt_out    = 1.e3 
-     ! dx = 16.e3 
-     ! xmin = -840.e3 
-     ! ymin = -1440.e3
+! tests in Swierczek-Jereczek et al. (2023), GMD.
+    
+!    experiment = "test1" ! 1000 m radius ice disk of 1000 m heights, solved with ELVA Benchmark: analytical (Bueler et al. 2007); dtt = 1; dtout = 1000. ; time_end = 50.e3
+    
+    !  experiment = "test2"   ! Benchmark: Spada et al. (2011) disc
+    !  experiment = "test3a"  ! Gaussian reduction of lithospheric thickness at centre
+    !  experiment = "test3b"  ! Gaussian increase of lithospheric thickness at centre
+    !  experiment = "test3c"  ! Gaussian reduction of viscosity at centre
+    !  experiment = "test3d"  ! Gaussian increase of viscosity at centre
+     experiment = "test4" ! ais ice6g_d 
+    ! experiment = "test5"  ! Lucía's Greenland ice-sheet load (since 15 ka)
+    
      
     write(*,*) "experiment = ", trim(experiment)
 
+       select case(trim(experiment))
+
+       case("test0")
+          
+             time_init = 0. 
+             time_end  = 2000 
+             dtt       = 10. 
+             dt_out    = 100. 
+             dx = 50.e3 
+             xmin = -3000.e3 
+             ymin = xmin !* 2
+          
+       case("test1")
+
+          time_init = 0. 
+          time_end  = 50.e3 
+          dtt       = 1.0 
+          dt_out    = 1.e3
+          dx        = 50.e3 
+          xmin      = -3000.e3 
+          ymin      = xmin
+
+       case("test2")
+
+          time_init = 0. 
+          time_end  = 50.e3 
+          dtt       = 10.0 
+          dt_out    = 1.e3
+          dx        = 50.e3 
+          xmin      = -3000.e3 
+          ymin      = xmin
+
+       case("test3a","test3b","test3c","test3d")
+          
+          time_init = 0. 
+          time_end  = 50.e3 
+          dtt       = 1.0 
+          dt_out    = 1.e3
+          dx        = 50.e3 
+          xmin      = -3000.e3 
+          ymin      = xmin
+
+       case("test4")
+          
+          time_init =  -122.5e3 
+          time_end  =     2.5e3
+          dtt       = 1.0  
+          dt_out    = 1.e3 
+          dx = 32.e3 
+          xmin = -3040.e3 
+          ymin = xmin
+   
+       case("test5")
+          
+          time_init = 0. 
+          time_end  = 15.e3 
+          dtt       = 1.0   
+          dt_out    = 1.e3 
+          dx = 16.e3 
+          xmin = -840.e3 
+          ymin = -1440.e3
+
+       case("DEFAULT")
+
+          write(*,*) 'Default values needed, stopping'
+          stop
+          
+      end select
+
+    
     ! === Define runtime information =========
     ! executable is defined in libisostasy/bin/test_isostasy.x 
     ! output directory should be predefined: output/test-isostasy
@@ -322,7 +345,7 @@ program test_isostasy
 ! https://agupubs.onlinelibrary.wiley.com/doi/full/10.1002/2016JB013844
 
             
-            r0 = 6.378e6*10.*3.1416/180. 
+            R0 = 6.378e6*10.*3.1416/180. 
 
             h0  = 1000.0   ! [m] 
             eta = 1.e+21   ! [Pa s]
@@ -344,7 +367,6 @@ program test_isostasy
                
             endif
 
-
             if (ncx.ne.nx) then
                            
                print*,'ncx not equal to nx'
@@ -363,21 +385,19 @@ program test_isostasy
             allocate(T_ice(ncx,ncy,nct))
             allocate(time_ice(nct))
             
+            call nc_read(filename,"time",time_ice,start=[1],count=[nct])
+            time_ice = -1.e3 * time_ice
+            
             call nc_read(filename,"IceT",T_ice,start=[1,1,1],count=[ncx,ncy,nct])
             T_ice = max(T_ice, 0.)
 
             ! Initialize H_ice
                     
            H_ice = T_ice(:,:,1)
+           H_ice_ref = T_ice(:,:,1)
+           
+           z_bed_ref = 0. ! recheck - Jan  - what do you put here? ie what are the initial conditions? LGM?
 
-           do i = 1, nct
-              time_ice(i) = (i - nct - 1)*1.e3
-!              print*,'hola', T_ice(90,90,i), time_ice(i)
-           enddo
-
-!           recheck - Jan  - what do you put here? ie what are the initial conditions? LGM?
-            z_bed_ref = 0.
-            H_ice_ref = T_ice(:,:,1)
 
         case("test5")
 
@@ -388,8 +408,6 @@ program test_isostasy
             h0  = 1000.0   ! [m] 
             eta = 1.e+21   ! [Pa s]
         
-!            H_ice = 0.
-
             ! Read in H_ice
 
             filename = "/Users/montoya/work/isostasy/cloned_isostasy/isostasy/input/gris_lgg/LGM_equilibrium_15kyr.nc"
@@ -430,11 +448,6 @@ program test_isostasy
 
             H_ice = T_ice(:,:,1)
             z_bed = z_bed_ice(:,:,1)
-
-            ! mmr - recheck this for ELRA
-            ! recheck - Jan - what does he put here? Is my Greenland data the same as the data he uses?
-!            H_ice_ref = 0. !T_ice(:,:,1)
-!            z_bed_ref = 0. !z_bed_ice(:,:,1)
             
             H_ice_ref = T_ice(:,:,1)
             z_bed_ref = z_bed_ice(:,:,1)
@@ -454,7 +467,6 @@ program test_isostasy
     ! Initialize writing output
     call isos_write_init(isos1,xc,yc,file_out,time_init)
 
-    
     ! Determine total number of iterations to run
     nt = ceiling((time_end-time_init)/dtt) + 1 
 
@@ -465,16 +477,17 @@ program test_isostasy
        time = time_init + (n-1)*dtt
 
        call interp_linear(time_ice,T_ice,time,H_ice) 
-       
-! HEREIAM - recheck with Jan
-       H_ice = H_ice ! - H_ice_ref ! mmr at least this has to be activated I think
-       z_bed = z_bed ! - z_bed_ref
 
-       
+       H_ice = H_ice 
+       z_bed = z_bed 
+
         ! Update bedrock
         call isos_update(isos1,H_ice,z_sl,time)
 
-        if (mod(time,dt_out) .eq. 0.0) then
+        
+        if (mod(time-time_init,dt_out) .eq. 0.0) then
+!           if (mod(time,dt_out) .eq. 0.0) then
+           
             ! Write output for this timestep
 
             ! Calculate benchmark solutions when available and write to file
@@ -484,7 +497,8 @@ program test_isostasy
 
                ! Calculate analytical solution to elva_disk
 
-! mmr: comment this to spare time; enable for test1 only
+               ! mmr: comment this to spare time; enable for test1 only
+               
                        call isosbench_elva_disk(z_bed_bench,r0,h0,eta,isos1%par%dx,isos1%now%D_lith(1,1), &
                            isos1%par%rho_ice,isos1%par%rho_a,isos1%par%g,time)
 
@@ -494,7 +508,7 @@ program test_isostasy
                 case DEFAULT
 
                     z_bed_bench = 0.0 
-
+                    
                     ! Write to file 
                     call isos_write_step(isos1,file_out,time,H_ice,z_sl)
 
@@ -528,7 +542,7 @@ contains
         ! Add grid axis variables to netcdf file
         call nc_write_dim(filename,"xc",x=xc*1e-3,units="km")
         call nc_write_dim(filename,"yc",x=yc*1e-3,units="km")
-        call nc_write_dim(filename,"time",x=time_init,dx=1.0_wp,nx=1,units="kiloyear",unlimited=.TRUE.)
+        call nc_write_dim(filename,"time",x=time_init,dx=1.0_wp,nx=1,units="year",unlimited=.TRUE.)
 
         ! Write dimensions for regional filter too
         call nc_write_dim(filename,"xf",x=0,dx=1,nx=size(isos%now%G0,1),units="pt")
