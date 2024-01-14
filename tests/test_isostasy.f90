@@ -51,6 +51,8 @@ program test_isostasy
     type(isos_class) :: isos1
     type(ice_class) :: ice
 
+    logical(wp) :: static_load
+
     ! mmr recheck
     
     ! ! === Define runtime information =========
@@ -75,15 +77,16 @@ program test_isostasy
     
 ! tests in Swierczek-Jereczek et al. (2023), GMD.
     
-!    experiment = "test1" ! 1000 m radius ice disk of 1000 m heights, solved with ELVA Benchmark: analytical (Bueler et al. 2007); dtt = 1; dtout = 1000. ; time_end = 50.e3
-    
-    !  experiment = "test2"   ! Benchmark: Spada et al. (2011) disc
+    !   experiment = "test1" ! 1000 m radius ice disk of 1000 m heights, solved with ELVA Benchmark: analytical (Bueler et al. 2007); dtt = 1; dtout = 1000. ; time_end = 50.e3
+
+      experiment = "test2"   ! Benchmark: Spada et al. (2011) disc
+
     !  experiment = "test3a"  ! Gaussian reduction of lithospheric thickness at centre
     !  experiment = "test3b"  ! Gaussian increase of lithospheric thickness at centre
     !  experiment = "test3c"  ! Gaussian reduction of viscosity at centre
     !  experiment = "test3d"  ! Gaussian increase of viscosity at centre
-     experiment = "test4" ! ais ice6g_d 
-    ! experiment = "test5"  ! Lucía's Greenland ice-sheet load (since 15 ka)
+    !  experiment = "test4"  ! ais ice6g_d 
+    !  experiment = "test5"  ! Lucía's Greenland ice-sheet load (since 15 ka)
     
      
     write(*,*) "experiment = ", trim(experiment)
@@ -99,6 +102,7 @@ program test_isostasy
              dx = 50.e3 
              xmin = -3000.e3 
              ymin = xmin !* 2
+             static_load = .true.
           
        case("test1")
 
@@ -109,6 +113,7 @@ program test_isostasy
           dx        = 50.e3 
           xmin      = -3000.e3 
           ymin      = xmin
+          static_load = .true.
 
        case("test2")
 
@@ -119,6 +124,7 @@ program test_isostasy
           dx        = 50.e3 
           xmin      = -3000.e3 
           ymin      = xmin
+          static_load = .true.
 
        case("test3a","test3b","test3c","test3d")
           
@@ -129,6 +135,7 @@ program test_isostasy
           dx        = 50.e3 
           xmin      = -3000.e3 
           ymin      = xmin
+          static_load = .true.
 
        case("test4")
           
@@ -139,6 +146,7 @@ program test_isostasy
           dx = 32.e3 
           xmin = -3040.e3 
           ymin = xmin
+          static_load = .false.
    
        case("test5")
           
@@ -149,6 +157,7 @@ program test_isostasy
           dx = 16.e3 
           xmin = -840.e3 
           ymin = -1440.e3
+          static_load = .false.
 
        case("DEFAULT")
 
@@ -317,7 +326,7 @@ program test_isostasy
 
          ! Spada et al. (2011)
          
-            r0 = 6.378e6*10.*3.1416/180. 
+            r0 = 6.378e6*10.*3.1416/180. ! * 0.1 ! recheck
 
             h0  = 1000.0   ! [m] 
             eta = 1.e+21   ! [Pa s]
@@ -475,10 +484,13 @@ program test_isostasy
     do n = 1, nt 
 
        time = time_init + (n-1)*dtt
-
-       call interp_linear(time_ice,T_ice,time,H_ice) 
-
-       H_ice = H_ice 
+       
+       if (static_load.neqv..true.)  then
+          call interp_linear(time_ice,T_ice,time,H_ice) 
+          H_ice = H_ice
+       else
+          H_ice =T_ice(:,:,1)
+       endif
        z_bed = z_bed 
 
         ! Update bedrock
@@ -560,9 +572,12 @@ contains
 
         call nc_write(filename,"G0",isos%now%G0,units="",long_name="Regional elastic plate filter", &
              dim1="xf",dim2="yf",start=[1,1])
-        
+
+! recheck convol
+!       call nc_write(filename,"GN",isos%now%GN,units="",long_name="Geoid's elastic plate filter", &
+!            dim1="xf",dim2="yf",start=[1,1])
        call nc_write(filename,"GN",isos%now%GN,units="",long_name="Geoid's elastic plate filter", &
-            dim1="xf",dim2="yf",start=[1,1])
+            dim1="xc",dim2="yc",start=[1,1])
 
         return
 
@@ -607,8 +622,6 @@ contains
         call nc_write(filename,"q_load",isos%now%q1,units="N/m2",long_name="Load", &                                        
              dim1="xc",dim2="yc",dim3="time",start=[1,1,n],ncid=ncid)                                            
 
-!        if (.TRUE.) then ! recheck mmr - done to spare time, delete
-        
         call nc_write(filename,"w_VA",-isos%now%w2,units="m",long_name="Displacement (viscous)", &                                        
              dim1="xc",dim2="yc",dim3="time",start=[1,1,n],ncid=ncid)                                            
         call nc_write(filename,"z_bed_EL",-isos%now%w1,units="m",long_name="Displacement (elastic)", &
@@ -630,7 +643,6 @@ contains
                 dim1="xc",dim2="yc",dim3="time",start=[1,1,n],ncid=ncid)  
         end if 
 
-!     endif
      
         ! Close the netcdf file
         call nc_close(ncid)

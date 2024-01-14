@@ -201,7 +201,7 @@ module isostasy
                 ! further out from the depression near the center. 
                 ! Note: previous implementation stopped at 400km, hard coded.
 
-                isos%par%nr =  100 !23 ! spare int(radius_fac*isos%par%L_w/isos%par%dx)+1 !mmr spare 100
+                isos%par%nr =  100 !100 !23 ! spare int(radius_fac*isos%par%L_w/isos%par%dx)+1 !mmr spare 100
                 
                 ! Now, initialize isos variables
                               
@@ -256,6 +256,8 @@ module isostasy
                    call calc_effective_viscosity_3layer_channel(isos%now%eta_eff,isos%par%visc_c,isos%par%thck_c,isos%par%He_lith,&
                         isos%par%n_lev,isos%par%nu,isos%par%dx,isos%par%dx)
 
+                   isos%now%eta_eff    = isos%now%eta_eff  * (1.5/(1. + isos%par%nu))         ! [Pa s]
+
                 case("laty")
 
 
@@ -267,6 +269,7 @@ module isostasy
                    
                    call calc_effective_viscosity_3d(isos%now%eta_eff,isos%now%eta,isos%par%nu,isos%par%dx,isos%par%dx)
                 
+                   isos%now%eta_eff    = isos%now%eta_eff  * (1.5/(1. + isos%par%nu))         ! [Pa s]
                    
                 case DEFAULT
 
@@ -427,65 +430,6 @@ module isostasy
         nx = size(H_ice,1)
         ny = size(H_ice,2)
 
-! mmr I think we don't need this
-! if (.FALSE.) then
-           
-!         select case(isos%par%method)
-
-!             case(0,1) 
-!                 ! 0: Steady-state lithospheric depression 
-!                 ! 1: LLRA - Local lithosphere, relaxing asthenosphere
-
-!                 ! Local lithosphere (LL)
-!                 call calc_litho_local(isos%now%w0,isos%now%q0,z_bed_ref,H_ice_ref,z_sl_ref, &
-!                                             isos%par%rho_ice,isos%par%rho_sw,isos%par%rho_a,isos%par%g)
-                
-!             case(2)
-!                 ! 2: ELRA - Elastic lithosphere, relaxing asthenosphere
-
-!                ! Elastic lithosphere
-               
-!                 call calc_litho_regional(isos%now%w0,isos%now%q0,z_bed_ref,H_ice_ref,z_sl_ref,isos%now%G0, &
-!                      isos%par%rho_ice,isos%par%rho_sw,isos%par%rho_a,isos%par%rho_l,isos%par%g)
-
-!             case(3)
-!                 ! 3: EGIA - 2D Elastic lithosphere, relaxing asthenosphere - to do!
-
-!                 ! Re-calculate the flexural rigidity based on the spatially variable
-!                 ! effective elastic thickness of the lithosphere (He_lith),
-!                 ! Young's modulus and Poisson's ratio. See Coulon et al. (2021) Eq. 5 & 6.
-!                 ! Note: this 2D field is only needed for the EGIA model (method=3) below.
-               
-!                 isos%now%D_lith = (isos%par%E*1e9) * (isos%now%He_lith*1e3)**3 / (12.0*(1.0-isos%par%nu**2))
-
-
-!                 ! Elastic lithosphere
-                
-!                 !call calc_litho_regional(isos%now%w0,isos%now%q0,z_bed_ref,H_ice_ref,z_sl_ref,isos%now%G0, &
-!                 ! isos%par%rho_ice,isos%par%rho_sw,isos%par%rho_a,isos%par%g)
-                
-!                 write(*,*) "isos_init_state:: Error: method=3 not implemented yet."
-!                 stop
-                            
-!             case(4) 
-!                 ! ELVA - viscous half-space asthenosphere overlain by                                       
-!                 ! elastic plate lithosphere with uniform constants                                          
-
-!                 !call calc_litho_local(isos%now%w0,isos%now%q0,z_bed_ref,H_ice_ref,z_sl_ref, &
-!                 !                            isos%par%rho_ice,isos%par%rho_sw,isos%par%rho_a,isos%par%g)
-! !mmr test3                call calc_litho_local(isos%now%w0,isos%now%q0,z_bed,H_ice,z_sl, &
-! !mmr test3                                            isos%par%rho_ice,isos%par%rho_sw,isos%par%rho_a,isos%par%g)
-                
-! !    ! Use EL solution, since this is the reference bedrock elevation for the reference loads
-! !
-! !                ! Elastic lithosphere
-
-! !               call calc_litho_regional(isos%now%w0,isos%now%q0,z_bed_ref,H_ice_ref,z_sl_ref,isos%now%G0, &
-! !                     isos%par%rho_ice,isos%par%rho_sw,isos%par%rho_a,isos%par%rho_l,isos%par%g)
-                               
-!             end select
-! endif
-
         ! Define initial time of isostasy model 
         ! (set time_lith earlier, so that it is definitely updated on the first timestep)
         isos%par%time_lith = time - isos%par%dt_lith
@@ -620,9 +564,6 @@ module isostasy
                     ! the EL component is contained in the ELVA model solution
                     ! q1 will be used (the load), while w1 will not be used further.
 
-
-!                    print*,'hola load0, dzbdt, w2', isos%now%q1(60,60), isos%now%dzbdt(60,60), isos%now%w2(60,60)
-
                     if (isos%par%viscoelastic_coupling) then
 
                        if (isos%par%static_load) then ! calculate only once 
@@ -639,15 +580,12 @@ module isostasy
                             isos%par%rho_ice,isos%par%rho_sw,isos%par%g)                       
                      endif
 
-!                    print*,'hola load1, dzbdt, w2', isos%now%q1(60,60), isos%now%dzbdt(60,60), isos%now%w2(60,60)
-
                     call calc_lv_asthenosphere_viscous_square(isos%now%dzbdt,isos%now%w2,isos%now%w1,isos%now%q1,isos%par%nu,isos%now%D_lith, &
                          isos%now%eta_eff,isos%par%rho_a,isos%par%rho_l,isos%par%g,isos%par%dx,dt_now)
 
-!                        print*,'hola load2, dzbdt, w2', isos%now%q1(60,60), isos%now%dzbdt(60,60), isos%now%w2(60,60)
-                   
                     if (isos%par%calc_geoid) then
-                       call calc_geoid_displacement(isos%now%wn,-isos%now%q1/isos%par%g - isos%now%w2*isos%par%rho_a - isos%now%w1*isos%par%rho_l, isos%now%GN)
+                       call calc_geoid_displacement(isos%now%wn,-isos%now%q1/isos%par%g - isos%now%w2*isos%par%rho_a - isos%now%w1*isos%par%rho_l, &
+                            isos%now%GN)
                     else
                        isos%now%wn = 0.
                     endif
@@ -792,8 +730,12 @@ module isostasy
         
         allocate(now%kei(nfilt,nfilt))
         allocate(now%G0(nfilt,nfilt))
-        allocate(now%GF(nfilt,nfilt))
-        allocate(now%GN(nfilt,nfilt))
+! recheck convol 
+!        allocate(now%GF(nfilt,nfilt))
+        allocate(now%GF(nx,ny))
+! recheck convol 
+!        allocate(now%GN(nfilt,nfilt)) 
+        allocate(now%GN(nx,ny))
 
         allocate(now%z_bed(nx,ny))
         allocate(now%dzbdt(nx,ny))
@@ -1140,8 +1082,6 @@ module isostasy
             y  = j*dy 
             r  = sqrt(x**2+y**2)  
 
-
-
             ! Get actual index of array
             i1 = i+1+n2 
             j1 = j+1+n2 
@@ -1154,9 +1094,6 @@ module isostasy
          end do
         end do
 
-
-        print*,'hola calling ge filter !!!!'
-        
         return 
       end subroutine calc_GE_filter_2D
 
@@ -1223,7 +1160,7 @@ module isostasy
         ! Get size of filter array and half-width
         n  = size(filt,1) 
         n2 = (n-1)/2 
-       
+        
         ! Safety check
         if (size(filt,1) .ne. size(filt,2)) then 
             write(*,*) "calc_ge_filt:: error: array 'filt' must be square [n,n]."
@@ -1259,11 +1196,11 @@ module isostasy
 
             ! Get correct GE value for this point (given by colatitude, theta)
             
-                        filt(i1,j1) = calc_gn_value(max(dy,r),r_earth,m_earth)* (dx*dy) 
+            filt(i1,j1) = calc_gn_value(max(dy,r),r_earth,m_earth)* (dx*dy)
 
          end do
         end do
-        
+
         return 
 
       end subroutine calc_GN_filter_2D
@@ -1400,8 +1337,8 @@ module isostasy
         ! filter to obtain the distributed load w1. 
 
         ! recheck for stability
-        call convolve_load_elastic_plate(w1,q1,GG)
-        ! RECHECK THISS!!!!!        call convolve_load_elastic_plate_fft(w1,q1,GG) ! hereoam ToDo
+!        call convolve_load_elastic_plate(w1,q1,GG)
+         call convolve_load_elastic_plate_fft(w1,q1,GG) ! recheck convol
 
         return
 
@@ -1477,8 +1414,7 @@ module isostasy
 
       end subroutine convolve_load_elastic_plate
 
-
-          subroutine convolve_load_elastic_plate_fft(w1,q1,GG)
+    subroutine convolve_load_elastic_plate_fft(w1,q1,GG)
         ! Spread the load q1 [Pa] from each point in the grid
         ! via the regional Green's function scaling GG [m N-1]
 
@@ -1490,128 +1426,101 @@ module isostasy
 
         ! Local variables
         !integer :: ip, jp, lpx, lpy
-        
         real(wp), allocatable :: q1_ext(:,:)
-        real(wp), allocatable :: q_ext(:,:)
+        real(wp), allocatable :: GG_ext(:,:)
         real(wp), allocatable :: w_ext(:,:)
+        complex(wp), allocatable :: q1_ext_hat(:,:)
+        complex(wp), allocatable :: GG_ext_hat(:,:)
+        complex(wp), allocatable :: w_ext_hat(:,:)
+        
         real(wp), allocatable :: w_reg(:,:)
-        
-        real(wp), allocatable :: q1_hat(:,:)
-        real(wp), allocatable :: q_ext_hat(:,:)
 
-        real(wp), allocatable :: q1_ext_hat(:,:)
-        
-        real(wp), allocatable :: GG_hat(:,:)
-        real(wp), allocatable :: w_reg_hat(:,:)
-
-        integer :: i, j, nx ,ny, nr
+        integer :: i, j, nx ,ny, nr, i1,i2,j1,j2
 
         nx = size(w1,1)
         ny = size(w1,2)
 
         ! Size of regional neighborhood 
-        nr = (size(GG,1)-1)/2 
+        nr = size(GG,1) !(size(GG,1)-1)/2
+
+        if ((nr.ne.nx).or.(nr.ne.ny)) then
+           print*,'nr, nx, ny =', nr, nx, ny
+           stop
+        endif
+
 
         ! Populate load on extended grid
+        allocate(    q1_ext(1:2*nx-1,1:2*ny-1))
+        allocate(    GG_ext(1:2*nx-1,1:2*ny-1))
+        allocate(GG_ext_hat(1:2*nx-1,1:2*ny-1))
+        allocate(q1_ext_hat(1:2*nx-1,1:2*ny-1))
+        allocate(     w_ext(1:2*nx-1,1:2*ny-1))
+        allocate( w_ext_hat(1:2*nx-1,1:2*ny-1))
 
-        allocate(q1_ext(1-nr:nx+nr,1-nr:ny+nr))
-        allocate(q1_ext_hat(1-nr:nx+nr,1-nr:ny+nr))
-
-        allocate(GG_hat(1-nr:nx+nr,1-nr:ny+nr))
-
+        ! Pad with zeros
+        q1_ext = 0.
+        GG_ext = 0.
+        
         ! First fill in main grid points with current point load
         q1_ext(1:nx,1:ny) = q1 
 
-        ! Populate the extended grid points
-        do i = 1, nx
-            q1_ext(i,1-nr:0)=q1_ext(i,1)
-            q1_ext(i,ny+1:ny+nr)=q1_ext(i,ny)
-        end do
-        do j = 1, ny
-            q1_ext(1-nr:0,j)=q1_ext(1,j)
-            q1_ext(NX+1:NX+nr,j)=q1_ext(nx,j)
-        end do
-        
-        ! Populate the extended grid corner points     
-        q1_ext(1-nr:0,1-nr:0)         = q1_ext(1,1)
-        q1_ext(1-nr:0,ny+1:ny+nr)     = q1_ext(1,ny)
-        q1_ext(nx+1:nx+nr,1-nr:0)     = q1_ext(nx,1)
-        q1_ext(nx+1:nx+nr,ny+1:ny+nr) = q1_ext(nx,ny)
+        ! First fill in main grid points with current point load
+        GG_ext(1:nx,1:ny) = GG
 
-        ! ----- allocation de w_reg  et de croix -----------
-
-        allocate(w_reg(-nr:nr,-nr:nr))
-        allocate(w_reg_hat(-nr:nr,-nr:nr))
-
-        allocate(q_ext(1:2*nr+1,1:2*nr+1))
-       allocate(q_ext_hat(1:2*nr+1,1:2*nr+1))
-
-        allocate(w_ext(1:2*nr+1,1:2*nr+1))
-        
-        q_ext = q1_ext
-
-        
-        w_reg = 0.
-
-        ! ! Fourier transform GG
-
-        call calc_fft_forward_r2r(GG,GG_hat)
+        call calc_fft_forward_r2c(GG_ext,GG_ext_hat)
 
         ! ! Fourier transfor q1_ext
-        
-        call calc_fft_forward_r2r(q_ext,q_ext_hat)
 
-        ! ! Multiply both
+        call calc_fft_forward_r2c(q1_ext,q1_ext_hat)
 
-        w_reg_hat =  GG_hat * q_ext_hat
-              
-        ! ! Invert product
+        ! Multiply both
 
-        call calc_fft_backward_r2r(w_reg_hat,w_ext)
-        
-        
-       do j = 1, ny
-       do i = 1, nx
+        w_ext_hat =  q1_ext_hat * GG_ext_hat
 
-!           ! Apply the neighborhood scaling to the deflection in the neighborhood
-!           w_reg = GG * q1_ext(i-nr:i+nr,j-nr:j+nr)
-!
-!           ! Sum to get total deflection at current point due to all neighbors
-!           w1(i,j) = sum(w_reg)
+        ! Invert product
 
-          w1(i,j) = w_ext(i+nr,j+nr)
+        call calc_fft_backward_c2r(w_ext_hat,w_ext)
 
-       end do
-       end do
+        if ( mod(nx,2).eq.0 ) then
+           i1 = nx/2
+        else
+           i1 = int(nx/2) + 1
+        endif
+        i2 = 2*nx - 1 - int(nx/2)
 
-        return
+        if ( mod(ny,2).eq.0 ) then
+           j1 = ny/2
+        else
+           j1 = int(ny/2) + 1
+        endif
+        j2 = 2*ny - 1 - int(ny/2)
+
+        ! normalisation is needed because of the FFTW definition
+        w1(1:nx,1:ny) = w_ext(i1:i2,j1:j2)*sqrt((2*nx-1)*(2*ny-1)*1.) 
+
+           return
 
       end subroutine convolve_load_elastic_plate_fft
-
 
       subroutine calc_geoid_displacement(wn,q,gn)
 
       implicit none
       
       real(wp), intent(INOUT)  :: wn(:,:)
-      real(wp), intent(IN)  :: GN(:,:)
-      real(wp), intent(IN)  :: q(:,:)
-
+      real(wp), intent(IN)     :: GN(:,:)
+      real(wp), intent(IN)     :: q(:,:)
 
       integer :: nx, ny
 
       nx = size(wn,1)
       ny = size(wn,2)
+! recheck convol     
+!      call convolve_load_elastic_plate(wn,q,GN)
+      call convolve_load_elastic_plate_fft(wn,q,GN)
       
-      call convolve_load_elastic_plate(wn,q,GN)
-      
-!      call convolve_load_elastic_plate_fft(wn,q,GN)
+        wn  = wn - 0.25 * (wn(1,1) + wn(nx,ny) + wn(1,ny) + wn(nx,1))
 
-        wn  = wn - 0.25*(wn(1,1)+wn(nx,ny)+wn(1,ny)+wn(nx,1))
-        
-        return
-        
-       end subroutine calc_geoid_displacement
+      end subroutine calc_geoid_displacement
       
 ! ========================================================
 !

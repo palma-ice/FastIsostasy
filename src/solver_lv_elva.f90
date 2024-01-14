@@ -7,6 +7,7 @@ module solver_lv_elva
     implicit none
 
     private
+    
     public :: calc_lv_asthenosphere_viscous_square
     public :: calc_gaussian_viscosity
     public :: calc_gaussian_rigidity
@@ -16,9 +17,9 @@ module solver_lv_elva
     public :: reduce_array
     public :: calc_asthenosphere_viscous_params
     public :: calc_fft_backward_r2r
-    Public :: calc_fft_forward_r2r
-    public :: calc_fft_backward_c2c
-    public :: calc_fft_forward_c2c
+    public :: calc_fft_forward_r2r
+    public :: calc_fft_backward_c2r
+    public :: calc_fft_forward_r2c
 
   contains
 
@@ -120,7 +121,7 @@ module solver_lv_elva
         ! Local variables
         integer  :: l, m, i, j
         real(wp) :: sec_per_year, dy ! mmr recheck - dy should be input
-        logical  :: fft_r2r, fft_c2c, finite_difs,  finite_difs_1, finite_difs_2
+        logical  :: finite_difs
         
         real(wp), allocatable :: kappa(:,:)
         real(wp), allocatable :: kappa_p(:,:)
@@ -779,7 +780,7 @@ module solver_lv_elva
 
      endif
      
-     eta_eff    = eta_eff  * (1.5/(1. + nu))         ! [Pa s]
+! move this out for symmetry     eta_eff    = eta_eff  * (1.5/(1. + nu))         ! [Pa s]
 
         
         deallocate(xc)
@@ -910,7 +911,7 @@ module solver_lv_elva
 
      endif
      
-     eta_eff    = eta_eff  * (1.5/(1. + nu))         ! [Pa s]
+! move this out for symmetry     eta_eff    = eta_eff  * (1.5/(1. + nu))         ! [Pa s]
 
         
         deallocate(xc)
@@ -1111,7 +1112,7 @@ module solver_lv_elva
 !      specialized DFT (such as FFTW’s r2hc or r2c transforms) could
 !      be just as fast. In FFTW, the DHT is actually computed by
 !      post-processing an r2hc transform, so there is ordinarily no
-!      reason to prefer it from a performance perspective.5 However,
+!      reason to prefer it from a performance perspective.However,
 !      we have heard rumors that the DHT might be the most appropriate
 !      transform in its own right for certain applications, and we
 !      would be very interested to hear from anyone who finds it
@@ -1194,107 +1195,143 @@ module solver_lv_elva
 
         return
     
-    end subroutine calc_fft_backward_r2r
+      end subroutine calc_fft_backward_r2r
 
-    
+
+!!!!!!
+
     ! http://www.fftw.org/fftw3_doc/Real_002ddata-DFTs.html
-    ! FFTW computes an unnormalized transform: computing an r2c
+    ! Fftw computes an unnormalized transform: computing an r2c
     ! followed by a c2r transform (or vice versa) will result in the
     ! original data multiplied by the size of the transform (the
     ! product of the logical dimensions). An r2c transform produces
     ! the same output as a FFTW_FORWARD complex DFT of the same input,
     ! and a c2r transform is correspondingly equivalent to
-    ! FFTW_BACKWARD.
+      ! FFTW_BACKWARD.
+      
+    subroutine calc_fft_forward_r2c(in,out)
+
+        use, intrinsic :: iso_c_binding
+        implicit none 
+        include 'fftw3.f03'  
+
+        real(wp), intent(IN)       :: in(:,:)
+        complex(wp), intent(OUT)   :: out(:,:)
+
+        real(wp), allocatable      :: rec(:,:)
+        real(dp), allocatable      :: in_aux(:,:)
+        complex(dp), allocatable   :: out_aux(:,:) 
+        real(dp), allocatable      :: rec_aux(:,:)
+        real(dp)                   :: dx, cc
+        type(c_ptr)                :: plan
+        integer(kind=4)            :: m,n
+        logical                    :: print_check
+
+
+        m = size(in,1)
+        n = size(in,2)
+
+        print_check = .false.
+
+        allocate(in_aux(m,n))
+        allocate(out_aux(m,n))
+!        allocate(rec(m,n))
+!        allocate(rec_aux(m,n))
+
+        in_aux = in 
+        plan = fftw_plan_dft_r2c_2d(m,n,in_aux,out_aux,1) ! recheck - shouldnt this be -1 (forward)
+        
+        call fftw_execute_dft_r2c(plan, in_aux, out_aux)
+
+        out = out_aux/sqrt(m*n*1.)
+     
+        ! if (print_check) then
+        !     call r4mat_print_some ( m, n, in, n/2-2, m/2-2, n/2+2, m/2+2, '  Part of the original data:' )
+        !     plan =  fftw_plan_r2c_2d(m,n,out_aux,rec_aux,FFTW_DHT,FFTW_DHT,FFTW_ESTIMATE)
+        !     call fftw_execute_r2c(plan, out_aux, rec_aux)
+        !     rec_aux = rec_aux/(m*n)
+        !     rec = real(rec_aux,wp) 
+        !     call fftw_destroy_plan(plan)
+        !     call r4mat_print_some (m, n, rec, n/2-2, m/2-2, n/2+2, m/2+2, '  Part of the recovered data:' )
+        ! end if
+
+        call fftw_destroy_plan(plan)
+        
+        deallocate(in_aux)
+        deallocate(out_aux)
+        !        deallocate(rec)
+        !        deallocate(rec_aux)
+
+        
+      
+        return
+      
+    end subroutine calc_fft_forward_r2c
+
+    subroutine calc_fft_backward_c2r(in,out)
+
+        use, intrinsic :: iso_c_binding
+        implicit none 
+        include 'fftw3.f03'  
+
+        complex(wp), intent(IN)    :: in(:,:)
+        real(wp), intent(OUT)      :: out(:,:)
+
+        real(wp), allocatable      :: rec(:,:)
+        complex(dp), allocatable   :: in_aux(:,:)
+        real(dp), allocatable      :: out_aux(:,:) 
+        real(dp), allocatable      :: rec_aux(:,:)
+        real(dp)                   :: dx, cc
+        type(c_ptr)                :: plan
+        integer(kind=4)            :: m,n
+        logical                    :: print_check
+
+        m = size(in,1)
+        n = size(in,2)
+
+
+        allocate(in_aux(m,n))
+        allocate(out_aux(m,n))
+        allocate(rec(m,n))
+        allocate(rec_aux(m,n))
+
+
+        in_aux = in
+!        plan = fftw_plan_c2r_2d(m,n,in_aux,out_aux,FFTW_DHT,FFTW_DHT,FFTW_ESTIMATE)
+        plan = fftw_plan_dft_c2r_2d(m,n,in_aux,out_aux,1)
+
+
+        call fftw_execute_dft_c2r(plan, in_aux, out_aux)
+!        out = out_aux/(m*n) !/sqrt(m*n))
+        out = out_aux/sqrt(m*n*1.)
+
+        ! if (print_check) then
+        !     call r4mat_print_some ( m, n, in, n/2-2, m/2-2, n/2+2, m/2+2, '  Part of the original data:' )
+        !     plan =  fftw_plan_c2r_2d(m,n,out_aux,rec_aux,FFTW_DHT,FFTW_DHT,FFTW_ESTIMATE)
+        !     call fftw_execute_c2r(plan, out_aux, rec_aux)
+        !     rec_aux = rec_aux/(m*n)
+        !     rec = real(rec_aux,wp) 
+        !     call fftw_destroy_plan(plan)
+        !     call r4mat_print_some ( m, n, rec, n/2-2, m/2-2, n/2+2, m/2+2, '  Part of the recovered data:' )
+        ! end if
+        
+        call fftw_destroy_plan(plan)
+        
+        deallocate(in_aux)
+        deallocate(out_aux)
+        deallocate(rec)
+        deallocate(rec_aux)
+
+        return
     
- 
-    subroutine calc_fft_forward_c2c(in,out)
+      end subroutine calc_fft_backward_c2r
 
-        use, intrinsic :: iso_c_binding
-        implicit none 
-        include 'fftw3.f03'  
 
-        real(wp), intent(IN)       :: in(:,:)
-        real(wp), intent(OUT)      :: out(:,:)
-
-        real(wp), allocatable      :: rec(:,:)
-        complex(dp), allocatable   :: in_aux(:,:)   
-        complex(dp), allocatable   :: out_aux(:,:)     
-        real(dp), allocatable      :: rec_aux(:,:)
-        real(dp)                   :: dx, cc
-        type(c_ptr)                :: plan
-        integer(kind=4)            :: m, n
-
-        m = size(in,1)
-        n = size(in,2)
-
+!!!!!
       
-        allocate(in_aux(m,n))
-        allocate(out_aux(m,n))
-        allocate(rec(m,n))
-        allocate(rec_aux(m,n))
 
-
-        in_aux = in
-        plan = fftw_plan_dft_2d(m,n,in_aux,out_aux,-1,FFTW_ESTIMATE)
-
-        call fftw_execute_dft(plan, in_aux, out_aux)                 
-        call fftw_destroy_plan(plan)
-        out = real(out_aux/sqrt(m*n*1.)) 
-
-
-        deallocate(in_aux)
-        deallocate(out_aux)
-        deallocate(rec)
-        deallocate(rec_aux)
-
-        return
-      
-    end subroutine calc_fft_forward_c2c
-
-    subroutine calc_fft_backward_c2c(in,out)
-
-        use, intrinsic :: iso_c_binding
-        implicit none 
-        include 'fftw3.f03'  
-
-        real(wp), intent(IN)       :: in(:,:)
-        real(wp), intent(OUT)      :: out(:,:)
-
-        real(wp), allocatable      :: rec(:,:)
-        complex(dp), allocatable   :: in_aux(:,:)   
-        complex(dp), allocatable   :: out_aux(:,:)     
-        real(dp), allocatable      :: rec_aux(:,:)
-        real(dp)                   :: dx, cc
-        type(c_ptr)                :: plan
-        integer(kind=4)            :: m, n
-
-        m = size(in,1)
-        n = size(in,2)
-
-
-        allocate(in_aux(m,n))
-        allocate(out_aux(m,n))
-        allocate(rec(m,n))
-        allocate(rec_aux(m,n))
-
-
-        in_aux = in
-        plan = fftw_plan_dft_2d(m,n,in_aux,out_aux,1,FFTW_ESTIMATE)
-
-        call fftw_execute_dft(plan, in_aux, out_aux)                 
-        call fftw_destroy_plan(plan)
-        out = real(out_aux/sqrt(m*n*1.)) 
-
-
-        deallocate(in_aux)
-        deallocate(out_aux)
-        deallocate(rec)
-        deallocate(rec_aux)
-
-        return
-
-    end subroutine calc_fft_backward_c2c
-
+    
+    
 
 
     ! ===== ARRAY SIZING FUNCTIONS ==============================
