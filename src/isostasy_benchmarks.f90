@@ -24,7 +24,7 @@ module isostasy_benchmarks
         real(wp) :: eta    = 0.e+21                  ! [Pa s]
 
         real(wp) :: rho_ice 
-        real(wp) :: rho_a 
+        real(wp) :: rho_uppermantle 
         real(wp) :: g 
 
         real(wp), allocatable :: kappa_mod(:)
@@ -71,7 +71,7 @@ module isostasy_benchmarks
 
 contains
 
-    subroutine isosbench_elva_disk(z_bed,r0,h0,eta,dx,D_lith,rho_ice,rho_a,g,time)
+    subroutine isosbench_elva_disk(z_bed,r0,h0,eta,dx,D_lith,rho_ice,rho_uppermantle,g,time)
         ! This will calculate the analytical solution 'elva_disk' for a specific time
 
         implicit none
@@ -83,7 +83,7 @@ contains
         real(wp), intent(IN)    :: dx 
         real(wp), intent(IN)    :: D_lith
         real(wp), intent(IN)    :: rho_ice
-        real(wp), intent(IN)    :: rho_a
+        real(wp), intent(IN)    :: rho_uppermantle
         real(wp), intent(IN)    :: g
         real(wp), intent(IN)    :: time 
 
@@ -109,7 +109,7 @@ contains
         ana%eta        = eta
         
         ana%rho_ice    = rho_ice
-        ana%rho_a      = rho_a
+        ana%rho_uppermantle      = rho_uppermantle
         ana%g          = g
         
         ! Calculate some arrays that are also needed 
@@ -318,12 +318,12 @@ contains
     
     end subroutine initialize_integration_class
 
-    subroutine initialize_analytical_integrand(me,r0,h0,D_lith,eta,rho_ice,rho_a,g) 
+    subroutine initialize_analytical_integrand(me,r0,h0,D_lith,eta,rho_ice,rho_uppermantle,g) 
 
         implicit none
 
         class(isos_analytical_elva_disk_load_class),intent(out)  :: me
-        real(wp), intent(in)   ::  h0, r0, D_lith, eta, rho_ice, rho_a, g 
+        real(wp), intent(in)   ::  h0, r0, D_lith, eta, rho_ice, rho_uppermantle, g 
 
         me%r0         = r0
         me%h0         = h0
@@ -331,7 +331,7 @@ contains
         me%eta        = eta
         
         me%rho_ice    = rho_ice
-        me%rho_a      = rho_a
+        me%rho_uppermantle      = rho_uppermantle
         me%g          = g
         
         return
@@ -346,7 +346,7 @@ contains
         real(wp), intent(in)  :: x ! (kappa)
         real(wp)              :: f
         real(wp) :: beta, h0, r0, eta, D_lith, t_sec, r_eq_zero
-        real(wp) :: rho_ice, rho_a, g 
+        real(wp) :: rho_ice, rho_uppermantle, g 
 
         r0     = me%r0
         h0     = me%h0
@@ -355,10 +355,10 @@ contains
         t_sec  = me%time*365*24*3600
 
         rho_ice = me%rho_ice 
-        rho_a   = me%rho_a 
+        rho_uppermantle   = me%rho_uppermantle 
         g       = me%g 
 
-        beta = rho_a*g + D_lith*(x**4)
+        beta = rho_uppermantle*g + D_lith*(x**4)
 
         r_eq_zero = 0.
 

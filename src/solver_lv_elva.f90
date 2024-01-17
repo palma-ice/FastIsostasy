@@ -1,9 +1,9 @@
 
 module solver_lv_elva
 
-    use isostasy_defs, only : sp, dp, wp, pi 
-!    use solver_elva !, only : fill_with
-    
+    use isostasy_defs, only : wp, pi 
+    use finite_differences, only: calc_derivative_x, calc_derivative_y, calc_derivative_xx, calc_derivative_yy
+
     implicit none
 
     private
@@ -21,10 +21,9 @@ module solver_lv_elva
     public :: calc_fft_backward_c2r
     public :: calc_fft_forward_r2c
 
-  contains
+    contains
 
-    
-    subroutine calc_lv_asthenosphere_viscous_square(dzbdt,w,w_el,q,nu,D_lith,eta,rho_a,rho_l,g,dx,dt)
+    subroutine calc_lv_asthenosphere_viscous_square(dzbdt,w,w_el,q,nu,D_lith,eta,rho_uppermantle,rho_litho,g,dx,dt)
     
         ! Extend a given domain [nx,ny] so that it is square based on the 
         ! largest dimension of original data. 
@@ -40,8 +39,8 @@ module solver_lv_elva
         real(wp), intent(IN)    :: nu  
         real(wp), intent(IN)    :: D_lith(:,:)
         real(wp), intent(IN)    :: eta(:,:)   
-        real(wp), intent(IN)    :: rho_a
-        real(wp), intent(IN)    :: rho_l 
+        real(wp), intent(IN)    :: rho_uppermantle
+        real(wp), intent(IN)    :: rho_litho 
         real(wp), intent(IN)    :: g 
         real(wp), intent(IN)    :: dx
         real(wp), intent(IN)    :: dt
@@ -70,7 +69,6 @@ module solver_lv_elva
         allocate(sq_eta(nsq,nsq))
 
         ! Step 1: populate variables on a square grid
-        
         sq_dzbdt = 0.0 
         call extend_array(sq_dzbdt,dzbdt,fill_with="mirror",val=0.0_wp)
         call extend_array(sq_w,w,fill_with="mirror",val=0.0_wp)
@@ -80,11 +78,10 @@ module solver_lv_elva
         call extend_array(sq_eta,eta,fill_with="mirror",val=0.0_wp)
 
         ! Step 2: solve
-
-        call calc_lv_asthenosphere_viscous(sq_dzbdt,sq_w,sq_w_el,sq_q,nu,sq_D_lith,sq_eta,rho_a,rho_l,g,dx,dt)
+        call calc_lv_asthenosphere_viscous(sq_dzbdt,sq_w,sq_w_el,sq_q,nu,sq_D_lith,sq_eta, &
+            rho_uppermantle,rho_litho,g,dx,dt)
 
         ! Step 3: get solution on original grid
-
         call reduce_array(dzbdt,sq_dzbdt)
         call reduce_array(w,sq_w)
         call reduce_array(w_el,sq_w_el)
@@ -94,7 +91,7 @@ module solver_lv_elva
     end subroutine calc_lv_asthenosphere_viscous_square
 
 
-   subroutine calc_lv_asthenosphere_viscous(dzbdt,u,u_el,q,nu,D_lith,eta,rho_a,rho_l,g,dx,dt)
+    subroutine calc_lv_asthenosphere_viscous(dzbdt,u,u_el,q,nu,D_lith,eta,rho_uppermantle,rho_litho,g,dx,dt)
         ! Calculate rate of change of vertical bedrock height
         ! from a viscous half-space asthenosphere.
         ! Contains viscous component only.
@@ -112,20 +109,16 @@ module solver_lv_elva
         real(wp), intent(IN)    :: nu
         real(wp), intent(IN)    :: D_lith(:,:) 
         real(wp), intent(IN)    :: eta(:,:)   ! [Pa s] Viscosity, eta=1e21 by default. 
-        real(wp), intent(IN)    :: rho_a
-        real(wp), intent(IN)    :: rho_l
+        real(wp), intent(IN)    :: rho_uppermantle
+        real(wp), intent(IN)    :: rho_litho
         real(wp), intent(IN)    :: g 
         real(wp), intent(IN)    :: dx
         real(wp), intent(IN)    :: dt
         
         ! Local variables
-        integer  :: l, m, i, j
+        integer  :: nx, ny, i, j
         real(wp) :: sec_per_year, dy ! mmr recheck - dy should be input
-        logical  :: finite_difs
         
-        real(wp), allocatable :: kappa(:,:)
-        real(wp), allocatable :: kappa_p(:,:)
-        real(wp), allocatable :: kappa_q(:,:)
         real(wp), allocatable :: beta(:,:)
         real(wp) :: mu 
 
@@ -136,8 +129,6 @@ module solver_lv_elva
         real(wp), allocatable :: prod_hat(:,:)
         
         real(wp), allocatable :: p(:,:)
-
-        real(wp), allocatable :: u_hat(:,:)
         
         real(wp), allocatable :: dudt(:,:)     
         real(wp), allocatable :: u_x(:,:)     
@@ -148,10 +139,6 @@ module solver_lv_elva
         real(wp), allocatable :: u_yy(:,:)
         real(wp), allocatable :: u_yx(:,:)
 
-        real(wp), allocatable :: u_xx_hat(:,:)
-        real(wp), allocatable :: u_xy_hat(:,:)
-        real(wp), allocatable :: u_yy_hat(:,:)
-
         real(wp), allocatable :: Mx(:,:) 
         real(wp), allocatable :: My(:,:)
 
@@ -159,19 +146,11 @@ module solver_lv_elva
         real(wp), allocatable :: Mxy_x(:,:)
         real(wp), allocatable :: Myx_y(:,:)
 
-        real(wp), allocatable :: Mx_hat(:,:)
-        real(wp), allocatable :: My_hat(:,:)
-        real(wp), allocatable :: Mxy_hat(:,:)
-
         real(wp), allocatable :: Mx_xx(:,:)
         real(wp), allocatable :: My_yy(:,:)
         
         real(wp), allocatable :: Mxy_xy(:,:)
         real(wp), allocatable :: Mxy_yx(:,:)
-
-        real(wp), allocatable :: Mx_xx_hat(:,:)
-        real(wp), allocatable :: Mxy_xy_hat(:,:)
-        real(wp), allocatable :: My_yy_hat(:,:)
 
 
         character :: boundaries
@@ -180,155 +159,73 @@ module solver_lv_elva
 
         dy = dx 
 
-        l = size(dzbdt,1)
-        m = size(dzbdt,2)
+        nx = size(dzbdt,1)
+        ny = size(dzbdt,2)
 
+        allocate(kappa(nx,ny))
+        allocate(beta(nx,ny))
 
-        allocate(kappa(l,m))
-        allocate(kappa_p(l,m))
-        allocate(kappa_q(l,m))
-        allocate(beta(l,m))
-
+        allocate(f(nx,ny))
+        allocate(f_hat(nx,ny))
         
-        allocate(u_hat(l,m))
-        allocate(f(l,m))
-        allocate(f_hat(l,m))
+        allocate(prod(nx,ny))
+        allocate(prod_hat(nx,ny))
         
-        allocate(prod(l,m))
-        allocate(prod_hat(l,m))
+        allocate(dudt(nx,ny))
         
-        allocate(dudt(l,m))
+        allocate(u_x(nx,ny))
+        allocate(u_y(nx,ny))
         
-        allocate(u_x(l,m))
-        allocate(u_y(l,m))
-        
-        allocate(u_xx(l,m))
-        allocate(u_xy(l,m))
-        allocate(u_yy(l,m))
-        allocate(u_yx(l,m))
+        allocate(u_xx(nx,ny))
+        allocate(u_xy(nx,ny))
+        allocate(u_yy(nx,ny))
+        allocate(u_yx(nx,ny))
 
-
-        allocate(u_xx_hat(l,m))
-        allocate(u_xy_hat(l,m))
-        allocate(u_yy_hat(l,m))
-
-
-        allocate(Mx(l,m))
-        allocate(My(l,m))
+        allocate(Mx(nx,ny))
+        allocate(My(nx,ny))
         
-        allocate(Mxy_x(l,m))
-        allocate(Myx_y(l,m))
+        allocate(Mxy_x(nx,ny))
+        allocate(Myx_y(nx,ny))
         
 
-        allocate(Mx_xx(l,m))
-        allocate(My_yy(l,m))        
-        allocate(Mxy_xy(l,m))
-       
-        allocate(Mx_xx_hat(l,m))
-        allocate(Mxy_xy_hat(l,m))
-        allocate(My_yy_hat(l,m))
+        allocate(Mx_xx(nx,ny))
+        allocate(My_yy(nx,ny))        
+        allocate(Mxy_xy(nx,ny))
 
-        allocate(Mx_hat(l,m))
-        allocate(Mxy_hat(l,m))
-        allocate(My_hat(l,m))
-
-        allocate(p(l,m))
-        
+        allocate(p(nx,ny))
        
         ! Initialize
-
-        call calc_asthenosphere_viscous_params(kappa,kappa_p,kappa_q,beta,mu,D_lith,rho_a,g,dx)  ! recheck this belongs out of here (once)
-
-!mmr recheck - try with finite differences too
+        call calc_asthenosphere_viscous_params(kappa,beta,mu,D_lith,rho_uppermantle,g,dx)  ! recheck this belongs out of here (once)
 
         ! Finite differences
+        call calc_derivative_xx(u_xx,u,dx)
+        call calc_derivative_yy(u_yy,u,dy)
+        call calc_derivative_x(u_x,u,dx)
+        call calc_derivative_y(u_xy,u_x,dy)
 
-        finite_difs = .true.
-
-        if (finite_difs) then
-
-           call calc_derivative_xx(u_xx,u,dx)
-           call calc_derivative_yy(u_yy,u,dy)
-           
-           call calc_derivative_x(u_x,u,dx)
-           call calc_derivative_y(u_xy,u_x,dy)
-
-        else
-           
-           call calc_fft_forward_r2r(u,u_hat)
-
-           u_xx_hat = kappa_p**2 * mu**2 * u_hat
-           u_yy_hat = kappa_q**2 * mu**2 * u_hat
-           u_xy_hat = kappa * mu**2 * u_hat
-
-           call calc_fft_backward_r2r(u_xx_hat,u_xx)
-           call calc_fft_backward_r2r(u_yy_hat,u_yy)
-           call calc_fft_backward_r2r(u_xy_hat,u_xy)
-         
-        endif
-        
-        !  Ventsel and Krauthammer (2001): Thin Plates and Shells.
+        ! Ventsel and Krauthammer (2001): Thin Plates and Shells.
         ! Theory, Analysis, and Applications. Eq (2.13, 2.23)
+        Mx = -D_lith*(u_xx + nu*u_yy)
+        My = -D_lith*(u_yy + nu*u_xx)
+        Mxy = -D_lith*(1.0-nu)*u_xy
 
-        Mx = -D_lith*(u_xx + nu*u_yy) 
-        My = -D_lith*(u_yy + nu*u_xx) 
-        Mxy = -D_lith*(1.0-nu)*u_xy    
+        ! Finite differences
+        call calc_derivative_xx(Mx_xx,Mx,dx)
+        call calc_derivative_yy(My_yy,My,dy)
+        call calc_derivative_x(Mxy_x,Mxy,dx)
+        call calc_derivative_y(Mxy_xy,Mxy_x,dy)
 
-         ! Finite differences
-
-        if (finite_difs) then
-
-           call calc_derivative_xx(Mx_xx,Mx,dx)
-           call calc_derivative_yy(My_yy,My,dy)
-
-           call calc_derivative_x(Mxy_x,Mxy,dx)
-           call calc_derivative_y(Mxy_xy,Mxy_x,dy)
-           
-        else 
-
-           call calc_fft_forward_r2r(Mx,Mx_hat)
-           call calc_fft_forward_r2r(My,My_hat)
-           call calc_fft_forward_r2r(Mxy,Mxy_hat)
-
-           Mx_xx_hat = kappa_p**2 * mu**2 * Mx_hat
-           My_yy_hat = kappa_q**2 * mu**2 * My_hat
-           Mxy_xy_hat = kappa * mu**2 * Mxy_hat
-
-           call calc_fft_backward_r2r(Mx_xx_hat,Mx_xx)
-           call calc_fft_backward_r2r(My_yy_hat,My_yy)
-           call calc_fft_backward_r2r(Mxy_xy_hat,Mxy_xy)
-                         
-     endif
-  
-     ! Viscous + elastic
-!     p =  - q - rho_a*g*u -rho_l*g*u_el
-
-     f = - q - rho_a*g*u  - rho_l*g*u_el + Mx_xx + 2.0*Mxy_xy + My_yy 
-     
-     kappa(1,1) = (kappa(1,2) + kappa(2,1)) / 2.0 ! 1.         
-
-! original case (Jans, as in main.pdf)
-!        
-!        call calc_fft_forward_r2r(f,f_hat)
-!        prod_hat = f_hat/kappa/mu
-!        call calc_fft_backward_r2r(prod_hat,prod)
-!        dudt = prod/(2.0*eta)  ! [m/s]
-
-        ! new case!
+        f = - q - rho_uppermantle*g*u - rho_litho*g*u_el + Mx_xx + 2.0*Mxy_xy + My_yy 
         call calc_fft_forward_r2r(f/(2.*eta),f_hat)
         prod_hat = f_hat/kappa/mu
         call calc_fft_backward_r2r(prod_hat,prod)
         dudt = prod  ! [m/s]
 
-        dudt  = dudt - 0.25*(dudt(1,1)+dudt(l,m)+dudt(1,m)+dudt(l,1)) 
-        
-! Rate of viscous asthenosphere uplift per unit time (seconds)
-        
+        dudt  = dudt - 0.25*(dudt(1,1)+dudt(nx,ny)+dudt(1,m)+dudt(nx,1)) 
+
+        ! Rate of viscous asthenosphere uplift per unit time (seconds)
         dzbdt = dudt * sec_per_year  !  [m/s] x [s/a] = [m/a] 
 
-
-
-        
         deallocate(f)
         deallocate(f_hat)
         deallocate(prod)
@@ -343,217 +240,17 @@ module solver_lv_elva
         deallocate(u_yy)
         deallocate(u_yx)
 
-!        deallocate(Mx_x)
-!        deallocate(My_y)
-
         deallocate(Mx_xx)
         deallocate(Mxy_xy)
         deallocate(My_yy)
 
         deallocate(p)
 
-        
         return
 
     end subroutine calc_lv_asthenosphere_viscous
 
-      
-   subroutine calc_derivative_x(dudx,u,dx)
-      ! Get simple horizontal derivatives wrt x
-  
-        implicit none
-
-        real(wp), intent(OUT) :: dudx(:,:) 
-        real(wp), intent(IN)  :: u(:,:) 
-        real(wp), intent(IN)  :: dx 
-        
-        ! Local variables 
-        integer :: i, j, nx, ny 
-        integer :: im1, ip1
-
-        nx = size(u,1)
-        ny = size(u,2) 
-
-        dudx = 0.0
-            
-        do j = 1, ny 
-           do i = 2, nx-1
-
-              im1 = i-1
-              ip1 = i+1
-
-              dudx(i,j) = (u(ip1,j)-u(im1,j))/(2.0*dx)
-
-           end do
-        end do
-
-        dudx(nx,:) = (u(nx,:)-u(nx-1,:))/dx
-        dudx(1,:) = (u(2,:)-u(1,:))/dx
-
-        return
-
-      end subroutine calc_derivative_x
-
-         subroutine calc_derivative_y(dudy,u,dy)
-      ! Get simple horizontal derivatives
-  
-        implicit none
-
-        real(wp), intent(OUT) :: dudy(:,:) 
-        real(wp), intent(IN)  :: u(:,:) 
-        real(wp), intent(IN)  :: dy
-        
-        ! Local variables 
-        integer :: i, j, nx, ny 
-        integer :: jm1, jp1 
-
-        nx = size(u,1)
-        ny = size(u,2) 
-
-        dudy = 0.0
-
-            
-        do j = 2, ny-1  
-           do i = 1, nx
-
-              jm1 = j-1
-              jp1 = j+1
-
-              dudy(i,j) = (u(i,jp1)-u(i,jm1))/(2.0*dy)
-
-           end do
-        end do
-
-        dudy(:,ny) = (u(:,ny)-u(:,ny-1))/dy
-        dudy(:,1) = (u(:,2)-u(:,1))/dy
-                
-        return
-
-      end subroutine calc_derivative_y
-
-      subroutine calc_derivative_xx(uxx,u,dx)
-      ! Get simple horizontal derivatives
-  
-        implicit none
-
-        real(wp), intent(OUT) :: uxx(:,:) 
-        real(wp), intent(IN)  :: u(:,:) 
-        real(wp), intent(IN)  :: dx 
-        
-        ! Local variables 
-        integer :: i, j, nx, ny 
-        integer :: im1, ip1
-
-        nx = size(u,1)
-        ny = size(u,2) 
-
-        uxx = 0.0
-            
-        do j = 1, ny  
-           do i = 2, nx-1
-
-              im1 = i-1
-              ip1 = i+1
-
-              uxx(i,j) = (u(ip1,j)- 2*u(i,j) + u(im1,j))/(dx*dx)
-
-           end do
-        end do
-
-        uxx(1,:) = (u(3,:)-2*u(2,:)+u(1,:))/(dx*dx)
-        uxx(nx,:) = (u(nx,:) - 2*u(nx-1,:) + u(nx-2,:))/(dx*dx)
-                        
-        return
-
-      end subroutine calc_derivative_xx
-
-      subroutine calc_derivative_yy(uyy,u,dy)
-      ! Get simple horizontal derivatives
-  
-        implicit none
-
-        real(wp), intent(OUT) :: uyy(:,:) 
-        real(wp), intent(IN)  :: u(:,:) 
-        real(wp), intent(IN)  :: dy 
-        
-        ! Local variables 
-        integer :: i, j, nx, ny 
-        integer :: jm1, jp1 
-
-        nx = size(u,1)
-        ny = size(u,2) 
-
-        uyy = 0.0
-            
-        do j = 2, ny-1  
-           do i = 1, nx
-
-
-              jm1 = j-1
-              jp1 = j+1
-
-              uyy(i,j) = (u(i,jp1) - 2*u(i,j) + u(i,jm1))/(dy*dy)
-
-           end do
-        end do
-
-        uyy(:,1) = (u(:,3)-2*u(:,2)+u(:,1))/(dy*dy)
-        uyy(:,ny) = (u(:,ny) - 2*u(:,ny-1) + u(:,ny-2))/(dy*dy)
-                        
-        return
-
-      end subroutine calc_derivative_yy
-
-
-        subroutine calc_horizontal_derivatives_2D(dudx,dudy,u,dx,dy)
-      ! Get simple horizontal derivatives
-  
-        implicit none
-
-        real(wp), intent(OUT) :: dudx(:,:) 
-        real(wp), intent(OUT) :: dudy(:,:) 
-        real(wp), intent(IN)  :: u(:,:) 
-        real(wp), intent(IN)  :: dx 
-        real(wp), intent(IN)  :: dy
-        
-        ! Local variables 
-        integer :: i, j, nx, ny 
-        integer :: im1, ip1, jm1, jp1 
-
-        nx = size(dudx,1)
-        ny = size(dudx,2) 
-
-        dudx = 0.0
-        dudy = 0.0
-
-            
-        do j = 2, ny-1  
-           do i = 2, nx-1
-
-              im1 = i-1
-              ip1 = i+1
-              jm1 = j-1
-              jp1 = j+1
-
-              dudx(i,j) = (u(ip1,j)-u(im1,j))/(2.0*dx)
-              dudy(i,j) = (u(i,jp1)-u(i,jm1))/(2.0*dy)
-
-
-           end do
-        end do
-
-        dudx(nx,:) = (u(nx,:)-u(nx-1,:))/dx
-        dudx(1,:) = (u(2,:)-u(1,:))/dx
-
-        dudy(:,ny) = (u(:,ny)-u(:,ny-1))/dy
-        dudy(:,1) = (u(:,2)-u(:,1))/dy
-                
-        return
-
-      end subroutine calc_horizontal_derivatives_2D
-
-
-      subroutine calc_gaussian_viscosity(eta,eta_0,sign,dx,dy)
+    subroutine calc_gaussian_viscosity(eta,eta_0,sign,dx,dy)
 
         real(wp), intent(OUT) :: eta(:,:)
         real(wp), intent(IN) :: eta_0, sign, dx, dy
@@ -573,7 +270,6 @@ module solver_lv_elva
         allocate(xc(nx))
         allocate(yc(ny))
 
-        
         do i = 1, nx
            xc(i) = dx*(i-1)
         end do
@@ -594,7 +290,6 @@ module solver_lv_elva
         Lx = (xmax - xmin)/2.
         Ly = (ymax - ymin)/2.
 
-
         eta_sigma_m1 = reshape ([ (4.0/Lx)**2,  0.0_wp, 0.0_wp,  (4.0/Ly)**2], shape = shape(eta_sigma_m1))
 
         do i = 1, nx
@@ -608,9 +303,9 @@ module solver_lv_elva
         
         return
         
-      end subroutine calc_gaussian_viscosity
+    end subroutine calc_gaussian_viscosity
 
-      subroutine calc_gaussian_rigidity(He_lith,He_lith_0, He_lith_1,sign,dx,dy)
+    subroutine calc_gaussian_rigidity(He_lith,He_lith_0, He_lith_1,sign,dx,dy)
 
         real(wp), intent(IN) :: He_lith_0, He_lith_1,sign, dx, dy
         real(wp), intent(OUT) :: He_lith(:,:)
@@ -933,17 +628,15 @@ module solver_lv_elva
 
 
 
-    subroutine calc_asthenosphere_viscous_params(kappa,kappa_p,kappa_q,beta,mu,D_lith,rho_a,g,dx) 
+    subroutine calc_asthenosphere_viscous_params(kappa,beta,mu,D_lith,rho_uppermantle,g,dx) 
         ! Calculate parameters needed for elastic lithosphere viscous asthenosphere (ELVA)                                        
         ! solution as in Bueler et al 2007 (eq 11)
                     
-      real(wp), intent(OUT)  :: kappa(:,:)
-      real(wp), intent(OUT)  :: kappa_p(:,:)
-      real(wp), intent(OUT)  :: kappa_q(:,:)
+        real(wp), intent(OUT)  :: kappa(:,:)
         real(wp), intent(OUT)  :: beta(:,:) 
         real(wp), intent(OUT)  :: mu      
         real(wp), intent(IN)   :: D_lith(:,:)
-        real(wp), intent(IN)   :: rho_a 
+        real(wp), intent(IN)   :: rho_uppermantle 
         real(wp), intent(IN)   :: g 
         real(wp), intent(IN)   :: dx
         
@@ -956,14 +649,10 @@ module solver_lv_elva
         ny = size(kappa,2)
 
         ! Calculate mu
-
         mu = 2.*pi/((nx-1)*dx)
 
         ! Calculate kappa and beta
-
         kappa = 0.0
-        kappa_p = 0.0
-        kappa_q = 0.0
         beta  = 0.0 
 
         ic = (nx-1)/2 + 1
@@ -982,9 +671,7 @@ module solver_lv_elva
                     iq = ny-j+1
                 end if
                 kappa(i,j)  = (ip*ip + iq*iq)**0.5
-                kappa_p(i,j) = ip 
-                kappa_q(i,j) = iq 
-                beta(i,j)   = rho_a*g + D_lith(i,j)*(mu**4)*kappa(i,j)**4
+                beta(i,j)   = rho_uppermantle*g + D_lith(i,j)*(mu**4)*kappa(i,j)**4
             end do
         end do
 
@@ -992,8 +679,8 @@ module solver_lv_elva
       
     end subroutine calc_asthenosphere_viscous_params
 
-      
-      subroutine calc_kappa(field,kappa)
+
+    subroutine calc_kappa(field,kappa)
 
         ! Calculate kappa and beta
 
@@ -1029,148 +716,82 @@ module solver_lv_elva
         end do
 
 
-        end subroutine calc_kappa
+    end subroutine calc_kappa
 
-    subroutine make_fft_plans(in,plan_fwd,plan_bck) 
- 
-        use, intrinsic :: iso_c_binding
-        implicit none 
-        include 'fftw3.f03' 
-
-        real(wp), intent(IN)       :: in(:,:)
-        type(c_ptr), intent(OUT)   :: plan_fwd, plan_bck
-        complex (dp), allocatable  :: in_aux(:,:)
-        complex (dp), allocatable  :: out_aux(:,:)
-        integer (kind = 4)         :: l, m
-
-
-        l    = size(in,1)
-        m    = size(in,2)
-
-        if(l.ne.m) then
-            write(*,*) "Dimensions do not match, stopping now"
-            stop
-        end if
-
-        in_aux = in
-
-! r2r      
-        plan_fwd = fftw_plan_dft_2d(l,m,in_aux,out_aux,-1,FFTW_ESTIMATE)
-        plan_bck = fftw_plan_dft_2d(l,m,out_aux,in_aux,+1,FFTW_ESTIMATE)
-
-        return
-
-    end subroutine make_fft_plans
-
-    subroutine calc_fft_forward_r2r(in,out)
+    subroutine calc_fft_forward_r2r(plan, in, out, in_aux, out_aux)
 
         use, intrinsic :: iso_c_binding
         implicit none 
-        include 'fftw3.f03'  
+        include 'fftw3.f03'
 
-        real(wp), intent(IN)       :: in(:,:)
-        real(wp), intent(OUT)      :: out(:,:)
+        type(c_ptr), intent(IN)     :: plan
+        real(wp), intent(IN)        :: in(:,:)
+        real(wp), intent(OUT)       :: out(:,:)
+        real(wp), intent(IN)        :: in_aux(:,:)
+        real(wp), intent(IN)        :: out_aux(:,:) 
 
-        real(wp), allocatable      :: rec(:,:)
-        real(dp), allocatable      :: in_aux(:,:)
-        real(dp), allocatable      :: out_aux(:,:) 
-        real(dp), allocatable      :: rec_aux(:,:)
-        real(dp)                   :: dx, cc
-        type(c_ptr)                :: plan
+        real(wp)                   :: dx, cc
         integer(kind=4)            :: m,n
-        logical                    :: print_check
-
 
         m = size(in,1)
         n = size(in,2)
 
-        print_check = .false.
+        ! http://www.fftw.org/fftw3_doc/The-Discrete-Hartley-Transform.html
+            
+        !      The discrete Hartley transform (DHT) is an invertible linear
+        !      transform closely related to the DFT. In the DFT, one
+        !      multiplies each input by cos - i * sin (a complex exponential),
+        !      whereas in the DHT each input is multiplied by simply cos +
+        !      sin. Thus, the DHT transforms n real numbers to n real numbers,
+        !      and has the convenient property of being its own inverse. In
+        !      FFTW, a DHT (of any positive n) can be specified by an r2r kind
+        !      of FFTW_DHT.
 
-        allocate(in_aux(m,n))
-        allocate(out_aux(m,n))
-        allocate(rec(m,n))
-        allocate(rec_aux(m,n))
+        !      Like the DFT, in FFTW the DHT is unnormalized, so computing a
+        !      DHT of size n followed by another DHT of the same size will
+        !      result in the original array multiplied by n.
 
+        !      The DHT was originally proposed as a more efficient alternative
+        !      to the DFT for real data, but it was subsequently shown that a
+        !      specialized DFT (such as FFTW’s r2hc or r2c transforms) could
+        !      be just as fast. In FFTW, the DHT is actually computed by
+        !      post-processing an r2hc transform, so there is ordinarily no
+        !      reason to prefer it from a performance perspective.However,
+        !      we have heard rumors that the DHT might be the most appropriate
+        !      transform in its own right for certain applications, and we
+        !      would be very interested to hear from anyone who finds it
+        !      useful.
 
-! http://www.fftw.org/fftw3_doc/The-Discrete-Hartley-Transform.html
-      
-!      The discrete Hartley transform (DHT) is an invertible linear
-!      transform closely related to the DFT. In the DFT, one
-!      multiplies each input by cos - i * sin (a complex exponential),
-!      whereas in the DHT each input is multiplied by simply cos +
-!      sin. Thus, the DHT transforms n real numbers to n real numbers,
-!      and has the convenient property of being its own inverse. In
-!      FFTW, a DHT (of any positive n) can be specified by an r2r kind
-!      of FFTW_DHT.
-
-!      Like the DFT, in FFTW the DHT is unnormalized, so computing a
-!      DHT of size n followed by another DHT of the same size will
-!      result in the original array multiplied by n.
-
-!      The DHT was originally proposed as a more efficient alternative
-!      to the DFT for real data, but it was subsequently shown that a
-!      specialized DFT (such as FFTW’s r2hc or r2c transforms) could
-!      be just as fast. In FFTW, the DHT is actually computed by
-!      post-processing an r2hc transform, so there is ordinarily no
-!      reason to prefer it from a performance perspective.However,
-!      we have heard rumors that the DHT might be the most appropriate
-!      transform in its own right for certain applications, and we
-!      would be very interested to hear from anyone who finds it
-!      useful.
-
-
-        in_aux = in 
-        plan = fftw_plan_r2r_2d(m,n,in_aux,out_aux,FFTW_DHT,FFTW_DHT,FFTW_ESTIMATE)
-
+        in_aux = in
+        ! plan = fftw_plan_r2r_2d(m,n,in_aux,out_aux,FFTW_DHT,FFTW_DHT,FFTW_ESTIMATE)
         call fftw_execute_r2r(plan, in_aux, out_aux)
         out = real(out_aux/sqrt(m*n*1.))
 
-        if (print_check) then
-            call r4mat_print_some ( m, n, in, n/2-2, m/2-2, n/2+2, m/2+2, '  Part of the original data:' )
-            plan =  fftw_plan_r2r_2d(m,n,out_aux,rec_aux,FFTW_DHT,FFTW_DHT,FFTW_ESTIMATE)
-            call fftw_execute_r2r(plan, out_aux, rec_aux)
-            rec_aux = rec_aux/(m*n)
-            rec = real(rec_aux,wp) 
-            call fftw_destroy_plan(plan)
-            call r4mat_print_some (m, n, rec, n/2-2, m/2-2, n/2+2, m/2+2, '  Part of the recovered data:' )
-        end if
-
-        deallocate(in_aux)
-        deallocate(out_aux)
-        deallocate(rec)
-        deallocate(rec_aux)
-      
         return
       
     end subroutine calc_fft_forward_r2r
 
-    subroutine calc_fft_backward_r2r(in,out)
+    subroutine calc_fft_backward_r2r(plan, in, out, in_aux, out_aux)
 
         use, intrinsic :: iso_c_binding
         implicit none 
         include 'fftw3.f03'  
 
-        real(wp), intent(IN)       :: in(:,:)
-        real(wp), intent(OUT)      :: out(:,:)
+        use, intrinsic :: iso_c_binding
+        implicit none 
+        include 'fftw3.f03'
 
-        real(wp), allocatable      :: rec(:,:)
-        real(dp), allocatable      :: in_aux(:,:)
-        real(dp), allocatable      :: out_aux(:,:) 
-        real(dp), allocatable      :: rec_aux(:,:)
-        real(dp)                   :: dx, cc
-        type(c_ptr)                :: plan
+        type(c_ptr), intent(IN)     :: plan
+        real(wp), intent(IN)        :: in(:,:)
+        real(wp), intent(OUT)       :: out(:,:)
+        real(wp), intent(IN)        :: in_aux(:,:)
+        real(wp), intent(IN)        :: out_aux(:,:) 
+
+        real(wp)                   :: dx, cc
         integer(kind=4)            :: m,n
-        logical                    :: print_check
 
         m = size(in,1)
         n = size(in,2)
-
-
-        allocate(in_aux(m,n))
-        allocate(out_aux(m,n))
-        allocate(rec(m,n))
-        allocate(rec_aux(m,n))
-
 
         in_aux = in
         plan = fftw_plan_r2r_2d(m,n,in_aux,out_aux,FFTW_DHT,FFTW_DHT,FFTW_ESTIMATE)
@@ -1178,28 +799,11 @@ module solver_lv_elva
         call fftw_execute_r2r(plan, in_aux, out_aux)
         out = real(out_aux/sqrt(m*n*1.)) 
 
-        if (print_check) then
-            call r4mat_print_some ( m, n, in, n/2-2, m/2-2, n/2+2, m/2+2, '  Part of the original data:' )
-            plan =  fftw_plan_r2r_2d(m,n,out_aux,rec_aux,FFTW_DHT,FFTW_DHT,FFTW_ESTIMATE)
-            call fftw_execute_r2r(plan, out_aux, rec_aux)
-            rec_aux = rec_aux/(m*n)
-            rec = real(rec_aux,wp) 
-            call fftw_destroy_plan(plan)
-            call r4mat_print_some ( m, n, rec, n/2-2, m/2-2, n/2+2, m/2+2, '  Part of the recovered data:' )
-        end if
-
-        deallocate(in_aux)
-        deallocate(out_aux)
-        deallocate(rec)
-        deallocate(rec_aux)
-
         return
-    
-      end subroutine calc_fft_backward_r2r
+    end subroutine calc_fft_backward_r2r
 
 
-!!!!!!
-
+    !!!!!!
     ! http://www.fftw.org/fftw3_doc/Real_002ddata-DFTs.html
     ! Fftw computes an unnormalized transform: computing an r2c
     ! followed by a c2r transform (or vice versa) will result in the
@@ -1209,24 +813,21 @@ module solver_lv_elva
     ! and a c2r transform is correspondingly equivalent to
       ! FFTW_BACKWARD.
       
-    subroutine calc_fft_forward_r2c(in,out)
+    subroutine calc_fft_forward_r2c(plan, in, out)
 
         use, intrinsic :: iso_c_binding
         implicit none 
         include 'fftw3.f03'  
 
+        type(c_ptr), intent(IN)    :: plan
         real(wp), intent(IN)       :: in(:,:)
         complex(wp), intent(OUT)   :: out(:,:)
 
-        real(wp), allocatable      :: rec(:,:)
-        real(dp), allocatable      :: in_aux(:,:)
-        complex(dp), allocatable   :: out_aux(:,:) 
-        real(dp), allocatable      :: rec_aux(:,:)
-        real(dp)                   :: dx, cc
-        type(c_ptr)                :: plan
+        real(wp), allocatable      :: in_aux(:,:)
+        complex(wp), allocatable   :: out_aux(:,:) 
+        real(wp)                   :: dx
         integer(kind=4)            :: m,n
         logical                    :: print_check
-
 
         m = size(in,1)
         n = size(in,2)
@@ -1235,103 +836,60 @@ module solver_lv_elva
 
         allocate(in_aux(m,n))
         allocate(out_aux(m,n))
-!        allocate(rec(m,n))
-!        allocate(rec_aux(m,n))
 
         in_aux = in 
-        plan = fftw_plan_dft_r2c_2d(m,n,in_aux,out_aux,1) ! recheck - shouldnt this be -1 (forward)
+        ! plan = fftw_plan_dft_r2c_2d(m,n,in_aux,out_aux,1) ! recheck - shouldnt this be -1 (forward)
         
         call fftw_execute_dft_r2c(plan, in_aux, out_aux)
 
         out = out_aux/sqrt(m*n*1.)
-     
-        ! if (print_check) then
-        !     call r4mat_print_some ( m, n, in, n/2-2, m/2-2, n/2+2, m/2+2, '  Part of the original data:' )
-        !     plan =  fftw_plan_r2c_2d(m,n,out_aux,rec_aux,FFTW_DHT,FFTW_DHT,FFTW_ESTIMATE)
-        !     call fftw_execute_r2c(plan, out_aux, rec_aux)
-        !     rec_aux = rec_aux/(m*n)
-        !     rec = real(rec_aux,wp) 
-        !     call fftw_destroy_plan(plan)
-        !     call r4mat_print_some (m, n, rec, n/2-2, m/2-2, n/2+2, m/2+2, '  Part of the recovered data:' )
-        ! end if
 
         call fftw_destroy_plan(plan)
         
         deallocate(in_aux)
         deallocate(out_aux)
-        !        deallocate(rec)
-        !        deallocate(rec_aux)
-
         
-      
         return
       
     end subroutine calc_fft_forward_r2c
 
-    subroutine calc_fft_backward_c2r(in,out)
+    subroutine calc_fft_backward_c2r(plan, in, out)
 
         use, intrinsic :: iso_c_binding
-        implicit none 
+        implicit none
         include 'fftw3.f03'  
 
+        type(c_ptr), intent(IN)    :: plan
         complex(wp), intent(IN)    :: in(:,:)
         real(wp), intent(OUT)      :: out(:,:)
 
-        real(wp), allocatable      :: rec(:,:)
-        complex(dp), allocatable   :: in_aux(:,:)
-        real(dp), allocatable      :: out_aux(:,:) 
-        real(dp), allocatable      :: rec_aux(:,:)
-        real(dp)                   :: dx, cc
-        type(c_ptr)                :: plan
+        complex(wp), allocatable   :: in_aux(:,:)
+        real(wp), allocatable      :: out_aux(:,:) 
+        real(wp)                   :: dx, cc
         integer(kind=4)            :: m,n
         logical                    :: print_check
 
         m = size(in,1)
         n = size(in,2)
 
-
         allocate(in_aux(m,n))
         allocate(out_aux(m,n))
-        allocate(rec(m,n))
-        allocate(rec_aux(m,n))
-
 
         in_aux = in
-!        plan = fftw_plan_c2r_2d(m,n,in_aux,out_aux,FFTW_DHT,FFTW_DHT,FFTW_ESTIMATE)
-        plan = fftw_plan_dft_c2r_2d(m,n,in_aux,out_aux,1)
-
+        ! plan = fftw_plan_dft_c2r_2d(m,n,in_aux,out_aux,1)
 
         call fftw_execute_dft_c2r(plan, in_aux, out_aux)
-!        out = out_aux/(m*n) !/sqrt(m*n))
-        out = out_aux/sqrt(m*n*1.)
 
-        ! if (print_check) then
-        !     call r4mat_print_some ( m, n, in, n/2-2, m/2-2, n/2+2, m/2+2, '  Part of the original data:' )
-        !     plan =  fftw_plan_c2r_2d(m,n,out_aux,rec_aux,FFTW_DHT,FFTW_DHT,FFTW_ESTIMATE)
-        !     call fftw_execute_c2r(plan, out_aux, rec_aux)
-        !     rec_aux = rec_aux/(m*n)
-        !     rec = real(rec_aux,wp) 
-        !     call fftw_destroy_plan(plan)
-        !     call r4mat_print_some ( m, n, rec, n/2-2, m/2-2, n/2+2, m/2+2, '  Part of the recovered data:' )
-        ! end if
+        out = out_aux/sqrt(m*n*1.)
         
-        call fftw_destroy_plan(plan)
+        ! call fftw_destroy_plan(plan)
         
         deallocate(in_aux)
         deallocate(out_aux)
-        deallocate(rec)
-        deallocate(rec_aux)
 
         return
     
-      end subroutine calc_fft_backward_c2r
-
-
-!!!!!
-      
-
-    
-    
+    end subroutine calc_fft_backward_c2r
 
 
     ! ===== ARRAY SIZING FUNCTIONS ==============================
@@ -1489,7 +1047,4 @@ module solver_lv_elva
     
     end subroutine reduce_array
     
- end module solver_lv_elva
-
-
-    
+end module solver_lv_elva

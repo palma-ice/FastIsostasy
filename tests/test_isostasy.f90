@@ -512,7 +512,7 @@ program test_isostasy
                ! mmr: comment this to spare time; enable for test1 only
                
                        call isosbench_elva_disk(z_bed_bench,r0,h0,eta,isos1%par%dx,isos1%now%D_lith(1,1), &
-                           isos1%par%rho_ice,isos1%par%rho_a,isos1%par%g,time)
+                           isos1%par%rho_ice,isos1%par%rho_uppermantle,isos1%par%g,time)
 
                     ! Write to file 
                     call isos_write_step(isos1,file_out,time,H_ice,z_sl,z_bed_bench)
@@ -632,7 +632,7 @@ contains
              dim1="xc",dim2="yc",dim3="time",start=[1,1,n],ncid=ncid)
         call nc_write(filename,"D_lith",isos%now%D_lith,units="N m",long_name="Lithosphere effective rigidity", &
              dim1="xc",dim2="yc",dim3="time",start=[1,1,n],ncid=ncid)                                           
-        call nc_write(filename,"w_geoid",-isos%now%wn,units="m",long_name="Geoid displacement", &                                        
+        call nc_write(filename,"w_geoid",-isos%now%ssh_perturb,units="m",long_name="Geoid displacement", &                                        
              dim1="xc",dim2="yc",dim3="time",start=[1,1,n],ncid=ncid)                                            
 
         if (present(z_bed_bench)) then 
