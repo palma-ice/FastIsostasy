@@ -1,5 +1,18 @@
 module green_functions
 
+    use isostasy_defs, only : wp, pi
+
+    implicit none
+
+    private
+    
+    public :: calc_greens_function_scaling
+    public :: calc_ge_filter_2D
+    public :: get_ge_value
+    public :: calc_gn_value
+    public :: calc_GN_filter_2D
+    
+    contains
 
     subroutine calc_greens_function_scaling(G0,kei2D,L_w,D_lith,dx,dy)
         ! The Green's function (Eq. 3 of Coulon et al, 2021)

@@ -13,7 +13,6 @@ module isostasy_defs
 
     real(wp), parameter :: pi = 3.14159265359
 
-    
     type isos_param_class
         logical            :: interactive_sealevel
         logical            :: correct_distortion
@@ -36,6 +35,7 @@ module isostasy_defs
         real(wp) :: nu
         real(wp) :: compressibility_correction
 
+        real(wp) :: sec_per_year
         real(wp) :: g 
         real(wp) :: r_earth 
         real(wp) :: m_earth
@@ -55,39 +55,6 @@ module isostasy_defs
         
     end type 
 
-    type isos_state_class 
-        integer               :: count_updates      ! [1] Number of sea-level updates since beginnning of simulation
-        real(wp)              :: t                  ! [yr] Time
-        real(wp)              :: bsl                ! [m] Barystatic sea level
-        
-        real(wp), allocatable :: He_lith(:,:)       ! [m]  Effective elastic thickness of the lithosphere
-        real(wp), allocatable :: D_lith(:,:)        ! [N-m] Lithosphere flexural rigidity
-        real(wp), allocatable :: eta(:,:,:)           ! [Pa-s]3D mantle viscosity
-        real(wp), allocatable :: eta_eff(:,:)       ! [Pa-s] Effective asthenosphere viscosity
-        real(wp), allocatable :: tau(:,:)           ! [yr] Asthenospheric relaxation timescale field
-       
-        real(wp), allocatable :: z_bed(:,:)         ! Bedrock elevation         [m]
-        real(wp), allocatable :: dzbdt(:,:)         ! Rate of bedrock uplift    [m/a]
-        real(wp), allocatable :: q(:,:)             ! [Pa] Load
-        real(wp), allocatable :: w(:,:)             ! Current viscous displacement
-        real(wp), allocatable :: w_equilibrium(:,:) ! Current equilibrium displacement (XLRA)
-
-        real(wp), allocatable :: ssh_perturb(:,:)  ! [m] sea-surface height perturbation
-        real(wp), allocatable :: Haf(:,:)           ! [m] Ice thickness above floatation
-        real(wp), allocatable :: Hice(:,:)          ! [m] Thickness of ice column
-        real(wp), allocatable :: Hsw(:,:)           ! [m] Thickness of seawater column
-        real(wp), allocatable :: u(:,:)             ! [m] Viscous displacement
-        real(wp), allocatable :: ue(:,:)            ! [m] Elastic displacement
-
-        real(wp), allocatable :: seasurfaceheight(:,:)  ! [m] sea-surface height
-        real(wp), allocatable :: canom_load(:,:)    ! [kg m^-2] Load column anomaly
-        real(wp), allocatable :: canom_full(:,:)    ! [kg m^-2] Full column anomaly
-        real(wp), allocatable :: mass_anom(:,:)     ! [kg] Mass anomaly
-        real(wp), allocatable :: maskocean(:,:)     ! [1] Ocean mask
-        real(wp), allocatable :: maskactive(:,:)    ! [1] Active mask
-        real(wp), allocatable :: maskgrounded(:,:)  ! [1] Grounded mask
-    end type isos_state_class
-
     type isos_domain_class
         integer                 :: i1
         integer                 :: i2
@@ -96,6 +63,7 @@ module isostasy_defs
         integer                 :: convo_offset
         integer                 :: nx
         integer                 :: ny
+        integer                 :: nsq
         real(wp)                :: dx
         real(wp)                :: dy
         real(wp)                :: mu
@@ -122,6 +90,38 @@ module isostasy_defs
         real(wp), allocatable :: GF(:,:)            ! Green's function values (Farrell 1972)
         real(wp), allocatable :: GN(:,:)            ! Green's function for geoid values
     end type isos_domain_class
+
+    type isos_state_class 
+        integer               :: count_updates      ! [1] Number of sea-level updates since beginnning of simulation
+        real(wp)              :: t                  ! [yr] Time
+        real(wp)              :: bsl                ! [m] Barystatic sea level
+        
+        real(wp), allocatable :: He_lith(:,:)       ! [m]  Effective elastic thickness of the lithosphere
+        real(wp), allocatable :: D_lith(:,:)        ! [N-m] Lithosphere flexural rigidity
+        real(wp), allocatable :: eta(:,:,:)           ! [Pa-s]3D mantle viscosity
+        real(wp), allocatable :: eta_eff(:,:)       ! [Pa-s] Effective asthenosphere viscosity
+        real(wp), allocatable :: tau(:,:)           ! [yr] Asthenospheric relaxation timescale field
+       
+        real(wp), allocatable :: z_bed(:,:)         ! Bedrock elevation         [m]
+        real(wp), allocatable :: dzbdt(:,:)         ! Rate of bedrock uplift    [m/a]
+        real(wp), allocatable :: q(:,:)             ! [Pa] Load
+        real(wp), allocatable :: w(:,:)             ! Current viscous displacement
+        real(wp), allocatable :: w_equilibrium(:,:) ! Current viscous equilibrium displacement (XLRA)
+        real(wp), allocatable :: we(:,:)            ! [m] Elastic displacement
+
+        real(wp), allocatable :: ssh_perturb(:,:)   ! [m] sea-surface height perturbation
+        real(wp), allocatable :: Haf(:,:)           ! [m] Ice thickness above floatation
+        real(wp), allocatable :: Hice(:,:)          ! [m] Thickness of ice column
+        real(wp), allocatable :: Hsw(:,:)           ! [m] Thickness of seawater column
+
+        real(wp), allocatable :: ssh(:,:)           ! [m] sea-surface height
+        real(wp), allocatable :: canom_load(:,:)    ! [kg m^-2] Load column anomaly
+        real(wp), allocatable :: canom_full(:,:)    ! [kg m^-2] Full column anomaly
+        real(wp), allocatable :: mass_anom(:,:)     ! [kg] Mass anomaly
+        real(wp), allocatable :: maskocean(:,:)     ! [1] Ocean mask
+        real(wp), allocatable :: maskactive(:,:)    ! [1] Active mask
+        real(wp), allocatable :: maskgrounded(:,:)  ! [1] Grounded mask
+    end type isos_state_class
 
     type isos_class
         type(isos_param_class)  :: par

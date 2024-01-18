@@ -1,144 +1,115 @@
 
 module solver_lv_elva
 
-    use isostasy_defs, only : wp, pi, isos_domain_class
-    use finite_differences, only: calc_derivative_x, calc_derivative_y, calc_derivative_xx, calc_derivative_yy
+    use, intrinsic :: iso_c_binding
+    use isostasy_defs, only : wp, pi, isos_domain_class, isos_param_class
+    use finite_differences
+    use isos_utils
 
     implicit none
+    include 'fftw3.f03'
 
     private
     
-    public :: calc_lv_asthenosphere_viscous_square
-    public :: calc_gaussian_viscosity
-    public :: calc_gaussian_rigidity
+    public :: calc_lvelva_viscous_square
     public :: calc_effective_viscosity_3layer_channel
     public :: calc_effective_viscosity_3d
-    public :: extend_array 
-    public :: reduce_array
-    public :: calc_asthenosphere_viscous_params
     public :: calc_fft_backward_r2r
     public :: calc_fft_forward_r2r
     public :: calc_fft_backward_c2r
     public :: calc_fft_forward_r2c
     public :: calc_kappa
+    public :: calc_beta
 
     contains
 
-    subroutine calc_lv_asthenosphere_viscous_square(dzbdt,w,w_el,q,nu,D_lith,eta,rho_uppermantle,rho_litho,g,dx,dt)
+    subroutine calc_lvelva_viscous_square(dzbdt, w, canom_full, nu, mu, D_lith, eta, &
+        kappa, nsq, par, domain)
     
-        ! Extend a given domain [nx,ny] so that it is square based on the 
-        ! largest dimension of original data. 
-        ! Solve calc_asthenosphere_viscous on the square arrays, then 
+        ! Extend a given domain [nx,ny] so that it is square based on the largest dimension
+        ! of original data. Solve calc_asthenosphere_viscous on the square arrays, then 
         ! extract solution onto original domain [nx,ny].
       
         implicit none
 
         real(wp), intent(OUT)   :: dzbdt(:,:)
         real(wp), intent(INOUT) :: w(:,:)
-        real(wp), intent(INOUT) :: w_el(:,:)    
-        real(wp), intent(IN)    :: q(:,:)
-        real(wp), intent(IN)    :: nu  
+        real(wp), intent(IN)    :: canom_full(:,:)
+        real(wp), intent(IN)    :: nu, mu
         real(wp), intent(IN)    :: D_lith(:,:)
-        real(wp), intent(IN)    :: eta(:,:)   
-        real(wp), intent(IN)    :: rho_uppermantle
-        real(wp), intent(IN)    :: rho_litho 
-        real(wp), intent(IN)    :: g 
-        real(wp), intent(IN)    :: dx
-        real(wp), intent(IN)    :: dt
-        
+        real(wp), intent(IN)    :: eta(:,:)
+        real(wp), intent(INOUT) :: kappa(:,:)
+        integer, intent(IN)     :: nsq
+        type(isos_param_class)  :: par
+        type(isos_domain_class) :: domain
+
         ! Local variables
-        integer :: i, j, nx, ny
-        integer :: nsq
         real(wp), allocatable :: sq_dzbdt(:,:)
         real(wp), allocatable :: sq_w(:,:)
-        real(wp), allocatable :: sq_w_el(:,:)    
-        real(wp), allocatable :: sq_q(:,:)
+        real(wp), allocatable :: sq_canom_full(:,:)
         real(wp), allocatable :: sq_D_lith(:,:)
         real(wp), allocatable :: sq_eta(:,:)    
 
         ! Step 0: determine size of square array and allocate variables
-
-        nx  = size(dzbdt,1)
-        ny  = size(dzbdt,2)
-        nsq = max(nx,ny) 
-        
         allocate(sq_dzbdt(nsq,nsq))
         allocate(sq_w(nsq,nsq))
-        allocate(sq_w_el(nsq,nsq))
-        allocate(sq_q(nsq,nsq))
+        allocate(sq_canom_full(nsq,nsq))
         allocate(sq_D_lith(nsq,nsq))
         allocate(sq_eta(nsq,nsq))
 
         ! Step 1: populate variables on a square grid
         sq_dzbdt = 0.0 
-        call extend_array(sq_dzbdt,dzbdt,fill_with="mirror",val=0.0_wp)
-        call extend_array(sq_w,w,fill_with="mirror",val=0.0_wp)
-        call extend_array(sq_w_el,w_el,fill_with="mirror",val=0.0_wp)
-        call extend_array(sq_q,q,fill_with="mirror",val=0.0_wp)
-        call extend_array(sq_D_lith,D_lith,fill_with="mirror",val=0.0_wp)
-        call extend_array(sq_eta,eta,fill_with="mirror",val=0.0_wp)
+        call extend_array(sq_dzbdt, dzbdt, fill_with="mirror", val=0.0_wp)
+        call extend_array(sq_w, w, fill_with="mirror", val=0.0_wp)
+        call extend_array(sq_canom_full, canom_full, fill_with="mirror", val=0.0_wp)
+        call extend_array(sq_D_lith, D_lith, fill_with="mirror", val=0.0_wp)
+        call extend_array(sq_eta, eta, fill_with="mirror", val=0.0_wp)
 
         ! Step 2: solve
-        call calc_lv_asthenosphere_viscous(sq_dzbdt,sq_w,sq_w_el,sq_q,nu,sq_D_lith,sq_eta, &
-            rho_uppermantle,rho_litho,g,dx,dt)
+        call calc_lv_asthenosphere_viscous(sq_dzbdt, sq_w, sq_canom_full, nu, mu, sq_D_lith, &
+            sq_eta, kappa, nsq, nsq, par, domain)
 
         ! Step 3: get solution on original grid
-        call reduce_array(dzbdt,sq_dzbdt)
-        call reduce_array(w,sq_w)
-        call reduce_array(w_el,sq_w_el)
+        call reduce_array(dzbdt, sq_dzbdt)
+        call reduce_array(w, sq_w)
         
         return
 
-    end subroutine calc_lv_asthenosphere_viscous_square
+    end subroutine calc_lvelva_viscous_square
 
 
-    subroutine calc_lv_asthenosphere_viscous(dzbdt,u,u_el,q,nu,D_lith,eta,rho_uppermantle,rho_litho,g,dx,dt)
-        ! Calculate rate of change of vertical bedrock height
-        ! from a viscous half-space asthenosphere.
-        ! Contains viscous component only.
+    ! Calculate vertical displacement rate (viscous part) on rectangular domain.
+    subroutine calc_lv_asthenosphere_viscous(dzbdt, u, canom_full, nu, mu, D_lith, eta, &
+        kappa, nx, ny, par, domain)
 
-        use, intrinsic :: iso_c_binding
         implicit none
-        include 'fftw3.f03'
 
         real(wp), parameter :: epsilon = 1.e-2 
         
-        real(wp), intent(OUT)   :: dzbdt(:,:)
-        real(wp), intent(IN)    :: u(:,:)
-        real(wp), intent(IN)    :: u_el(:,:)
-        real(wp), intent(IN)    :: q(:,:)
-        real(wp), intent(IN)    :: nu
+        real(wp), intent(INOUT) :: dzbdt(:,:)
+        real(wp), intent(INOUT) :: u(:,:)
+        real(wp), intent(INOUT) :: canom_full(:,:)
+        real(wp), intent(IN)    :: nu, mu
         real(wp), intent(IN)    :: D_lith(:,:) 
         real(wp), intent(IN)    :: eta(:,:)   ! [Pa s] Viscosity, eta=1e21 by default. 
-        real(wp), intent(IN)    :: rho_uppermantle
-        real(wp), intent(IN)    :: rho_litho
-        real(wp), intent(IN)    :: g 
-        real(wp), intent(IN)    :: dx
-        real(wp), intent(IN)    :: dt
-        
-        ! Local variables
-        integer  :: nx, ny, i, j
-        real(wp) :: sec_per_year, dy ! mmr recheck - dy should be input
-        
-        real(wp), allocatable :: beta(:,:)
-        real(wp) :: mu 
+        real(wp), intent(INOUT) :: kappa(:,:)
+        integer, intent(IN)     :: nx, ny
+        type(isos_param_class)  :: par
+        type(isos_domain_class) :: domain
 
-        real(wp), allocatable :: f(:,:)        
-        real(wp), allocatable :: f_hat(:,:)    
+        real(wp), allocatable :: f(:,:)
+        real(wp), allocatable :: f_hat(:,:)
 
-        real(wp), allocatable :: prod(:,:)     
+        real(wp), allocatable :: prod(:,:)
         real(wp), allocatable :: prod_hat(:,:)
-        
-        real(wp), allocatable :: p(:,:)
-        
-        real(wp), allocatable :: dudt(:,:)     
-        real(wp), allocatable :: u_x(:,:)     
-        real(wp), allocatable :: u_y(:,:)     
+
+        real(wp), allocatable :: dudt(:,:)
+        real(wp), allocatable :: u_x(:,:)
+        real(wp), allocatable :: u_y(:,:)
 
         real(wp), allocatable :: u_xx(:,:)
         real(wp), allocatable :: u_xy(:,:)
         real(wp), allocatable :: u_yy(:,:)
-        real(wp), allocatable :: u_yx(:,:)
 
         real(wp), allocatable :: Mx(:,:) 
         real(wp), allocatable :: My(:,:)
@@ -151,58 +122,37 @@ module solver_lv_elva
         real(wp), allocatable :: My_yy(:,:)
         
         real(wp), allocatable :: Mxy_xy(:,:)
-        real(wp), allocatable :: Mxy_yx(:,:)
-
-
-        character :: boundaries
-
-        sec_per_year = 3600.0*24.0*365.0 ![s]
-
-        dy = dx 
-
-        nx = size(dzbdt,1)
-        ny = size(dzbdt,2)
-
-        allocate(kappa(nx,ny))
-        allocate(beta(nx,ny))
 
         allocate(f(nx,ny))
         allocate(f_hat(nx,ny))
-        
+
         allocate(prod(nx,ny))
         allocate(prod_hat(nx,ny))
-        
+
         allocate(dudt(nx,ny))
-        
+
         allocate(u_x(nx,ny))
         allocate(u_y(nx,ny))
-        
+
         allocate(u_xx(nx,ny))
         allocate(u_xy(nx,ny))
         allocate(u_yy(nx,ny))
-        allocate(u_yx(nx,ny))
 
         allocate(Mx(nx,ny))
         allocate(My(nx,ny))
-        
+
         allocate(Mxy_x(nx,ny))
         allocate(Myx_y(nx,ny))
         
-
         allocate(Mx_xx(nx,ny))
-        allocate(My_yy(nx,ny))        
+        allocate(My_yy(nx,ny))
         allocate(Mxy_xy(nx,ny))
 
-        allocate(p(nx,ny))
-       
-        ! Initialize
-        call calc_asthenosphere_viscous_params(kappa,beta,mu,D_lith,rho_uppermantle,g,dx)  ! recheck this belongs out of here (once)
-
         ! Finite differences
-        call calc_derivative_xx(u_xx,u,dx)
-        call calc_derivative_yy(u_yy,u,dy)
-        call calc_derivative_x(u_x,u,dx)
-        call calc_derivative_y(u_xy,u_x,dy)
+        call calc_derivative_xx(u_xx, u, domain%dx, nx, ny)
+        call calc_derivative_yy(u_yy, u, domain%dy, nx, ny)
+        call calc_derivative_x(u_x, u, domain%dx, nx, ny)
+        call calc_derivative_y(u_xy, u_x, domain%dy, nx, ny)
 
         ! Ventsel and Krauthammer (2001): Thin Plates and Shells.
         ! Theory, Analysis, and Applications. Eq (2.13, 2.23)
@@ -211,21 +161,22 @@ module solver_lv_elva
         Mxy = -D_lith*(1.0-nu)*u_xy
 
         ! Finite differences
-        call calc_derivative_xx(Mx_xx,Mx,dx)
-        call calc_derivative_yy(My_yy,My,dy)
-        call calc_derivative_x(Mxy_x,Mxy,dx)
-        call calc_derivative_y(Mxy_xy,Mxy_x,dy)
+        call calc_derivative_xx(Mx_xx, Mx, domain%dx, nx, ny)
+        call calc_derivative_yy(My_yy, My, domain%dy, nx, ny)
+        call calc_derivative_x(Mxy_x, Mxy, domain%dx, nx, ny)
+        call calc_derivative_y(Mxy_xy, Mxy_x, domain%dy, nx, ny)
 
-        f = - q - rho_uppermantle*g*u - rho_litho*g*u_el + Mx_xx + 2.0*Mxy_xy + My_yy 
-        call calc_fft_forward_r2r(plan, f/(2.*eta), f_hat, in_aux, out_aux)
-        prod_hat = f_hat/kappa/mu
-        call calc_fft_backward_r2r(plan, prod_hat, prod, in_aux, out_aux)
+        f = (canom_full + Mx_xx + 2.0*Mxy_xy + My_yy) / (2. * eta)
+        call calc_fft_forward_r2r(domain%forward_fftplan_r2r, f, f_hat)
+
+        prod_hat = f_hat / kappa / mu
+        call calc_fft_backward_r2r(domain%backward_fftplan_r2r, prod_hat, prod)
         dudt = prod  ! [m/s]
 
-        dudt  = dudt - 0.25*(dudt(1,1)+dudt(nx,ny)+dudt(1,m)+dudt(nx,1)) 
+        dudt  = dudt - 0.25 * (dudt(1,1) + dudt(nx,ny) + dudt(1,ny) + dudt(nx,1))
 
         ! Rate of viscous asthenosphere uplift per unit time (seconds)
-        dzbdt = dudt * sec_per_year  !  [m/s] x [s/a] = [m/a] 
+        dzbdt = dudt * par%sec_per_year  !  [m/s] x [s/a] = [m/a] 
 
         deallocate(f)
         deallocate(f_hat)
@@ -239,19 +190,17 @@ module solver_lv_elva
         deallocate(u_xx)
         deallocate(u_xy)
         deallocate(u_yy)
-        deallocate(u_yx)
 
         deallocate(Mx_xx)
         deallocate(Mxy_xy)
         deallocate(My_yy)
 
-        deallocate(p)
-
         return
 
     end subroutine calc_lv_asthenosphere_viscous
 
-    subroutine calc_effective_viscosity_3layer_channel(eta_eff,visc_c,thck_c,He_lith,n_lev,nu,dx,dy)
+    subroutine calc_effective_viscosity_3layer_channel(eta_eff, visc_c, thck_c, He_lith, &
+        n_lev, dx, dy)
 
         implicit none
 
@@ -259,8 +208,8 @@ module solver_lv_elva
         real(wp), intent(IN)     :: visc_c
         real(wp), intent(IN)     :: thck_c
         real(wp), intent(IN)     :: He_lith !(:,:) 
-        integer,  intent(IN)     :: n_lev               
-        real(wp), intent(IN)     :: nu, dx, dy
+        integer,  intent(IN)     :: n_lev
+        real(wp), intent(IN)     :: dx, dy
         
         real(wp) :: Lx, Ly, L
         real(wp) :: xcntr, ycntr, xmax, xmin, ymax, ymin
@@ -283,7 +232,7 @@ module solver_lv_elva
         ny = size(eta_eff,2) 
         
         allocate(xc(nx))
-        allocate(yc(ny))        
+        allocate(yc(ny))
         allocate(R(nx,ny))
         allocate(eta_ratio(nx,ny))
         allocate(eta_ratiom1(nx,ny))
@@ -385,13 +334,13 @@ module solver_lv_elva
         
     end subroutine calc_effective_viscosity_3layer_channel
 
-    subroutine calc_effective_viscosity_3d(eta_eff,eta,nu,dx,dy)
+    subroutine calc_effective_viscosity_3d(eta_eff,eta,dx,dy)
 
         implicit none
 
         real(wp), intent(INOUT)  :: eta_eff(:,:)
         real(wp), intent(IN)     :: eta(:,:,:)
-        real(wp), intent(IN)     :: nu, dx, dy
+        real(wp), intent(IN)     :: dx, dy
         
         real(wp) :: Lx, Ly, L
         real(wp) :: xcntr, ycntr, xmax, xmin, ymax, ymin
@@ -495,50 +444,38 @@ module solver_lv_elva
 
         endif
      
-! move this out for symmetry     eta_eff    = eta_eff  * (1.5/(1. + nu))         ! [Pa s]
-
-        
         deallocate(xc)
-        deallocate(yc)        
+        deallocate(yc)
         deallocate(R)
         deallocate(eta_ratio)
         deallocate(eta_ratiom1)
         deallocate(c)
         deallocate(s)
-!        deallocate(eta)
         deallocate(eta_c)
         deallocate(dz_c)
         deallocate(dz)
         deallocate(kappa)
      
         return
-        
     end subroutine calc_effective_viscosity_3d
 
-    subroutine calc_asthenosphere_viscous_params(kappa,beta,mu,D_lith,rho_uppermantle,g,dx) 
-        ! Calculate parameters needed for elastic lithosphere viscous asthenosphere (ELVA)                                        
-        ! solution as in Bueler et al 2007 (eq 11)
+    subroutine calc_beta(beta, kappa, mu, D_lith, rho_uppermantle, g) 
+        ! Calculate analytical solution as in Bueler et al 2007 (eq 11)
                     
-        real(wp), intent(OUT)  :: kappa(:,:)
         real(wp), intent(OUT)  :: beta(:,:) 
         real(wp), intent(OUT)  :: mu      
+        real(wp), intent(IN)   :: kappa(:,:)
         real(wp), intent(IN)   :: D_lith(:,:)
-        real(wp), intent(IN)   :: rho_uppermantle 
+        real(wp), intent(IN)   :: rho_uppermantle
         real(wp), intent(IN)   :: g 
-        real(wp), intent(IN)   :: dx
         
         ! Local variables
         integer  :: i, j, nx, ny 
         integer  :: ip, iq, ic, jc 
-        real(wp) :: xd, yd
 
-        nx = size(kappa,1)
-        ny = size(kappa,2)
-
-        ! Calculate kappa and beta
-        kappa = 0.0
-        beta  = 0.0 
-
+        beta = 0.0 
+        nx = size(beta, 1)
+        ny = size(beta, 2)
         ic = (nx-1)/2 + 1
         jc = (ny-1)/2 + 1
 
@@ -554,20 +491,18 @@ module solver_lv_elva
                 else
                     iq = ny-j+1
                 end if
-                kappa(i,j)  = (ip*ip + iq*iq)**0.5
                 beta(i,j)   = rho_uppermantle*g + D_lith(i,j)*(mu**4)*kappa(i,j)**4
             end do
         end do
 
         return
-      
-    end subroutine calc_asthenosphere_viscous_params
+    end subroutine calc_beta
 
     subroutine convenient_calc_kappa(domain)
         implicit none
         type(isos_domain_class), intent(INOUT)  :: domain
 
-        calc_kappa(domain%kappa, domain%nx, domain%ny)
+        call calc_kappa(domain%kappa, domain%nx, domain%ny)
         return
     end subroutine convenient_calc_kappa
 
@@ -603,86 +538,62 @@ module solver_lv_elva
         return
     end subroutine calc_kappa
 
-    subroutine calc_fft_forward_r2r(plan, in, out, in_aux, out_aux)
 
-        use, intrinsic :: iso_c_binding
+
+    ! http://www.fftw.org/fftw3_doc/The-Discrete-Hartley-Transform.html
+        
+    !      The discrete Hartley transform (DHT) is an invertible linear
+    !      transform closely related to the DFT. In the DFT, one
+    !      multiplies each input by cos - i * sin (a complex exponential),
+    !      whereas in the DHT each input is multiplied by simply cos +
+    !      sin. Thus, the DHT transforms n real numbers to n real numbers,
+    !      and has the convenient property of being its own inverse. In
+    !      FFTW, a DHT (of any positive n) can be specified by an r2r kind
+    !      of FFTW_DHT.
+
+    !      Like the DFT, in FFTW the DHT is unnormalized, so computing a
+    !      DHT of size n followed by another DHT of the same size will
+    !      result in the original array multiplied by n.
+
+    !      The DHT was originally proposed as a more efficient alternative
+    !      to the DFT for real data, but it was subsequently shown that a
+    !      specialized DFT (such as FFTW’s r2hc or r2c transforms) could
+    !      be just as fast. In FFTW, the DHT is actually computed by
+    !      post-processing an r2hc transform, so there is ordinarily no
+    !      reason to prefer it from a performance perspective. However,
+    !      we have heard rumors that the DHT might be the most appropriate
+    !      transform in its own right for certain applications, and we
+    !      would be very interested to hear from anyone who finds it
+    !      useful.
+
+    subroutine calc_fft_forward_r2r(plan, in, out)
+
         implicit none 
-        include 'fftw3.f03'
-
         type(c_ptr), intent(IN)     :: plan
-        real(wp), intent(IN)        :: in(:,:)
-        real(wp), intent(OUT)       :: out(:,:)
-        real(wp), intent(IN)        :: in_aux(:,:)
-        real(wp), intent(IN)        :: out_aux(:,:) 
+        real(wp), intent(INOUT)     :: in(:,:)
+        real(wp), intent(INOUT)     :: out(:,:)
 
-        real(wp)                   :: dx, cc
-        integer(kind=4)            :: m,n
-
-        m = size(in,1)
-        n = size(in,2)
-
-        ! http://www.fftw.org/fftw3_doc/The-Discrete-Hartley-Transform.html
-            
-        !      The discrete Hartley transform (DHT) is an invertible linear
-        !      transform closely related to the DFT. In the DFT, one
-        !      multiplies each input by cos - i * sin (a complex exponential),
-        !      whereas in the DHT each input is multiplied by simply cos +
-        !      sin. Thus, the DHT transforms n real numbers to n real numbers,
-        !      and has the convenient property of being its own inverse. In
-        !      FFTW, a DHT (of any positive n) can be specified by an r2r kind
-        !      of FFTW_DHT.
-
-        !      Like the DFT, in FFTW the DHT is unnormalized, so computing a
-        !      DHT of size n followed by another DHT of the same size will
-        !      result in the original array multiplied by n.
-
-        !      The DHT was originally proposed as a more efficient alternative
-        !      to the DFT for real data, but it was subsequently shown that a
-        !      specialized DFT (such as FFTW’s r2hc or r2c transforms) could
-        !      be just as fast. In FFTW, the DHT is actually computed by
-        !      post-processing an r2hc transform, so there is ordinarily no
-        !      reason to prefer it from a performance perspective.However,
-        !      we have heard rumors that the DHT might be the most appropriate
-        !      transform in its own right for certain applications, and we
-        !      would be very interested to hear from anyone who finds it
-        !      useful.
-
-        in_aux = in
-        ! plan = fftw_plan_r2r_2d(m,n,in_aux,out_aux,FFTW_DHT,FFTW_DHT,FFTW_ESTIMATE)
-        call fftw_execute_r2r(plan, in_aux, out_aux)
-        out = real(out_aux/sqrt(m*n*1.))
+        call fftw_execute_r2r(plan, in, out)
 
         return
       
     end subroutine calc_fft_forward_r2r
 
-    subroutine calc_fft_backward_r2r(plan, in, out, in_aux, out_aux)
+    subroutine calc_fft_backward_r2r(plan, in, out)
 
-        use, intrinsic :: iso_c_binding
         implicit none 
-        include 'fftw3.f03'  
-
-        use, intrinsic :: iso_c_binding
-        implicit none 
-        include 'fftw3.f03'
 
         type(c_ptr), intent(IN)     :: plan
-        real(wp), intent(IN)        :: in(:,:)
-        real(wp), intent(OUT)       :: out(:,:)
-        real(wp), intent(IN)        :: in_aux(:,:)
-        real(wp), intent(IN)        :: out_aux(:,:) 
+        real(wp), intent(INOUT)     :: in(:,:)
+        real(wp), intent(INOUT)     :: out(:,:)
 
-        real(wp)                   :: dx, cc
-        integer(kind=4)            :: m,n
+        integer(kind=4)             :: m, n
 
-        m = size(in,1)
-        n = size(in,2)
+        m = size(in, 1)
+        n = size(in, 2)
 
-        in_aux = in
-        plan = fftw_plan_r2r_2d(m,n,in_aux,out_aux,FFTW_DHT,FFTW_DHT,FFTW_ESTIMATE)
-
-        call fftw_execute_r2r(plan, in_aux, out_aux)
-        out = real(out_aux/sqrt(m*n*1.)) 
+        call fftw_execute_r2r(plan, in, out)
+        out = out / (m*n*1.)
 
         return
     end subroutine calc_fft_backward_r2r
@@ -696,53 +607,25 @@ module solver_lv_elva
     ! product of the logical dimensions). An r2c transform produces
     ! the same output as a FFTW_FORWARD complex DFT of the same input,
     ! and a c2r transform is correspondingly equivalent to
-      ! FFTW_BACKWARD.
+    ! FFTW_BACKWARD.
       
-    subroutine calc_fft_forward_r2c(plan, in, out)
+    subroutine calc_fft_forward_r2c(plan, in, out, out_aux)
 
-        use, intrinsic :: iso_c_binding
         implicit none 
-        include 'fftw3.f03'  
 
-        type(c_ptr), intent(IN)    :: plan
-        real(wp), intent(IN)       :: in(:,:)
-        complex(wp), intent(OUT)   :: out(:,:)
+        type(c_ptr), intent(IN)     :: plan
+        real(wp), intent(INOUT)     :: in(:,:)
+        real(wp), intent(INOUT)     :: out(:,:)
+        complex(wp), intent(INOUT)  :: out_aux(:,:)
 
-        real(wp), allocatable      :: in_aux(:,:)
-        complex(wp), allocatable   :: out_aux(:,:) 
-        real(wp)                   :: dx
-        integer(kind=4)            :: m,n
-        logical                    :: print_check
+        call fftw_execute_dft_r2c(plan, in, out_aux)
+        out = real(out_aux)
 
-        m = size(in,1)
-        n = size(in,2)
-
-        print_check = .false.
-
-        allocate(in_aux(m,n))
-        allocate(out_aux(m,n))
-
-        in_aux = in 
-        ! plan = fftw_plan_dft_r2c_2d(m,n,in_aux,out_aux,1) ! recheck - shouldnt this be -1 (forward)
-        
-        call fftw_execute_dft_r2c(plan, in_aux, out_aux)
-
-        out = out_aux/sqrt(m*n*1.)
-
-        call fftw_destroy_plan(plan)
-        
-        deallocate(in_aux)
-        deallocate(out_aux)
-        
         return
-      
     end subroutine calc_fft_forward_r2c
 
     subroutine calc_fft_backward_c2r(plan, in, out)
-
-        use, intrinsic :: iso_c_binding
         implicit none
-        include 'fftw3.f03'  
 
         type(c_ptr), intent(IN)    :: plan
         complex(wp), intent(IN)    :: in(:,:)
@@ -776,160 +659,4 @@ module solver_lv_elva
     
     end subroutine calc_fft_backward_c2r
 
-
-    ! ===== ARRAY SIZING FUNCTIONS ==============================
-
-    subroutine extend_array(ve,v,fill_with,val)
-        ! Given an array ve with dimensions >= those of v, 
-        ! populate ve with values of v, centered in the larger array.
-        ! Fill extra cells with value of user's choice. 
-
-        implicit none
-
-        real(wp), intent(INOUT) :: ve(:,:) 
-        real(wp), intent(IN)    :: v(:,:)
-        character(len=*), intent(IN) :: fill_with
-        real(wp), intent(IN), optional :: val
-
-        ! Local variables
-        integer  :: i, j, nx, ny, nx1, ny1
-        integer  :: i0, i1, j0, j1
-        real(wp) :: fill_value 
-
-        nx = size(v,1)
-        ny = size(v,2) 
-
-        nx1 = size(ve,1)
-        ny1 = size(ve,2)
-
-        ! Determine fill value to be used
-
-        select case(trim(fill_with))
-
-            case("zero","zeros")
-
-                fill_value = 0.0
-
-            case("mean")
-
-                fill_value = sum(v) / real(nx*ny,wp)
-
-            case("val")
-
-                if (.not. present(val)) then
-                    write(*,*) "extend_array:: Error: for fill_with='val', the optional &
-                    &argument val must be provided and is missing right now."
-                    stop
-                end if
-
-                fill_value = val
-
-            case("mirror")
-                ! Set fill_value to zero, it will not be used 
-
-                fill_value = 0.0 
-
-            case DEFAULT
-                write(*,*) "extend_array:: Error: choice of 'fill_with' not recognized."
-                write(*,*) "fill_with = ", trim(fill_with)
-                stop
-        
-        end select
-
-        ! Initialize extended array to correct fill value
-
-        ve = fill_value 
-
-        ! Fill in the actual values centered within the extended array
-
-        if (nx .eq. nx1) then
-            i0 = 1
-        else
-            i0 = floor( (nx1-nx)/2.0 )
-        end if 
-        i1 = i0+nx-1
-
-        if (ny .eq. ny1) then
-            j0 = 1
-        else
-            j0 = floor( (ny1-ny)/2.0 )
-        end if 
-        j1 = j0+ny-1
-
-        ve(i0:i1,j0:j1) = v
-
-
-        if (trim(fill_with) .eq. "mirror") then
-            ! Populate extended array region with mirrored points 
-
-            ! Left
-            if (i0 .gt. 1) then 
-                ve(1:i0-1,j0:j1) = v(i0-1:1:-1,:)
-            end if
-            ! Right
-            if (i1 .lt. nx1) then 
-                ve(i1+1:nx1,j0:j1) = v(nx:nx-(nx1-i1)+1:-1,:)
-            end if
-            
-            ! Bottom
-            if (j0 .gt. 1) then 
-                ve(i0:i1,1:j0-1) = v(:,j0-1:1:-1)
-            end if
-            ! Top
-            if (j1 .lt. ny1) then 
-                ve(i0:i1,j1+1:ny1) = v(:,ny:ny-(ny1-j1)+1:-1)
-            end if
-            
-            ! To do - populate the corners too. For now ignore, and keep 
-            ! extended array values equal to fill_value=0.0. 
-
-        end if 
-
-        return
-    
-    end subroutine extend_array
-
-    subroutine reduce_array(v,ve)
-        ! Given an array of dimensions >= those of v
-        ! extract centered values of ve of interest,
-        ! discarding remaining values around the borders.
-
-        implicit none
-
-        real(wp), intent(INOUT) :: v(:,:)
-        real(wp), intent(IN)    :: ve(:,:) 
-        
-        ! Local variables
-        integer  :: i, j, nx, ny, nx1, ny1
-        integer  :: i0, i1, j0, j1
-        real(wp) :: fill_value 
-
-        nx = size(v,1)
-        ny = size(v,2) 
-
-        nx1 = size(ve,1)
-        ny1 = size(ve,2)
-
-        ! Fill in the actual values from those centered within the extended array
-
-        if (nx .eq. nx1) then
-            i0 = 1
-        else
-            i0 = floor( (nx1-nx)/2.0 )
-        end if 
-        i1 = i0+nx-1
-
-        if (ny .eq. ny1) then
-            j0 = 1
-        else
-            j0 = floor( (ny1-ny)/2.0 )
-        end if 
-        j1 = j0+ny-1
-
-        v = ve(i0:i1,j0:j1)
-
-        return
-    
-    end subroutine reduce_array
-    
 end module solver_lv_elva

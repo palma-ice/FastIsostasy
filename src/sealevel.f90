@@ -6,7 +6,7 @@ module sea_level
     private
     public :: calc_sealevel
 
-contains
+    contains
 
     ! calc_sealevel()
     ! Update the sea level based on the new ice thickness field
@@ -17,13 +17,14 @@ contains
 
         call calc_columnanoms_load(Hice, isos)  ! Part 1
 
-        if (((isos%now%t - isos%ref%t) / isos%par%dt_sl) .ge. isos%now%count_updates) then
+        if (((isos%now%t - isos%ref%t) / isos%par%dt_diagnostics) .ge. isos%now%count_updates) then
             call calc_seasurfaceheight(isos)    ! Part 2
             call calc_masks(isos)               ! Part 3
             call calc_sl_contribution(isos)     ! Part 4
-            isos%now%count_updates += 1
+            isos%now%count_updates = isos%now%count_updates + 1
         endif
 
+        return
     end subroutine calc_sealevel
 
     !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -35,10 +36,10 @@ contains
         type(isos_class), intent(INOUT)   :: isos 
 
         isos%now%Hice = Hice
-        isos%now%Hsw = (isos%now%seasurfaceheight - isos%now%z_bed) * isos%now%maskocean
+        isos%now%Hsw = (isos%now%ssh - isos%now%z_bed) * isos%now%maskocean
         isos%now%canom_load(:, :) = 0
         call add_columnanom(isos%par%rho_ice, isos%now%Hice, isos%ref%Hice, isos%now%canom_load)
-        call add_columnanom(isos%par%rho_sw, isos%now%Hsw, isos%ref%Hsw, isos%now%canom_load)
+        call add_columnanom(isos%par%rho_seawater, isos%now%Hsw, isos%ref%Hsw, isos%now%canom_load)
     end subroutine calc_columnanoms_load
 
     !
@@ -60,7 +61,7 @@ contains
         type(isos_class), intent(INOUT)   :: isos 
         isos%now%canom_full = isos%now%canom_load
         call add_columnanom(isos%par%rho_litho, isos%now%ue, isos%ref%ue, isos%now%canom_full)
-        call add_columnanom(isos%par%rho_mantle, isos%now%u, isos%ref%u, isos%now%canom_full)
+        call add_columnanom(isos%par%rho_uppermantle, isos%now%u, isos%ref%u, isos%now%canom_full)
     end subroutine calc_columnanom_solidearth
 
     !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -70,7 +71,7 @@ contains
         implicit none
         type(isos_class), intent(INOUT)   :: isos 
         call calc_ssh_perturbation(isos)
-        isos%now%seasurfaceheight = isos%ref%seasurfaceheight + isos%now%ssh_perturbation + isos%now%bsl
+        isos%now%ssh = isos%ref%ssh + isos%now%ssh_perturb + isos%now%bsl
     end subroutine calc_seasurfaceheight
 
 
@@ -87,7 +88,7 @@ contains
         implicit none
         type(isos_class), intent(INOUT)   :: isos 
         isos%now%mass_anom = isos%domain%A * ( isos%now%canom_full &
-            - isos%par%rho_sw * isos%now%bsl * isos%now%maskocean * isos%ref%maskactive )
+            - isos%par%rho_seawater * isos%now%bsl * isos%now%maskocean * isos%ref%maskactive )
     end subroutine calc_mass_anom
 
     !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -103,7 +104,7 @@ contains
     subroutine calc_maskocean(isos)
         implicit none
         type(isos_class), intent(INOUT)   :: isos
-        isos%now%maskocean = ((isos%now%seasurfaceheight - isos%now%z_bed) > 0) * (1 - isos%now%maskgrounded)
+        isos%now%maskocean = ((isos%now%ssh - isos%now%z_bed) > 0) * (1 - isos%now%maskgrounded)
     end subroutine calc_maskocean
 
     !
@@ -119,7 +120,7 @@ contains
         implicit none
         type(isos_class), intent(INOUT)   :: isos
 
-        isos%now%Haf = isos%now%Hice + min(isos%now%z_bed - isos%now%seasurfaceheight, 0) *
+        isos%now%Haf = isos%now%Hice + min(isos%now%z_bed - isos%now%ssh, 0) *
             (isos%par%rho_sw / isos%par%rho_ice)
     end subroutine calc_height_above_floatation
 

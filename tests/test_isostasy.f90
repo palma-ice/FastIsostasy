@@ -290,7 +290,7 @@ program test_isostasy
             ! Define tau field using the mask
 !mmr           call isos_set_field(isos1%now%tau,[1e2,1e3,3e3],[0.0_wp,1.0_wp,2.0_wp],mask,dx,sigma=150e3)
 
-            call isos_set_field(isos1%now%tau,[1.e2_wp,1.e3_wp,3.e3_wp],[0.0_wp,1.0_wp,2.0_wp],mask,dx,sigma=150.e3_wp) 
+            call isos_set_smoothed_field(isos1%now%tau,[1.e2_wp,1.e3_wp,3.e3_wp],[0.0_wp,1.0_wp,2.0_wp],mask,dx,sigma=150.e3_wp) 
 
         case("point_load")
             ! Define ice thickness only in one grid point 
@@ -561,7 +561,7 @@ contains
         call nc_write_dim(filename,"yf",x=0,dx=1,nx=size(isos%now%G0,2),units="pt")
 
         ! Write constant fields 
-        call nc_write(filename,"z_bed_ref",isos%now%z_bed_ref,units="m",long_name="Bedrock elevation reference", &
+        call nc_write(filename,"z_bed_ref",isos%ref%z_bed,units="m",long_name="Bedrock elevation reference", &
                         dim1="xc",dim2="yc",start=[1,1]) 
 
         call nc_write(filename,"tau",isos%now%tau,units="yr",long_name="Asthenosphere relaxation timescale", &

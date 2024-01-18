@@ -136,7 +136,7 @@ module finite_differences
         dudx = 0.0
         dudy = 0.0
 
-        do j = 2, ny-1  
+        do j = 2, ny-1
            do i = 2, nx-1
               im1 = i-1
               ip1 = i+1

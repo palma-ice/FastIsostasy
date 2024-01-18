@@ -6,6 +6,10 @@ module isos_utils
 
     private
     
+    public :: extend_array
+    public :: reduce_array
+    public :: isos_set_field
+    public :: isos_set_smoothed_field
     public :: smooth_gauss_2D
     public :: gauss_values
     public :: calc_gaussian_rigidity
@@ -13,6 +17,228 @@ module isos_utils
     
     contains
 
+
+
+    ! ===== ARRAY SIZING FUNCTIONS ==============================
+
+    subroutine extend_array(ve,v,fill_with,val)
+        ! Given an array ve with dimensions >= those of v, 
+        ! populate ve with values of v, centered in the larger array.
+        ! Fill extra cells with value of user's choice. 
+
+        implicit none
+
+        real(wp), intent(INOUT) :: ve(:,:) 
+        real(wp), intent(IN)    :: v(:,:)
+        character(len=*), intent(IN) :: fill_with
+        real(wp), intent(IN), optional :: val
+
+        ! Local variables
+        integer  :: i, j, nx, ny, nx1, ny1
+        integer  :: i0, i1, j0, j1
+        real(wp) :: fill_value 
+
+        nx = size(v,1)
+        ny = size(v,2) 
+
+        nx1 = size(ve,1)
+        ny1 = size(ve,2)
+
+        ! Determine fill value to be used
+
+        select case(trim(fill_with))
+
+            case("zero","zeros")
+
+                fill_value = 0.0
+
+            case("mean")
+
+                fill_value = sum(v) / real(nx*ny,wp)
+
+            case("val")
+
+                if (.not. present(val)) then
+                    write(*,*) "extend_array:: Error: for fill_with='val', the optional &
+                    &argument val must be provided and is missing right now."
+                    stop
+                end if
+
+                fill_value = val
+
+            case("mirror")
+                ! Set fill_value to zero, it will not be used 
+
+                fill_value = 0.0 
+
+            case DEFAULT
+                write(*,*) "extend_array:: Error: choice of 'fill_with' not recognized."
+                write(*,*) "fill_with = ", trim(fill_with)
+                stop
+        
+        end select
+
+        ! Initialize extended array to correct fill value
+
+        ve = fill_value 
+
+        ! Fill in the actual values centered within the extended array
+
+        if (nx .eq. nx1) then
+            i0 = 1
+        else
+            i0 = floor( (nx1-nx)/2.0 )
+        end if 
+        i1 = i0+nx-1
+
+        if (ny .eq. ny1) then
+            j0 = 1
+        else
+            j0 = floor( (ny1-ny)/2.0 )
+        end if 
+        j1 = j0+ny-1
+
+        ve(i0:i1,j0:j1) = v
+
+
+        if (trim(fill_with) .eq. "mirror") then
+            ! Populate extended array region with mirrored points 
+
+            ! Left
+            if (i0 .gt. 1) then 
+                ve(1:i0-1,j0:j1) = v(i0-1:1:-1,:)
+            end if
+            ! Right
+            if (i1 .lt. nx1) then 
+                ve(i1+1:nx1,j0:j1) = v(nx:nx-(nx1-i1)+1:-1,:)
+            end if
+            
+            ! Bottom
+            if (j0 .gt. 1) then 
+                ve(i0:i1,1:j0-1) = v(:,j0-1:1:-1)
+            end if
+            ! Top
+            if (j1 .lt. ny1) then 
+                ve(i0:i1,j1+1:ny1) = v(:,ny:ny-(ny1-j1)+1:-1)
+            end if
+            
+            ! To do - populate the corners too. For now ignore, and keep 
+            ! extended array values equal to fill_value=0.0. 
+
+        end if 
+
+        return
+    
+    end subroutine extend_array
+
+    subroutine reduce_array(v,ve)
+        ! Given an array of dimensions >= those of v
+        ! extract centered values of ve of interest,
+        ! discarding remaining values around the borders.
+
+        implicit none
+
+        real(wp), intent(INOUT) :: v(:,:)
+        real(wp), intent(IN)    :: ve(:,:) 
+        
+        ! Local variables
+        integer  :: i, j, nx, ny, nx1, ny1
+        integer  :: i0, i1, j0, j1
+        real(wp) :: fill_value 
+
+        nx = size(v,1)
+        ny = size(v,2) 
+
+        nx1 = size(ve,1)
+        ny1 = size(ve,2)
+
+        ! Fill in the actual values from those centered within the extended array
+
+        if (nx .eq. nx1) then
+            i0 = 1
+        else
+            i0 = floor( (nx1-nx)/2.0 )
+        end if 
+        i1 = i0+nx-1
+
+        if (ny .eq. ny1) then
+            j0 = 1
+        else
+            j0 = floor( (ny1-ny)/2.0 )
+        end if 
+        j1 = j0+ny-1
+
+        v = ve(i0:i1,j0:j1)
+
+        return
+    
+    end subroutine reduce_array
+
+    subroutine isos_set_field(var, var_values, mask_values, mask)
+        ! Impose multiple var values according to the corresponding
+        ! locations provided in a mask. 
+        ! Additionally impose Gaussian smoothing via the
+        ! smoothing radius sigma.
+
+        implicit none 
+
+        real(wp), intent(OUT) :: var(:,:) 
+        real(wp), intent(IN)  :: var_values(:)
+        real(wp), intent(IN)  :: mask_values(:)
+        real(wp), intent(IN)  :: mask(:,:) 
+
+        ! Local variables
+        integer :: j, n 
+
+        ! Determine how many values should be assigned
+        n = size(var_values,1)
+
+        ! Initially set var=0 everywhere
+        var = 0.0_wp 
+
+        ! Loop over unique var values and assign them
+        ! to correct regions of domain.
+        do j = 1, n 
+
+            where(mask .eq. mask_values(j)) var = var_values(j)
+
+        end do
+        
+        return
+
+    end subroutine isos_set_field
+
+    subroutine isos_set_smoothed_field(var, var_values, mask_values, mask, dx, sigma)
+        ! Impose multiple var values according to the corresponding
+        ! locations provided in a mask. 
+        ! Additionally impose Gaussian smoothing via the
+        ! smoothing radius sigma.
+
+        implicit none 
+
+        real(wp), intent(OUT) :: var(:,:) 
+        real(wp), intent(IN)  :: var_values(:)
+        real(wp), intent(IN)  :: mask_values(:)
+        real(wp), intent(IN)  :: mask(:,:) 
+        real(wp), intent(IN)  :: dx 
+        real(wp), intent(IN)  :: sigma 
+
+        ! Safety check 
+        if (sigma .le. dx) then 
+            write(*,*) "isos_set_field:: Error: sigma must be larger than dx."
+            write(*,*) "dx    = ", dx 
+            write(*,*) "sigma = ", sigma 
+            stop 
+        end if 
+
+        call isos_set_field(var, var_values, mask_values, mask)
+        
+        ! Apply Gaussian smoothing as desired
+        call smooth_gauss_2D(var,dx=dx,sigma=sigma)
+        
+        return
+
+    end subroutine isos_set_smoothed_field
 
     subroutine smooth_gauss_2D(var,dx,sigma,mask_apply,mask_use)
         ! Smooth out a field to avoid noise 
@@ -29,7 +255,6 @@ module isos_utils
 
         ! Local variables
         integer  :: i, j, nx, ny, n, n2, k 
-        integer  :: imx, ipx, jmx, jpx 
         real(wp), allocatable :: filter0(:,:), filter(:,:) 
         real(wp), allocatable :: var_old(:,:) 
         logical,  allocatable :: mask_apply_local(:,:) 
