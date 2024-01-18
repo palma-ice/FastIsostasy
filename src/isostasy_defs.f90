@@ -65,11 +65,6 @@ module isostasy_defs
         real(wp), allocatable :: eta(:,:,:)           ! [Pa-s]3D mantle viscosity
         real(wp), allocatable :: eta_eff(:,:)       ! [Pa-s] Effective asthenosphere viscosity
         real(wp), allocatable :: tau(:,:)           ! [yr] Asthenospheric relaxation timescale field
-        
-        real(wp), allocatable :: kei(:,:)           ! Kelvin function filter values
-        real(wp), allocatable :: G0(:,:)            ! Green's function values
-        real(wp), allocatable :: GF(:,:)            ! Green's function values (Farrell 1972)
-        real(wp), allocatable :: GN(:,:)            ! Green's function for geoid values
        
         real(wp), allocatable :: z_bed(:,:)         ! Bedrock elevation         [m]
         real(wp), allocatable :: dzbdt(:,:)         ! Rate of bedrock uplift    [m/a]
@@ -103,6 +98,7 @@ module isostasy_defs
         integer                 :: ny
         real(wp)                :: dx
         real(wp)                :: dy
+        real(wp)                :: mu
 
         real(wp), allocatable   :: dx_matrix(:,:)   ! [m] Length difference in x between neighboring cells
         real(wp), allocatable   :: dy_matrix(:,:)   ! [m] Length difference in y between neighboring cells
@@ -120,6 +116,11 @@ module isostasy_defs
         type(c_ptr)             :: backward_fftplan_r2r
         type(c_ptr)             :: forward_dftplan_r2c
         type(c_ptr)             :: backward_dftplan_c2r
+
+        real(wp), allocatable :: kei(:,:)           ! Kelvin function filter values
+        real(wp), allocatable :: G0(:,:)            ! Green's function values
+        real(wp), allocatable :: GF(:,:)            ! Green's function values (Farrell 1972)
+        real(wp), allocatable :: GN(:,:)            ! Green's function for geoid values
     end type isos_domain_class
 
     type isos_class

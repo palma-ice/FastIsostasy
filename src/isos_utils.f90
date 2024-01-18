@@ -8,6 +8,8 @@ module isos_utils
     
     public :: smooth_gauss_2D
     public :: gauss_values
+    public :: calc_gaussian_rigidity
+    public :: calc_gaussian_viscosity
     
     contains
 
@@ -180,5 +182,114 @@ module isos_utils
         return 
 
     end function gauss_values
+
+
+    subroutine calc_gaussian_viscosity(eta,eta_0,sign,dx,dy)
+
+        real(wp), intent(OUT) :: eta(:,:)
+        real(wp), intent(IN) :: eta_0, sign, dx, dy
+        real(wp) :: Lx, Ly, L, det_eta_sigma, f
+        real(wp) :: xcntr, ycntr, xmax, xmin, ymax, ymin
+
+        real(wp), allocatable :: xc(:), yc(:)
+
+        real(wp) :: eta_sigma(2,2)
+        real(wp) :: eta_sigma_m1(2,2)
+
+        integer  :: i, j, nx, ny
+
+        nx = size(eta,1)
+        ny = size(eta,2)
+
+        allocate(xc(nx))
+        allocate(yc(ny))
+
+        do i = 1, nx
+           xc(i) = dx*(i-1)
+        end do
+        xmin = xc(1)
+        xmax = xc(nx)
+
+        do j = 1, ny
+           yc(j) = dy*(j-1)
+        enddo
+        ymin = yc(1)
+        ymax = yc(ny)
+
+        
+        xcntr = (xmax+xmin)/2.0
+        ycntr = (ymax+ymin)/2.0
+
+
+        Lx = (xmax - xmin)/2.
+        Ly = (ymax - ymin)/2.
+
+        eta_sigma_m1 = reshape ([ (4.0/Lx)**2,  0.0_wp, 0.0_wp,  (4.0/Ly)**2], shape = shape(eta_sigma_m1))
+
+        do i = 1, nx
+           do j = 1, ny
+              f = exp(-0.5*dot_product([xc(i),yc(j)]-[xcntr,ycntr], matmul(eta_sigma_m1, [xc(i),yc(j)]-[xcntr,ycntr]) ))              
+              eta(i,j) = eta_0 * 10**(sign * f)
+           enddo
+        enddo
+
+        eta = exp(log10(1.e21 / eta)) * eta
+        
+        return
+        
+    end subroutine calc_gaussian_viscosity
+
+    subroutine calc_gaussian_rigidity(He_lith,He_lith_0, He_lith_1,sign,dx,dy)
+
+        real(wp), intent(IN) :: He_lith_0, He_lith_1,sign, dx, dy
+        real(wp), intent(OUT) :: He_lith(:,:)
+        real(wp) :: Lx, Ly, L, det_He_lith_sigma
+        real(wp) :: xcntr, ycntr, xmax, xmin, ymax, ymin
+
+        real(wp), allocatable :: xc(:), yc(:)
+
+        real(wp) :: He_lith_sigma(2,2)
+        real(wp) :: He_lith_sigma_m1(2,2)
+
+        integer  :: i, j, nx, ny
+
+        nx = size(He_lith,1)
+        ny = size(He_lith,2)
+
+        allocate(xc(nx))
+        allocate(yc(ny))
+
+        
+        do i = 1, nx
+           xc(i) = dx*(i-1)
+        end do
+        xmin = xc(1)
+        xmax = xc(nx)
+
+        do j = 1, ny
+           yc(j) = dy*(j-1)
+        enddo
+        ymin = yc(1)
+        ymax = yc(ny)
+
+        
+        xcntr = (xmax+xmin)/2.0
+        ycntr = (ymax+ymin)/2.0
+
+        Lx = (xmax - xmin)/2.
+        Ly = (ymax - ymin)/2.
+
+        He_lith_sigma_m1 = reshape ([ (4.0/Lx)**2,  0.0_wp, 0.0_wp,  (4.0/Ly)**2], shape = shape(he_lith_sigma_m1))
+
+        do i = 1, nx
+           do j = 1, ny
+              He_lith(i,j) = He_lith_0 +   &
+                   sign*He_lith_1 * exp(-0.5*dot_product([xc(i),yc(j)]-[xcntr,ycntr], matmul(He_lith_sigma_m1, [xc(i),yc(j)]-[xcntr,ycntr]) ))
+           enddo
+        enddo
+        
+        return
+        
+      end subroutine calc_gaussian_rigidity
 
 end module isos_utils

@@ -32,11 +32,13 @@ module isostasy
 
     contains
     
-    subroutine isos_init(isos, filename, group, nx, ny, dx, static_load, E, nu, &
+    subroutine isos_init(isos, filename, group, nx, ny, dx, E, nu, &
         rho_water, rho_ice, rho_seawater, rho_uppermantle, rho_litho, g, r_earth, m_earth, &
-        A_ocean_pd, visc_method, visc_c, thck_c, n_lev, rigidity_method, calc_geoid)
+        A_ocean_pd, visc_method, visc_c, thck_c, n_lev, rigidity_method)
 
+        use, intrinsic :: iso_c_binding
         implicit none 
+        include 'fftw3.f03'
 
         type(isos_class), intent(OUT) :: isos
         character(len=*), intent(IN)  :: filename
@@ -44,8 +46,6 @@ module isostasy
         integer,  intent(IN)  :: nx
         integer,  intent(IN)  :: ny
         real(wp), intent(IN)  :: dx
-
-        logical, intent(IN), optional :: static_load
 
         real(wp), intent(IN), optional :: E
         real(wp), intent(IN), optional :: nu
@@ -59,26 +59,20 @@ module isostasy
         real(wp), intent(IN), optional :: m_earth
         real(wp), intent(IN), optional :: A_ocean_pd
 
-        ! Viscous asthenosphere-related parameters        
-    
+        ! Viscous asthenosphere-related parameters
         character(len=*), intent(IN), optional :: visc_method
-        real(wp), intent(IN), optional :: visc_c               
-        real(wp), intent(IN), optional :: thck_c                 
+        real(wp), intent(IN), optional :: visc_c
+        real(wp), intent(IN), optional :: thck_c
         integer, intent(IN), optional  :: n_lev
         
-        !Lithosphere effective thickness (and therefore ridigidity)       
+        !Lithosphere effective thickness (and therefore ridigidity)
         character(len=*), intent(IN), optional :: rigidity_method
 
-        !Geoid
-        logical, intent(IN), optional :: calc_geoid
-        
         ! Local variables
-
-        real(wp) :: radius_fac
-        real(wp) :: filter_scaling
-        real(wp) :: D_lith_const
-
-        character*256 :: filename_laty
+        real(wp)        :: radius_fac
+        real(wp)        :: filter_scaling
+        real(wp)        :: D_lith_const
+        character*256   :: filename_laty
 
         ! By default one level in asthenosphere
         isos%par%n_lev = 1.        
@@ -118,6 +112,8 @@ module isostasy
         isos%domain%ny = ny
         isos%domain%dx = dx
         isos%domain%dy = dy
+        isos%domain%mu = 2. * pi / ((nx-1) * dx)    ! 2 * pi / L
+        
         call allocate_isos(isos)
 
         ! Init plans
@@ -140,48 +136,8 @@ module isostasy
         isos%domain%dx_matrix = dx * isos%domain%K
         isos%domain%dy_matrix = dy * isos%domain%K
         isos%domain%A = dx_matrix * dy_matrix
-
-        if ( mod(nx,2).eq.0 ) then
-            isos%domain%i1 = nx/2
-        else
-            isos%domain%i1 = int(nx/2) + 1
-        endif
-        isos%domain%i2 = 2*nx - 1 - int(nx/2)
- 
-        if ( mod(ny,2).eq.0 ) then
-            isos%domain%j1 = ny/2
-        else
-            isos%domain%j1 = int(ny/2) + 1
-        endif
-        isos%domain%j2 = 2*ny - 1 - int(ny/2)
-
-        if ( mod(ny - nx, 2).eq.0 ) then
-            isos%domain%convo_offset = (ny - nx) / 2
-        else
-            isos%domain%convo_offset = (ny - nx - 1) / 2
-        endif
-
-        isos%domain%kappa(:, :) = 0.0
-        ic = (nx-1)/2 + 1
-        jc = (ny-1)/2 + 1
-
-        do i = 1, nx
-            if (i.le.ic) then 
-                ip = i-1
-            else
-                ip = nx-i+1
-            end if
-            do j = 1, ny
-                if (j.le.jc) then
-                    iq = j-1  
-                else
-                    iq = ny-j+1
-                end if
-                isos%domain%kappa(i,j)  = (ip*ip + iq*iq)**0.5
-            end do
-        end do
-        isos%domain%kappa = 2 * pi / L * isos%domain%kappa
-        isos%domain%kappa(1,1) = (isos%domain%kappa(1,2) + isos%domain%kappa(2,1)) / 2.0
+        call convenient_calc_convolution_indices(isos%domain)
+        call convenient_calc_kappa(isos%domain)
 
         ! Init parameters
         isos%params%compressibility_correction = 1.5 / (1 + nu)
@@ -229,13 +185,13 @@ module isostasy
                 call isos_allocate(isos%now,isos%par%nx,isos%par%ny,isos%par%n_lev,nr=isos%par%nr)
 
                 ! Calculate the Kelvin function filter 
-                call calc_kei_filter_2D(isos%now%kei,L_w=isos%par%L_w,dx=isos%par%dx,dy=isos%par%dx)
+                call calc_kei_filter_2D(isos%domain%kei,L_w=isos%par%L_w,dx=isos%par%dx,dy=isos%par%dx)
 
                 ! Apply scaling to adjust magnitude of filter for radius of filter cutoff
-                isos%now%kei = filter_scaling*isos%now%kei
+                isos%domain%kei = filter_scaling*isos%domain%kei
 
                 ! Calculate the reference Green's function values
-                call calc_greens_function_scaling(isos%now%G0,isos%now%kei,isos%par%L_w, &
+                call calc_greens_function_scaling(isos%domain%G0,isos%domain%kei,isos%par%L_w, &
                                                     D_lith_const,dx=isos%par%dx,dy=isos%par%dx)
 
                 ! Populate 2D D_lith field to have it available
@@ -280,11 +236,11 @@ module isostasy
 
                 isos%par%nr =  100 !100 !23 ! spare int(radius_fac*isos%par%L_w/isos%par%dx)+1 !mmr spare 100
                 
-                call calc_ge_filter_2D(isos%now%GF,dx=isos%par%dx,dy=isos%par%dx) 
+                call calc_ge_filter_2D(isos%domain%GF,dx=isos%par%dx,dy=isos%par%dx) 
              
                 if (isos%par%interactive_sealevel) then
                     ! Calculate the geoid's Green function (Coulon et al. 2021) to determine geoid displacement
-                    call calc_gn_filter_2D(isos%now%GN,isos%par%m_earth,isos%par%r_earth, dx=isos%par%dx,dy=isos%par%dx)
+                    call calc_gn_filter_2D(isos%domain%GN,isos%par%m_earth,isos%par%r_earth, dx=isos%par%dx,dy=isos%par%dx)
                 endif
               
                 ! Populate 2D D_lith field to have it available
@@ -399,10 +355,10 @@ module isostasy
                 write(*,*) "    ny:           ", isos%par%ny
                 write(*,*) "    dx (m):       ", isos%par%dx 
 
-                write(*,*) "    range(kei): ", minval(isos%now%kei),    maxval(isos%now%kei)
-                write(*,*) "    range(G0):  ", minval(isos%now%G0),     maxval(isos%now%G0)
-                write(*,*) "    range(GF):  ", minval(isos%now%GF),     maxval(isos%now%GF)
-                write(*,*) "    range(GN):  ", minval(isos%now%GN),     maxval(isos%now%GN)
+                write(*,*) "    range(kei): ", minval(isos%domain%kei),    maxval(isos%domain%kei)
+                write(*,*) "    range(G0):  ", minval(isos%domain%G0),     maxval(isos%domain%G0)
+                write(*,*) "    range(GF):  ", minval(isos%domain%GF),     maxval(isos%domain%GF)
+                write(*,*) "    range(GN):  ", minval(isos%domain%GN),     maxval(isos%domain%GN)
 
             case DEFAULT 
 
@@ -417,10 +373,10 @@ module isostasy
                 call isos_allocate(isos%now,isos%par%nx,isos%par%ny,isos%par%n_lev,nr=isos%par%nr)
                 
                 ! Set regional filter fields to zero (not used)
-                isos%now%kei = 0.0 
-                isos%now%G0  = 0.0
-                isos%now%GF  = 0.0
-                isos%now%GN  = 0.0
+                isos%domain%kei = 0.0 
+                isos%domain%G0  = 0.0
+                isos%domain%GF  = 0.0
+                isos%domain%GN  = 0.0
                 
             end select
 
@@ -584,7 +540,7 @@ module isostasy
                     
                     ! Elastic lithosphere (EL)
                     if (update_equil) then 
-                        call calc_litho_regional(isos%now%w1,isos%now%q1,isos%now%z_bed,H_ice,z_sl,isos%now%G0, &
+                        call calc_litho_regional(isos%now%w1,isos%now%q1,isos%now%z_bed,H_ice,z_sl,isos%domain%G0, &
                              isos%par%rho_ice,isos%par%rho_seawater,isos%par%rho_uppermantle,isos%par%rho_litho,isos%par%g)
                     end if 
 
@@ -597,7 +553,7 @@ module isostasy
 
                     ! 2D elastic lithosphere (2DEL)
                     if (update_equil) then
-                       !call calc_litho_regional(isos%now%w1,isos%now%q1,isos%now%z_bed,H_ice,z_sl,isos%now%G0)
+                       !call calc_litho_regional(isos%now%w1,isos%now%q1,isos%now%z_bed,H_ice,z_sl,isos%domain%G0)
  
                         write(*,*) "isos_update:: Error: method=3 not implemented yet."
                         stop 
@@ -620,7 +576,7 @@ module isostasy
                     ! the EL component is contained in the ELVA model solution
                     ! q1 will be used (the load), while w1 will not be used further.
 
-                    call calc_litho_regional(isos%now%w1,isos%now%q1,isos%now%z_bed,H_ice,z_sl,isos%now%GF,
+                    call calc_litho_regional(isos%now%w1,isos%now%q1,isos%now%z_bed,H_ice,z_sl,isos%domain%GF,
                         isos%par%rho_ice,isos%par%rho_seawater,isos%par%rho_uppermantle,isos%par%rho_litho,
                         isos%par%g)
 
@@ -629,7 +585,7 @@ module isostasy
 
                     if (isos%par%interactive_sealevel) then
                        call calc_geoid_displacement(isos%now%ssh_perturb,-isos%now%q1/isos%par%g - isos%now%w2*isos%par%rho_uppermantle - isos%now%w1*isos%par%rho_litho, &
-                            isos%now%GN)
+                            isos%domain%GN)
                     else
                        isos%now%ssh_perturb = 0.
                     endif
@@ -856,6 +812,12 @@ module isostasy
         if (allocated(domain%A))            deallocate(domain%A)
         if (allocated(domain%K))            deallocate(domain%K)
         if (allocated(domain%kappa))        deallocate(domain%kappa)
+
+        if (allocated(domain%kei))       deallocate(domain%kei)
+        if (allocated(domain%G0))        deallocate(domain%G0)
+        if (allocated(domain%GF))        deallocate(domain%GF)
+        if (allocated(domain%GN))        deallocate(domain%GN)
+
         return 
 
     end subroutine deallocate_isos_domain
@@ -868,11 +830,6 @@ module isostasy
         if (allocated(state%D_lith))    deallocate(state%D_lith)
         if (allocated(state%eta))       deallocate(state%eta)
         if (allocated(state%tau))       deallocate(state%tau)
-
-        if (allocated(state%kei))       deallocate(state%kei)
-        if (allocated(state%G0))        deallocate(state%G0)
-        if (allocated(state%GF))        deallocate(state%GF)
-        if (allocated(state%GN))        deallocate(state%GN)
 
         if (allocated(state%z_bed))     deallocate(state%z_bed)
         if (allocated(state%dzbdt))     deallocate(state%dzbdt)
@@ -911,6 +868,11 @@ module isostasy
         allocate(domain%K(nx,ny))
         allocate(domain%kappa(nx,ny))
 
+        allocate(domain%kei(nx,ny))
+        allocate(domain%G0(nx,ny))
+        allocate(domain%GF(nx,ny))
+        allocate(domain%GN(nx,ny))
+
         return
     end subroutine allocate_isos_domain
 
@@ -938,16 +900,6 @@ module isostasy
         allocate(state%eta_eff(nx,ny))
         allocate(state%tau(nx,ny))
 
-        
-        allocate(state%kei(nfilt,nfilt))
-        allocate(state%G0(nfilt,nfilt))
-! recheck convol 
-!        allocate(now%GF(nfilt,nfilt))
-        allocate(state%GF(nx,ny))
-! recheck convol 
-!        allocate(state%GN(nfilt,nfilt)) 
-        allocate(state%GN(nx,ny))
-
         allocate(state%z_bed(nx,ny))
         allocate(state%dzbdt(nx,ny))
         allocate(state%z_bed_ref(nx,ny))
@@ -973,8 +925,6 @@ module isostasy
         return
 
     end subroutine allocate_isos_state
-
-
 
     subroutine isos_set_field(var,var_values,mask_values,mask,dx,sigma)
         ! Impose multiple var values according to the corresponding
@@ -1024,238 +974,8 @@ module isostasy
     end subroutine isos_set_field
 
 
-    subroutine calc_greens_function_scaling(G0,kei2D,L_w,D_lith,dx,dy)
-        ! The Green's function (Eq. 3 of Coulon et al, 2021)
-        ! gives displacement G in [m] as a function of the distance
-        ! r from the point load P_b [Pa]. 
-
-        ! Here G0 is calculated, which is G without including the point load.
-        ! G0 has units of [m N-1]. 
-        ! This can then be multiplied with the actual magnitude of the
-        ! point load to obtain G.
-        ! G = G0 * P_b = [m N-1] * [Pa] = [m]. 
-
-        ! Note that L_w contains information about rho_uppermantle. 
-
-        implicit none
-
-        real(wp), intent(OUT) :: G0(:,:) 
-        real(wp), intent(IN)  :: kei2D(:,:) 
-        real(wp), intent(IN)  :: L_w 
-        real(wp), intent(IN)  :: D_lith 
-        real(wp), intent(IN)  :: dx 
-        real(wp), intent(IN)  :: dy
-        
-        G0 = -L_w**2 / (2.0*pi*D_lith) * kei2D * (dx*dy)
-
-        return
-
-    end subroutine calc_greens_function_scaling
-
-    subroutine calc_ge_filter_2D(filt,dx,dy) 
-        ! Calculate 2D Green Function
-
-        implicit none 
-
-        real(wp), intent(OUT) :: filt(:,:) 
-!        real(wp), intent(IN)  :: GE(:,:)
-        real(wp), intent(IN)  :: dx 
-        real(wp), intent(IN)  :: dy   
-
-        ! Local variables 
-        integer  :: i, j, i1, j1, n, n2
-        real(wp) :: x, y, r
-
-        real(wp) :: ge_test_0
-        real(wp) :: ge_test_1
-
-        real(wp), parameter, dimension(42) :: rn_vals = [ 0.0,    0.011,  0.111,  1.112,  2.224, &
-            3.336, 4.448,  6.672, 8.896,  11.12,  17.79,  22.24,  27.80,  33.36,  44.48,  55.60, &
-            66.72,  88.96,  111.2,  133.4,  177.9,  222.4,  278.0,  333.6, 444.8,  556.0,  667.2, &
-            778.4,  889.6,  1001.0, 1112.0, 1334.0, 1779.0, 2224.0, 2780.0, 3336.0, 4448.0, 5560.0, &
-            6672.0, 7784.0, 8896.0, 10008.0]* 1.e3        !    # converted to meters
-       
-        real(wp), parameter, dimension(42) :: ge_vals = [ -33.6488, -33.64, -33.56, -32.75, -31.86, &
-            -30.98, -30.12, -28.44, -26.87, -25.41,-21.80, -20.02, -18.36, -17.18, -15.71, -14.91, &
-            -14.41, -13.69, -13.01,-12.31, -10.95, -9.757, -8.519, -7.533, -6.131, -5.237, -4.660, &
-            -4.272,-3.999, -3.798, -3.640, -3.392, -2.999, -2.619, -2.103, -1.530, -0.292, 0.848, &
-            1.676,  2.083,  2.057,  1.643]
-
-
-        ! Get size of filter array and half-width
-        n  = size(filt,1) 
-        n2 = (n-1)/2 
-       
-        ! Safety check
-        if (size(filt,1) .ne. size(filt,2)) then 
-            write(*,*) "calc_ge_filt:: error: array 'filt' must be square [n,n]."
-            write(*,*) "size(filt): ", size(filt,1), size(filt,2)
-            stop
-        end if 
-
-        ! Safety check
-        if (mod(n,2) .ne. 1) then 
-            write(*,*) "calc_ge_filt:: error: n can only be odd."
-            write(*,*) "n = ", n
-            stop  
-        end if 
-
-
-        ! Loop over filter array in two dimensions,
-        ! calculate the distance from the center
-        ! and impose correct Green function value. 
-
-        filt = 0.
-        
-        do j = -n2, n2 
-        do i = -n2, n2
-
-            x  = i*dx 
-            y  = j*dy 
-            r  = sqrt(x**2+y**2)  
-
-            ! Get actual index of array
-            i1 = i+1+n2 
-            j1 = j+1+n2 
-
-            ! Get correct GE value for this point
-
-            
-            filt(i1,j1) = get_ge_value(r,rn_vals,ge_vals) * 1.e-12 *(dx*dy) /(9.81*max(r,dx)) ! mmr-recheck 9.81
-
-         end do
-        end do
-
-        return 
-      end subroutine calc_GE_filter_2D
-
-
-
-      function get_ge_value(r,rn_vals,ge_vals) result(ge)
-
-        implicit none
-
-        real(wp), intent(IN) :: r           ! [m] Radius from point load 
-        real(wp), intent(IN) :: rn_vals(:)  ! [m] Tabulated  radius values
-        real(wp), intent(IN) :: ge_vals(:) ! [-] Tabulated Green function values
-        real(wp) :: ge
-
-        ! Local variables 
-        integer :: k, n 
-        real(wp) :: rn_now 
-        real(wp) :: wt 
-
-        n = size(rn_vals,1) 
-
-        ! Get radius from point load
-        rn_now = r   
-
-        if (rn_now .gt. rn_vals(n)) then
-
-            ge = 0. !ge_vals(n)
-
-        else 
-
-            do k = 1, n-1
-                if (rn_now .ge. rn_vals(k) .and. rn_now .lt. rn_vals(k+1)) exit
-            end do 
-
-            ! Linear interpolation to get current ge value
-            ge = ge_vals(k) &
-                + (rn_now-rn_vals(k))/(rn_vals(k+1)-rn_vals(k))*(ge_vals(k+1)-ge_vals(k))   
-
-        end if 
-
-        return
-
-      end function get_GE_value
-
-    subroutine calc_GN_filter_2D(filt,m_earth,r_earth,dx,dy) 
-        ! Calculate 2D Green Function
-
-        implicit none 
-
-        real(wp), intent(OUT) :: filt(:,:) 
-        real(wp), intent(IN)  :: m_earth
-        real(wp), intent(IN)  :: r_earth
-        real(wp), intent(IN)  :: dx 
-        real(wp), intent(IN)  :: dy   
-
-        ! Local variables 
-        integer  :: i, j, i1, j1, n, n2
-        real(wp) :: x, y, r
-
-        real(wp) :: ge_test_0
-        real(wp) :: ge_test_1
-
-
-        ! Get size of filter array and half-width
-        n  = size(filt,1) 
-        n2 = (n-1)/2 
-        
-        ! Safety check
-        if (size(filt,1) .ne. size(filt,2)) then 
-            write(*,*) "calc_ge_filt:: error: array 'filt' must be square [n,n]."
-            write(*,*) "size(filt): ", size(filt,1), size(filt,2)
-            stop
-        end if 
-
-        ! Safety check
-        if (mod(n,2) .ne. 1) then 
-            write(*,*) "calc_ge_filt:: error: n can only be odd."
-            write(*,*) "n = ", n
-            stop  
-        end if 
-
-
-        ! Loop over filter array in two dimensions,
-        ! calculate the distance from the center
-        ! and impose correct Green function value. 
-
-        filt = 0.
-        
-        do j = -n2, n2 
-        do i = -n2, n2
-
-            x  = i*dx 
-            y  = j*dy
-            
-            r  = sqrt(x**2+y**2)  
-
-            ! Get actual index of array
-            i1 = i+1+n2 
-            j1 = j+1+n2 
-
-            ! Get correct GE value for this point (given by colatitude, theta)
-            
-            filt(i1,j1) = calc_gn_value(max(dy,r),r_earth,m_earth)* (dx*dy)
-
-         end do
-        end do
-
-        return 
-
-      end subroutine calc_GN_filter_2D
-
-
-    function calc_gn_value(r,r_earth,m_earth) result(gn)
-        !Info
-        implicit none
-
-        real(wp), intent(IN) :: r
-        real(wp), intent(IN)  :: r_earth 
-        real(wp), intent(IN)  :: m_earth 
-        real(wp)              :: gn
-
-        gn = r_earth / (2. * m_earth * sin (r/(2.*r_earth)) )
-
-        return
-    end function calc_gn_value
-      
-    
     ! === isos physics routines ======================================
 
-    
     subroutine calc_litho_regional(w1,q1,z_bed,H_ice,z_sl,GG,rho_ice,rho_seawater,rho_uppermantle,rho_litho,g)
         ! Calculate the load on the lithosphere as
         ! distributed on an elastic plate. 

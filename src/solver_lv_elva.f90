@@ -1,7 +1,7 @@
 
 module solver_lv_elva
 
-    use isostasy_defs, only : wp, pi 
+    use isostasy_defs, only : wp, pi, isos_domain_class
     use finite_differences, only: calc_derivative_x, calc_derivative_y, calc_derivative_xx, calc_derivative_yy
 
     implicit none
@@ -20,6 +20,7 @@ module solver_lv_elva
     public :: calc_fft_forward_r2r
     public :: calc_fft_backward_c2r
     public :: calc_fft_forward_r2c
+    public :: calc_kappa
 
     contains
 
@@ -216,9 +217,9 @@ module solver_lv_elva
         call calc_derivative_y(Mxy_xy,Mxy_x,dy)
 
         f = - q - rho_uppermantle*g*u - rho_litho*g*u_el + Mx_xx + 2.0*Mxy_xy + My_yy 
-        call calc_fft_forward_r2r(f/(2.*eta),f_hat)
+        call calc_fft_forward_r2r(plan, f/(2.*eta), f_hat, in_aux, out_aux)
         prod_hat = f_hat/kappa/mu
-        call calc_fft_backward_r2r(prod_hat,prod)
+        call calc_fft_backward_r2r(plan, prod_hat, prod, in_aux, out_aux)
         dudt = prod  ! [m/s]
 
         dudt  = dudt - 0.25*(dudt(1,1)+dudt(nx,ny)+dudt(1,m)+dudt(nx,1)) 
@@ -250,116 +251,7 @@ module solver_lv_elva
 
     end subroutine calc_lv_asthenosphere_viscous
 
-    subroutine calc_gaussian_viscosity(eta,eta_0,sign,dx,dy)
-
-        real(wp), intent(OUT) :: eta(:,:)
-        real(wp), intent(IN) :: eta_0, sign, dx, dy
-        real(wp) :: Lx, Ly, L, det_eta_sigma, f
-        real(wp) :: xcntr, ycntr, xmax, xmin, ymax, ymin
-
-        real(wp), allocatable :: xc(:), yc(:)
-
-        real(wp) :: eta_sigma(2,2)
-        real(wp) :: eta_sigma_m1(2,2)
-
-        integer  :: i, j, nx, ny
-
-        nx = size(eta,1)
-        ny = size(eta,2)
-
-        allocate(xc(nx))
-        allocate(yc(ny))
-
-        do i = 1, nx
-           xc(i) = dx*(i-1)
-        end do
-        xmin = xc(1)
-        xmax = xc(nx)
-
-        do j = 1, ny
-           yc(j) = dy*(j-1)
-        enddo
-        ymin = yc(1)
-        ymax = yc(ny)
-
-        
-        xcntr = (xmax+xmin)/2.0
-        ycntr = (ymax+ymin)/2.0
-
-
-        Lx = (xmax - xmin)/2.
-        Ly = (ymax - ymin)/2.
-
-        eta_sigma_m1 = reshape ([ (4.0/Lx)**2,  0.0_wp, 0.0_wp,  (4.0/Ly)**2], shape = shape(eta_sigma_m1))
-
-        do i = 1, nx
-           do j = 1, ny
-              f = exp(-0.5*dot_product([xc(i),yc(j)]-[xcntr,ycntr], matmul(eta_sigma_m1, [xc(i),yc(j)]-[xcntr,ycntr]) ))              
-              eta(i,j) = eta_0 * 10**(sign * f)
-           enddo
-        enddo
-
-        eta = exp(log10(1.e21 / eta)) * eta
-        
-        return
-        
-    end subroutine calc_gaussian_viscosity
-
-    subroutine calc_gaussian_rigidity(He_lith,He_lith_0, He_lith_1,sign,dx,dy)
-
-        real(wp), intent(IN) :: He_lith_0, He_lith_1,sign, dx, dy
-        real(wp), intent(OUT) :: He_lith(:,:)
-        real(wp) :: Lx, Ly, L, det_He_lith_sigma
-        real(wp) :: xcntr, ycntr, xmax, xmin, ymax, ymin
-
-        real(wp), allocatable :: xc(:), yc(:)
-
-        real(wp) :: He_lith_sigma(2,2)
-        real(wp) :: He_lith_sigma_m1(2,2)
-
-        integer  :: i, j, nx, ny
-
-        nx = size(He_lith,1)
-        ny = size(He_lith,2)
-
-        allocate(xc(nx))
-        allocate(yc(ny))
-
-        
-        do i = 1, nx
-           xc(i) = dx*(i-1)
-        end do
-        xmin = xc(1)
-        xmax = xc(nx)
-
-        do j = 1, ny
-           yc(j) = dy*(j-1)
-        enddo
-        ymin = yc(1)
-        ymax = yc(ny)
-
-        
-        xcntr = (xmax+xmin)/2.0
-        ycntr = (ymax+ymin)/2.0
-
-        Lx = (xmax - xmin)/2.
-        Ly = (ymax - ymin)/2.
-
-        He_lith_sigma_m1 = reshape ([ (4.0/Lx)**2,  0.0_wp, 0.0_wp,  (4.0/Ly)**2], shape = shape(he_lith_sigma_m1))
-
-        do i = 1, nx
-           do j = 1, ny
-              He_lith(i,j) = He_lith_0 +   &
-                   sign*He_lith_1 * exp(-0.5*dot_product([xc(i),yc(j)]-[xcntr,ycntr], matmul(He_lith_sigma_m1, [xc(i),yc(j)]-[xcntr,ycntr]) ))
-           enddo
-        enddo
-        
-        return
-        
-      end subroutine calc_gaussian_rigidity
-
-        
-      subroutine calc_effective_viscosity_3layer_channel(eta_eff,visc_c,thck_c,He_lith,n_lev,nu,dx,dy)
+    subroutine calc_effective_viscosity_3layer_channel(eta_eff,visc_c,thck_c,He_lith,n_lev,nu,dx,dy)
 
         implicit none
 
@@ -414,68 +306,66 @@ module solver_lv_elva
 
         else if (n_lev.eq.3) then
 
+            do i = 1, nx
+            xc(i) = dx*(i-1)
+            end do
+            xmin = xc(1)
+            xmax = xc(nx)
+
+            do j = 1, ny
+            yc(j) = dy*(j-1)
+            enddo
+            ymin = yc(1)
+            ymax = yc(ny)
+
+            
+            xcntr = (xmax+xmin)/2.0
+            ycntr = (ymax+ymin)/2.0
+
+            Lx = xmax - xmin
+            Ly = ymax - ymin
+            L = (Lx + Ly) / 2.0
+
+            kappa = 2*pi/L 
+                    
+            eta(:,:,1)  = 0.
+            eta(:,:,2)  = visc_c      
+            eta(:,:,3)  = eta_eff
+
+            dz(:,:,1)  = He_lith*1.e3
+            dz(:,:,2)  = thck_c*1.e3     ![m]
+            dz(:,:,3)  = 2000.*1.e3      ![m]
         
-        do i = 1, nx
-           xc(i) = dx*(i-1)
-        end do
-        xmin = xc(1)
-        xmax = xc(nx)
+            ! Start with n-th layer: viscous half space
+            
+            eta_eff(:,:) = eta(:,:,n_lev)
+            
+            do k = 1, n_lev-1
 
-        do j = 1, ny
-           yc(j) = dy*(j-1)
-        enddo
-        ymin = yc(1)
-        ymax = yc(ny)
+            eta_c = eta(:,:,n_lev-1)
+            dz_c = dz(:,:,n_lev-k+1)
 
+            eta_ratio = eta_c/eta_eff
+            eta_ratiom1 = 1./eta_ratio
+
+            c = cosh(dz_c*kappa)
+            s = sinh(dz_c*kappa)
+
+            R = (2.0 * eta_ratio * c * s + (1-eta_ratio**2) * (dz_c*kappa)**2 + (eta_ratio*s)**2 + c**2 )/&
+                    ((eta_ratio + eta_ratiom1)* c * s + (eta_ratio - eta_ratiom1)*dz_c*kappa + s**2 + c**2)
+            
+            eta_eff = R*eta_c
+            
+            end do
+
+        else
+
+            print*,'n_lev = ', n_lev
         
-        xcntr = (xmax+xmin)/2.0
-        ycntr = (ymax+ymin)/2.0
+            stop
 
-        Lx = xmax - xmin
-        Ly = ymax - ymin
-        L = (Lx + Ly) / 2.0
-
-        kappa = 2*pi/L 
-                
-        eta(:,:,1)  = 0.
-        eta(:,:,2)  = visc_c      
-        eta(:,:,3)  = eta_eff
-
-        dz(:,:,1)  = He_lith*1.e3
-        dz(:,:,2)  = thck_c*1.e3     ![m]
-        dz(:,:,3)  = 2000.*1.e3      ![m]
-       
-        ! Start with n-th layer: viscous half space
-        
-        eta_eff(:,:) = eta(:,:,n_lev)
-        
-        do k = 1, n_lev-1
-
-           eta_c = eta(:,:,n_lev-1)
-           dz_c = dz(:,:,n_lev-k+1)
-
-           eta_ratio = eta_c/eta_eff
-           eta_ratiom1 = 1./eta_ratio
-
-           c = cosh(dz_c*kappa)
-           s = sinh(dz_c*kappa)
-
-           R = (2.0 * eta_ratio * c * s + (1-eta_ratio**2) * (dz_c*kappa)**2 + (eta_ratio*s)**2 + c**2 )/&
-                ((eta_ratio + eta_ratiom1)* c * s + (eta_ratio - eta_ratiom1)*dz_c*kappa + s**2 + c**2)
-           
-           eta_eff = R*eta_c
-           
-        end do
-
-     else
-
-        print*,'n_lev = ', n_lev
-       
-        stop
-
-     endif
-     
-! move this out for symmetry     eta_eff    = eta_eff  * (1.5/(1. + nu))         ! [Pa s]
+        endif
+        ! move this out for symmetry     eta_eff    = eta_eff  * (1.5/(1. + nu))         ! [Pa s]
 
         
         deallocate(xc)
@@ -493,9 +383,9 @@ module solver_lv_elva
      
         return
         
-      end subroutine calc_effective_viscosity_3layer_channel
+    end subroutine calc_effective_viscosity_3layer_channel
 
-      subroutine calc_effective_viscosity_3d(eta_eff,eta,nu,dx,dy)
+    subroutine calc_effective_viscosity_3d(eta_eff,eta,nu,dx,dy)
 
         implicit none
 
@@ -552,59 +442,58 @@ module solver_lv_elva
 
         else if (n_lev.ge.3) then
 
+            do i = 1, nx
+            xc(i) = dx*(i-1)
+            end do
+            xmin = xc(1)
+            xmax = xc(nx)
+
+            do j = 1, ny
+            yc(j) = dy*(j-1)
+            enddo
+            ymin = yc(1)
+            ymax = yc(ny)
+
+            
+            xcntr = (xmax+xmin)/2.0
+            ycntr = (ymax+ymin)/2.0
+
+            Lx = xmax - xmin
+            Ly = ymax - ymin
+            L = (Lx + Ly) / 2.0
+
+            kappa = 2*pi/L 
+                    
         
-        do i = 1, nx
-           xc(i) = dx*(i-1)
-        end do
-        xmin = xc(1)
-        xmax = xc(nx)
+            ! Start with n-th layer: viscous half space
+            
+            eta_eff(:,:) = eta(:,:,n_lev)
+            
+            do k = 1, n_lev-1
 
-        do j = 1, ny
-           yc(j) = dy*(j-1)
-        enddo
-        ymin = yc(1)
-        ymax = yc(ny)
+            eta_c = eta(:,:,n_lev-1)
+            dz_c = 100.*1.e3 !dz(:,:,n_lev-k+1)
+            
+            eta_ratio = eta_c/eta_eff
+            eta_ratiom1 = 1./eta_ratio
 
+            c = cosh(dz_c*kappa)
+            s = sinh(dz_c*kappa)
+
+            R = (2.0 * eta_ratio * c * s + (1-eta_ratio**2) * (dz_c*kappa)**2 + (eta_ratio*s)**2 + c**2 )/&
+                    ((eta_ratio + eta_ratiom1)* c * s + (eta_ratio - eta_ratiom1)*dz_c*kappa + s**2 + c**2)
+            
+            eta_eff = R*eta_c
+            
+            end do
+
+        else
+
+            print*,'n_lev = ', n_lev
         
-        xcntr = (xmax+xmin)/2.0
-        ycntr = (ymax+ymin)/2.0
+            stop
 
-        Lx = xmax - xmin
-        Ly = ymax - ymin
-        L = (Lx + Ly) / 2.0
-
-        kappa = 2*pi/L 
-                
-       
-        ! Start with n-th layer: viscous half space
-        
-        eta_eff(:,:) = eta(:,:,n_lev)
-        
-        do k = 1, n_lev-1
-
-           eta_c = eta(:,:,n_lev-1)
-           dz_c = 100.*1.e3 !dz(:,:,n_lev-k+1)
-          
-           eta_ratio = eta_c/eta_eff
-           eta_ratiom1 = 1./eta_ratio
-
-           c = cosh(dz_c*kappa)
-           s = sinh(dz_c*kappa)
-
-           R = (2.0 * eta_ratio * c * s + (1-eta_ratio**2) * (dz_c*kappa)**2 + (eta_ratio*s)**2 + c**2 )/&
-                ((eta_ratio + eta_ratiom1)* c * s + (eta_ratio - eta_ratiom1)*dz_c*kappa + s**2 + c**2)
-           
-           eta_eff = R*eta_c
-           
-        end do
-
-     else
-
-        print*,'n_lev = ', n_lev
-       
-        stop
-
-     endif
+        endif
      
 ! move this out for symmetry     eta_eff    = eta_eff  * (1.5/(1. + nu))         ! [Pa s]
 
@@ -624,9 +513,7 @@ module solver_lv_elva
      
         return
         
-      end subroutine calc_effective_viscosity_3d
-
-
+    end subroutine calc_effective_viscosity_3d
 
     subroutine calc_asthenosphere_viscous_params(kappa,beta,mu,D_lith,rho_uppermantle,g,dx) 
         ! Calculate parameters needed for elastic lithosphere viscous asthenosphere (ELVA)                                        
@@ -647,9 +534,6 @@ module solver_lv_elva
 
         nx = size(kappa,1)
         ny = size(kappa,2)
-
-        ! Calculate mu
-        mu = 2.*pi/((nx-1)*dx)
 
         ! Calculate kappa and beta
         kappa = 0.0
@@ -679,21 +563,21 @@ module solver_lv_elva
       
     end subroutine calc_asthenosphere_viscous_params
 
+    subroutine convenient_calc_kappa(domain)
+        implicit none
+        type(isos_domain_class), intent(INOUT)  :: domain
 
-    subroutine calc_kappa(field,kappa)
+        calc_kappa(domain%kappa, domain%nx, domain%ny)
+        return
+    end subroutine convenient_calc_kappa
 
-        ! Calculate kappa and beta
+    subroutine calc_kappa(kappa, nx, ny)
 
-        real(wp), intent(IN)  :: field(:,:)
-        real(wp), allocatable, intent(OUT) :: kappa(:,:)
+        integer, intent(IN)     :: nx, ny
+        real(wp), intent(OUT)   :: kappa(:,:)
 
-        integer :: i, j, ic, jc, ip, iq, nx, ny
+        integer :: i, j, ic, jc, ip, iq
 
-        nx = size(field,1)
-        ny = size(field,2)
-
-        allocate(kappa(nx,ny))
-        
         kappa = 0.0
 
         ic = (nx-1)/2 + 1
@@ -714,8 +598,9 @@ module solver_lv_elva
               kappa(i,j)  = (ip*ip + iq*iq)**0.5
            end do
         end do
+        kappa(1,1) = (kappa(1,2) + kappa(2,1)) / 2.0
 
-
+        return
     end subroutine calc_kappa
 
     subroutine calc_fft_forward_r2r(plan, in, out, in_aux, out_aux)
