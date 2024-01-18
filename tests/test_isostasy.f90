@@ -27,7 +27,7 @@ program test_isostasy
 
     real(wp) :: r0, h0, eta 
 
-    integer  :: i, j, nx, ny, nz, slice_time
+    integer  :: i, j, k, nx, ny, nz, slice_time
     real(wp) :: time_now
     real(wp) :: xmin, xmax, dx
     real(wp) :: ymin, ymax, dy
@@ -77,16 +77,15 @@ program test_isostasy
     
 ! tests in Swierczek-Jereczek et al. (2023), GMD.
     
-    !   experiment = "test1" ! 1000 m radius ice disk of 1000 m heights, solved with ELVA Benchmark: analytical (Bueler et al. 2007); dtt = 1; dtout = 1000. ; time_end = 50.e3
+!     experiment = "test1" ! 1000 m radius ice disk of 1000 m heights, solved with ELVA Benchmark: analytical (Bueler et al. 2007); dtt = 1; dtout = 1000. ; time_end = 50.e3
+!      experiment = "test2"   ! Benchmark: Spada et al. (2011) disc
 
-      experiment = "test2"   ! Benchmark: Spada et al. (2011) disc
-
-    !  experiment = "test3a"  ! Gaussian reduction of lithospheric thickness at centre
+!      experiment = "test3a"  ! Gaussian reduction of lithospheric thickness at centre
     !  experiment = "test3b"  ! Gaussian increase of lithospheric thickness at centre
     !  experiment = "test3c"  ! Gaussian reduction of viscosity at centre
     !  experiment = "test3d"  ! Gaussian increase of viscosity at centre
     !  experiment = "test4"  ! ais ice6g_d 
-    !  experiment = "test5"  ! Lucía's Greenland ice-sheet load (since 15 ka)
+      experiment = "test5"  ! Lucía's Greenland ice-sheet load (since 15 ka)
     
      
     write(*,*) "experiment = ", trim(experiment)
@@ -400,13 +399,25 @@ program test_isostasy
             call nc_read(filename,"IceT",T_ice,start=[1,1,1],count=[ncx,ncy,nct])
             T_ice = max(T_ice, 0.)
 
-            ! Initialize H_ice
-                    
-           H_ice = T_ice(:,:,1)
-           H_ice_ref = T_ice(:,:,1)
-           
-           z_bed_ref = 0. ! recheck - Jan  - what do you put here? ie what are the initial conditions? LGM?
+            ! calculate anomalies
+            
+            H_ice = T_ice(:,:,1)
+            do i = 1, ncx
+               do j = 1, ncy
+                  do k = 1,nct
+                     T_ice(i,j,k)  = T_ice(i,j,k) - H_ice(i,j) 
+                  enddo
+               enddo
+            enddo
+            
+            H_ice = T_ice(:,:,1)
+            H_ice_ref = T_ice(:,:,1)
 
+            print*,'stop: need to use Jans bathymetry at first time step'
+            stop
+
+           
+            
 
         case("test5")
 
@@ -455,12 +466,27 @@ program test_isostasy
             call nc_read(filename,"yc",yc_ice,start=[1],count=[ncy])
             
 
+            ! calculate anomalies
+            
+            H_ice = T_ice(:,:,1)
+            do i = 1, ncx
+               do j = 1, ncy
+                  do k = 1,nct
+                     T_ice(i,j,k)  = T_ice(i,j,k) - H_ice(i,j) 
+                  enddo
+               enddo
+            enddo
+            
             H_ice = T_ice(:,:,1)
             z_bed = z_bed_ice(:,:,1)
             
             H_ice_ref = T_ice(:,:,1)
             z_bed_ref = z_bed_ice(:,:,1)
 
+!            print*,'check load at first time step - zero over land and large over ocean'
+!           stop
+
+          
         case DEFAULT
 
             write(*,*) "Error: experiment name not recognized."
@@ -485,14 +511,14 @@ program test_isostasy
 
        time = time_init + (n-1)*dtt
        
-       if (static_load.neqv..true.)  then
-          call interp_linear(time_ice,T_ice,time,H_ice) 
-          H_ice = H_ice
+       if (static_load.eqv..true.)  then
+          H_ice = T_ice(:,:,1)
        else
-          H_ice =T_ice(:,:,1)
+          call interp_linear(time_ice,T_ice,time,H_ice)
        endif
-       z_bed = z_bed 
 
+
+       
         ! Update bedrock
         call isos_update(isos1,H_ice,z_sl,time)
 
@@ -622,9 +648,9 @@ contains
         call nc_write(filename,"q_load",isos%now%q1,units="N/m2",long_name="Load", &                                        
              dim1="xc",dim2="yc",dim3="time",start=[1,1,n],ncid=ncid)                                            
 
-        call nc_write(filename,"w_VA",-isos%now%w2,units="m",long_name="Displacement (viscous)", &                                        
+        call nc_write(filename,"w_visc",isos%now%w2,units="m",long_name="Displacement (viscous)", &                                        
              dim1="xc",dim2="yc",dim3="time",start=[1,1,n],ncid=ncid)                                            
-        call nc_write(filename,"z_bed_EL",-isos%now%w1,units="m",long_name="Displacement (elastic)", &
+        call nc_write(filename,"w_el",isos%now%w1,units="m",long_name="Displacement (elastic)", &
              dim1="xc",dim2="yc",dim3="time",start=[1,1,n],ncid=ncid)                                           
         call nc_write(filename,"eta_eff",isos%now%eta_eff,units="Pa s",long_name="Asthenosphere effective viscosity", &
              dim1="xc",dim2="yc",dim3="time",start=[1,1,n],ncid=ncid)                                           

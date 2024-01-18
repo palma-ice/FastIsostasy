@@ -15,8 +15,8 @@
     rho_ice         = 931.                  ! [kg/m^3] 910          | test1: 910| test2: 931  | test3: 910  | test4: 910  | test4: 910
     rho_sw          = 1028.0                ! [kg/m^3] 
     rho_w           = 1000.0                ! [kg/m^3] 
-    rho_a           = 3300.0                ! [kg/m^3] | test1: 3300 | test2: 3300  | test3: 3700  | test4: 3700  | test4: 3700
-    rho_l           = 2600.0                ! [kg/m^3] 	
+    rho_a           = 3400.0                ! [kg/m^3] | test1: 3300 | test2: 3300  | test3: 3700  | test4: 3700  | test4: 3700
+    rho_l           = 2800.0                ! [kg/m^3] 	
     g               = 9.81                  ! [m/s^2]
     r_earth         = 6.378e6               ! [m]  Earth's radius
     m_earth         = 5.972e24              ! [kg] Earth's mass 

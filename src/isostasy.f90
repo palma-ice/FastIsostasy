@@ -576,8 +576,9 @@ module isostasy
 
                     else
 
-                       call calc_load_local(isos%now%q1,isos%now%z_bed,H_ice,z_sl, &
-                            isos%par%rho_ice,isos%par%rho_sw,isos%par%g)                       
+!                       call calc_load_local(isos%now%q1,isos%now%z_bed,H_ice,z_sl,isos%par%rho_ice,isos%par%rho_sw,isos%par%g)
+                       call calc_load_local(isos%now%q1,-isos%now%w1,H_ice,z_sl,isos%par%rho_ice,isos%par%rho_sw,isos%par%g)
+                       
                      endif
 
                     call calc_lv_asthenosphere_viscous_square(isos%now%dzbdt,isos%now%w2,isos%now%w1,isos%now%q1,isos%par%nu,isos%now%D_lith, &
@@ -1303,7 +1304,7 @@ module isostasy
         else
             ! Ocean
 
-           q = rho_sw*g*(z_sl-z_bed) 
+           q = rho_sw*g*(z_sl-z_bed)
 
         end if
 
