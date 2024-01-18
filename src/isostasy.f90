@@ -120,13 +120,16 @@ module isostasy
         call allocate_isos(isos)
 
         ! Init plans
-        isos%domain%forward_fftplan_r2r = fftw_plan_r2r_2d(nx, ny, in_aux, out_aux, &
-            FFTW_DHT, FFTW_DHT, FFTW_ESTIMATE)
-        isos%domain%backward_fftplan_r2r = fftw_plan_r2r_2d(nx, ny, in_aux, out_aux, &
-            FFTW_DHT, FFTW_DHT, FFTW_ESTIMATE)
+        isos%domain%forward_fftplan_r2r = fftw_plan_r2r_2d(nx, ny, isos%state%w, &
+            isos%state%w, FFTW_DHT, FFTW_DHT, FFTW_ESTIMATE)
+        isos%domain%backward_fftplan_r2r = fftw_plan_r2r_2d(nx, ny, isos%state%w, &
+            isos%state%w, FFTW_DHT, FFTW_DHT, FFTW_ESTIMATE)
 
-        isos%domain%forward_dftplan_r2c = fftw_plan_dft_r2c_2d(m, n, in_aux, out_aux, 1) ! recheck - shouldnt this be -1 (forward)
-        isos%domain%backward_dftplan_c2r = fftw_plan_dft_c2r_2d(m, n, in_aux, out_aux, 1)
+        ! TODO recheck - shouldnt this be -1 (forward)
+        isos%domain%forward_dftplan_r2c = fftw_plan_dft_r2c_2d(m, n, isos%state%w, &
+            isos%state%cplx_out_aux, 1)
+        isos%domain%backward_dftplan_c2r = fftw_plan_dft_c2r_2d(m, n, &
+            isos%state%cplx_out_aux, isos%state%w, 1)
 
         ! Init domain
         if (correct_distortion) then
@@ -730,6 +733,7 @@ module isostasy
         if (allocated(state%w))                 deallocate(state%w)
         if (allocated(state%w_equilibrium))     deallocate(state%w_equilibrium)
         if (allocated(state%we))                deallocate(state%we)
+        if (allocated(state%cplx_out_aux))      deallocate(state%cplx_out_aux)
 
         if (allocated(state%ssh_perturb))       deallocate(state%ssh_perturb)
         if (allocated(state%Haf))               deallocate(state%Haf)
@@ -798,6 +802,7 @@ module isostasy
         allocate(state%w(nx,ny))
         allocate(state%w_equilibrium(nx,ny))
         allocate(state%we(nx,ny))
+        allocate(state%cplx_out_aux(nx,ny))
 
         allocate(state%ssh_perturb(nx,ny))
         allocate(state%Haf(nx,ny))

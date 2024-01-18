@@ -541,30 +541,24 @@ module solver_lv_elva
 
 
     ! http://www.fftw.org/fftw3_doc/The-Discrete-Hartley-Transform.html
-        
-    !      The discrete Hartley transform (DHT) is an invertible linear
-    !      transform closely related to the DFT. In the DFT, one
-    !      multiplies each input by cos - i * sin (a complex exponential),
-    !      whereas in the DHT each input is multiplied by simply cos +
-    !      sin. Thus, the DHT transforms n real numbers to n real numbers,
-    !      and has the convenient property of being its own inverse. In
-    !      FFTW, a DHT (of any positive n) can be specified by an r2r kind
-    !      of FFTW_DHT.
 
-    !      Like the DFT, in FFTW the DHT is unnormalized, so computing a
-    !      DHT of size n followed by another DHT of the same size will
-    !      result in the original array multiplied by n.
+    ! The discrete Hartley transform (DHT) is an invertible linear transform closely
+    ! related to the DFT. In the DFT, one multiplies each input by cos - i * sin
+    ! (a complex exponential), whereas in the DHT each input is multiplied by simply cos +
+    ! sin. Thus, the DHT transforms n real numbers to n real numbers, and has the convenient
+    ! property of being its own inverse. In FFTW, a DHT (of any positive n) can be specified
+    ! by an r2r kind of FFTW_DHT.
 
-    !      The DHT was originally proposed as a more efficient alternative
-    !      to the DFT for real data, but it was subsequently shown that a
-    !      specialized DFT (such as FFTW’s r2hc or r2c transforms) could
-    !      be just as fast. In FFTW, the DHT is actually computed by
-    !      post-processing an r2hc transform, so there is ordinarily no
-    !      reason to prefer it from a performance perspective. However,
-    !      we have heard rumors that the DHT might be the most appropriate
-    !      transform in its own right for certain applications, and we
-    !      would be very interested to hear from anyone who finds it
-    !      useful.
+    ! Like the DFT, in FFTW the DHT is unnormalized, so computing a DHT of size n followed
+    ! by another DHT of the same size will result in the original array multiplied by n.
+
+    ! The DHT was originally proposed as a more efficient alternative to the DFT for real
+    ! data, but it was subsequently shown that a specialized DFT (such as FFTW’s r2hc or r2c
+    ! transforms) could be just as fast. In FFTW, the DHT is actually computed by
+    ! post-processing an r2hc transform, so there is ordinarily no reason to prefer it from
+    ! a performance perspective. However, we have heard rumors that the DHT might be the
+    ! most appropriate transform in its own right for certain applications, and we would be
+    ! very interested to hear from anyone who finds it useful.
 
     subroutine calc_fft_forward_r2r(plan, in, out)
 
@@ -609,17 +603,15 @@ module solver_lv_elva
     ! and a c2r transform is correspondingly equivalent to
     ! FFTW_BACKWARD.
       
-    subroutine calc_fft_forward_r2c(plan, in, out, out_aux)
+    subroutine calc_fft_forward_r2c(plan, in, out)
 
         implicit none 
 
         type(c_ptr), intent(IN)     :: plan
         real(wp), intent(INOUT)     :: in(:,:)
-        real(wp), intent(INOUT)     :: out(:,:)
-        complex(wp), intent(INOUT)  :: out_aux(:,:)
+        complex(wp), intent(INOUT)  :: out(:,:)
 
-        call fftw_execute_dft_r2c(plan, in, out_aux)
-        out = real(out_aux)
+        call fftw_execute_dft_r2c(plan, in, out)
 
         return
     end subroutine calc_fft_forward_r2c
@@ -628,35 +620,17 @@ module solver_lv_elva
         implicit none
 
         type(c_ptr), intent(IN)    :: plan
-        complex(wp), intent(IN)    :: in(:,:)
-        real(wp), intent(OUT)      :: out(:,:)
+        complex(wp), intent(INOUT) :: in(:,:)
+        real(wp), intent(INOUT)    :: out(:,:)
 
-        complex(wp), allocatable   :: in_aux(:,:)
-        real(wp), allocatable      :: out_aux(:,:) 
-        real(wp)                   :: dx, cc
         integer(kind=4)            :: m,n
-        logical                    :: print_check
 
         m = size(in,1)
         n = size(in,2)
-
-        allocate(in_aux(m,n))
-        allocate(out_aux(m,n))
-
-        in_aux = in
-        ! plan = fftw_plan_dft_c2r_2d(m,n,in_aux,out_aux,1)
-
-        call fftw_execute_dft_c2r(plan, in_aux, out_aux)
-
-        out = out_aux/sqrt(m*n*1.)
-        
-        ! call fftw_destroy_plan(plan)
-        
-        deallocate(in_aux)
-        deallocate(out_aux)
+        call fftw_execute_dft_c2r(plan, in, out)
+        out = out / (m*n*1.)
 
         return
-    
     end subroutine calc_fft_backward_c2r
 
 end module solver_lv_elva

@@ -41,19 +41,18 @@ module isostasy_defs
         real(wp) :: m_earth
         logical            :: static_load       ! [-] Load static / transient
         character(len=56)  :: visc_method       ! [-] Method use to prescribe asthenosphere's viscosity field
-        real(wp)           :: visc_c            ! [Pa s]  Viscosity in channel between elastic lithosphere and viscous asthenosphere (for LV-ELVA only)
-        real(wp)           :: thck_c            ! [km]    Thickness of channel between elastic lithosphere and viscous asthenosphere (for LV-ELVA only)
-        integer            :: n_lev             ! [-]     Number of layers within viscous asthenosphere (for LV-ELVA only)
+        real(wp)           :: visc_c            ! [Pa s] Channel viscosity (for LV-ELVA only)
+        real(wp)           :: thck_c            ! [km] Channel thickness (for LV-ELVA only)
+        integer            :: n_lev             ! [-] Number of layers for LV-ELVA
         character(len=56)  :: rigidity_method   ! [-] Method use to prescribe lithosphere's rigidity field
         
         real(wp) :: L_w                         ! [m] Lithosphere flexural length scale (for method=2)
-        integer  :: nr                          ! [-] Radius of neighborhood for convolution, in number of grid points        
+        integer  :: nr                          ! [-] Radius of convolution neighborhood, in number of grid points        
         real(wp) :: mu                          ! [1/m] 2pi/L
-        
-        real(wp) :: time_diagnostics            ! [yr] Current model time of last update of equilibrium lithospheric displacement
-        real(wp) :: time_prognostics            ! [yr] Current model time of last update of bedrock uplift
-        
-    end type 
+        real(wp) :: time_diagnostics            ! [yr] Current model time of last diagnostic update
+        real(wp) :: time_prognostics            ! [yr] Current model time of last prognostic update
+
+    end type
 
     type isos_domain_class
         integer                 :: i1
@@ -73,12 +72,6 @@ module isostasy_defs
         real(wp), allocatable   :: A(:,:)           ! [m^2] Cell area
         real(wp), allocatable   :: K(:,:)           ! [1] Distortion matrix
         real(wp), allocatable   :: kappa(:,:)       ! Pseudodifferential operator
-
-        ! Auxiliary arrays for fft computation
-        real(wp), allocatable       :: real_in_aux(:,:)
-        real(wp), allocatable       :: real_out_aux(:,:)
-        complex(wp), allocatable    :: cplx_in_aux(:,:)
-        complex(wp), allocatable    :: cplx_out_aux(:,:)
 
         type(c_ptr)             :: forward_fftplan_r2r
         type(c_ptr)             :: backward_fftplan_r2r
@@ -102,12 +95,13 @@ module isostasy_defs
         real(wp), allocatable :: eta_eff(:,:)       ! [Pa-s] Effective asthenosphere viscosity
         real(wp), allocatable :: tau(:,:)           ! [yr] Asthenospheric relaxation timescale field
        
-        real(wp), allocatable :: z_bed(:,:)         ! Bedrock elevation         [m]
-        real(wp), allocatable :: dzbdt(:,:)         ! Rate of bedrock uplift    [m/a]
-        real(wp), allocatable :: q(:,:)             ! [Pa] Load
-        real(wp), allocatable :: w(:,:)             ! Current viscous displacement
-        real(wp), allocatable :: w_equilibrium(:,:) ! Current viscous equilibrium displacement (XLRA)
-        real(wp), allocatable :: we(:,:)            ! [m] Elastic displacement
+        real(wp), allocatable       :: z_bed(:,:)         ! Bedrock elevation         [m]
+        real(wp), allocatable       :: dzbdt(:,:)         ! Rate of bedrock uplift    [m/a]
+        real(wp), allocatable       :: q(:,:)             ! [Pa] Load
+        real(wp), allocatable       :: w(:,:)             ! Current viscous displacement
+        real(wp), allocatable       :: w_equilibrium(:,:) ! Current viscous equilibrium displacement (XLRA)
+        real(wp), allocatable       :: we(:,:)            ! [m] Elastic displacement
+        complex(wp), allocatable    :: cplx_out_aux(:,:)
 
         real(wp), allocatable :: ssh_perturb(:,:)   ! [m] sea-surface height perturbation
         real(wp), allocatable :: Haf(:,:)           ! [m] Ice thickness above floatation
