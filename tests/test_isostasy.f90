@@ -51,8 +51,6 @@ program test_isostasy
     type(isos_class) :: isos1
     type(ice_class) :: ice
 
-    logical(wp) :: static_load
-
     ! mmr recheck
     
     ! ! === Define runtime information =========
@@ -102,7 +100,6 @@ program test_isostasy
              dx = 50.e3 
              xmin = -3000.e3 
              ymin = xmin !* 2
-             static_load = .true.
           
        case("test1")
 
@@ -113,7 +110,6 @@ program test_isostasy
           dx        = 50.e3 
           xmin      = -3000.e3 
           ymin      = xmin
-          static_load = .true.
 
        case("test2")
 
@@ -124,7 +120,6 @@ program test_isostasy
           dx        = 50.e3 
           xmin      = -3000.e3 
           ymin      = xmin
-          static_load = .true.
 
        case("test3a","test3b","test3c","test3d")
           
@@ -135,7 +130,6 @@ program test_isostasy
           dx        = 50.e3 
           xmin      = -3000.e3 
           ymin      = xmin
-          static_load = .true.
 
        case("test4")
           
@@ -146,7 +140,6 @@ program test_isostasy
           dx = 32.e3 
           xmin = -3040.e3 
           ymin = xmin
-          static_load = .false.
    
        case("test5")
           
@@ -157,7 +150,6 @@ program test_isostasy
           dx = 16.e3 
           xmin = -840.e3 
           ymin = -1440.e3
-          static_load = .false.
 
        case("DEFAULT")
 
@@ -483,15 +475,10 @@ program test_isostasy
     ! Advance isostasy model
     do n = 1, nt 
 
-       time = time_init + (n-1)*dtt
-       
-       if (static_load.neqv..true.)  then
-          call interp_linear(time_ice,T_ice,time,H_ice) 
-          H_ice = H_ice
-       else
-          H_ice =T_ice(:,:,1)
-       endif
-       z_bed = z_bed 
+        time = time_init + (n-1)*dtt
+        call interp_linear(time_ice,T_ice,time,H_ice) 
+        ! H_ice = H_ice
+        ! z_bed = z_bed
 
         ! Update bedrock
         call isos_update(isos1,H_ice,z_sl,time)

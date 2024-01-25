@@ -60,8 +60,8 @@ module sea_level
         implicit none
         type(isos_class), intent(INOUT)   :: isos 
         isos%now%canom_full = isos%now%canom_load
-        call add_columnanom(isos%par%rho_litho, isos%now%ue, isos%ref%ue, isos%now%canom_full)
-        call add_columnanom(isos%par%rho_uppermantle, isos%now%u, isos%ref%u, isos%now%canom_full)
+        call add_columnanom(isos%par%rho_litho, isos%now%we, isos%ref%we, isos%now%canom_full)
+        call add_columnanom(isos%par%rho_uppermantle, isos%now%w, isos%ref%w, isos%now%canom_full)
     end subroutine calc_columnanom_solidearth
 
     !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -104,7 +104,7 @@ module sea_level
     subroutine calc_maskocean(isos)
         implicit none
         type(isos_class), intent(INOUT)   :: isos
-        isos%now%maskocean = ((isos%now%ssh - isos%now%z_bed) > 0) * (1 - isos%now%maskgrounded)
+        isos%now%maskocean = real((isos%now%ssh - isos%now%z_bed) > 0) * (1 - real(isos%now%maskgrounded))
     end subroutine calc_maskocean
 
     !

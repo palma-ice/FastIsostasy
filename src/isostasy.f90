@@ -120,16 +120,16 @@ module isostasy
         call allocate_isos(isos)
 
         ! Init plans
-        isos%domain%forward_fftplan_r2r = fftw_plan_r2r_2d(nx, ny, isos%state%w, &
-            isos%state%w, FFTW_DHT, FFTW_DHT, FFTW_ESTIMATE)
-        isos%domain%backward_fftplan_r2r = fftw_plan_r2r_2d(nx, ny, isos%state%w, &
-            isos%state%w, FFTW_DHT, FFTW_DHT, FFTW_ESTIMATE)
+        isos%domain%forward_fftplan_r2r = fftw_plan_r2r_2d(nx, ny, isos%now%w, &
+            isos%now%w, FFTW_DHT, FFTW_DHT, FFTW_ESTIMATE)
+        isos%domain%backward_fftplan_r2r = fftw_plan_r2r_2d(nx, ny, isos%now%w, &
+            isos%now%w, FFTW_DHT, FFTW_DHT, FFTW_ESTIMATE)
 
         ! TODO recheck - shouldnt this be -1 (forward)
-        isos%domain%forward_dftplan_r2c = fftw_plan_dft_r2c_2d(m, n, isos%state%w, &
-            isos%state%cplx_out_aux, 1)
+        isos%domain%forward_dftplan_r2c = fftw_plan_dft_r2c_2d(m, n, isos%now%w, &
+            isos%now%cplx_out_aux, 1)
         isos%domain%backward_dftplan_c2r = fftw_plan_dft_c2r_2d(m, n, &
-            isos%state%cplx_out_aux, isos%state%w, 1)
+            isos%now%cplx_out_aux, isos%now%w, 1)
 
         ! Init domain
         if (correct_distortion) then
@@ -186,20 +186,20 @@ module isostasy
                 ! should be 5-6x radius of relative stiffness to capture the forebuldge
                 ! further out from the depression near the center. 
                 ! Note: previous implementation stopped at 400km, hard coded. 
-                isos%par%nr =   int(radius_fac*isos%par%L_w/isos%par%dx)+1
+                isos%par%nr =   int(radius_fac*isos%par%L_w/isos%domain%dx)+1
                                 
                 ! Now, initialize isos variables 
-                call isos_allocate(isos%now,isos%par%nx,isos%par%ny,isos%par%n_lev,nr=isos%par%nr)
+                call isos_allocate(isos%now,isos%domain%nx,isos%domain%ny,isos%par%n_lev,nr=isos%par%nr)
 
                 ! Calculate the Kelvin function filter 
-                call calc_kei_filter_2D(isos%domain%kei,L_w=isos%par%L_w,dx=isos%par%dx,dy=isos%par%dx)
+                call calc_kei_filter_2D(isos%domain%kei,L_w=isos%par%L_w,dx=isos%domain%dx,dy=isos%domain%dx)
 
                 ! Apply scaling to adjust magnitude of filter for radius of filter cutoff
                 isos%domain%kei = filter_scaling*isos%domain%kei
 
                 ! Calculate the reference Green's function values
                 call calc_greens_function_scaling(isos%domain%G0,isos%domain%kei,isos%par%L_w, &
-                                                    D_lith_const,dx=isos%par%dx,dy=isos%par%dx)
+                                                    D_lith_const,dx=isos%domain%dx,dy=isos%domain%dx)
 
                 ! Populate 2D D_lith field to have it available
                 isos%now%D_lith = D_lith_const
@@ -241,14 +241,14 @@ module isostasy
                 ! further out from the depression near the center. 
                 ! Note: previous implementation stopped at 400km, hard coded.
 
-                isos%par%nr =  100 !100 !23 ! spare int(radius_fac*isos%par%L_w/isos%par%dx)+1 !mmr spare 100
+                isos%par%nr =  100 !100 !23 ! spare int(radius_fac*isos%par%L_w/isos%domain%dx)+1 !mmr spare 100
                 
-                call calc_ge_filter_2D(isos%domain%GF, dx=isos%par%dx, dy=isos%par%dx) 
+                call calc_ge_filter_2D(isos%domain%GF, dx=isos%domain%dx, dy=isos%domain%dx) 
              
                 if (isos%par%interactive_sealevel) then
                     ! Calculate the geoid's Green function (Coulon et al. 2021) to determine geoid displacement
                     call calc_gn_filter_2D(isos%domain%GN, isos%par%m_earth, &
-                        isos%par%r_earth, dx=isos%par%dx, dy=isos%par%dx)
+                        isos%par%r_earth, dx=isos%domain%dx, dy=isos%domain%dx)
                 endif
               
                 ! Populate 2D D_lith field to have it available
@@ -265,29 +265,29 @@ module isostasy
                    
                 case("gaussian_plus")
 
-                   call calc_gaussian_viscosity(isos%now%eta_eff,isos%par%visc,+1._wp,dx=isos%par%dx,dy=isos%par%dx)
+                   call calc_gaussian_viscosity(isos%now%eta_eff,isos%par%visc,+1._wp,dx=isos%domain%dx,dy=isos%domain%dx)
                    
                 case("gaussian_minus")
 
-                   call calc_gaussian_viscosity(isos%now%eta_eff,isos%par%visc,-1._wp,dx=isos%par%dx,dy=isos%par%dx)
+                   call calc_gaussian_viscosity(isos%now%eta_eff,isos%par%visc,-1._wp,dx=isos%domain%dx,dy=isos%domain%dx)
                                       
                 case("viscous_channel")
 
                    isos%now%eta_eff    = isos%par%visc
 
                    call calc_effective_viscosity_3layer_channel(isos%now%eta_eff,isos%par%visc_c,isos%par%thck_c,isos%par%He_lith,&
-                        isos%par%n_lev,isos%par%nu,isos%par%dx,isos%par%dx)
+                        isos%par%n_lev,isos%par%nu,isos%domain%dx,isos%domain%dx)
 
                 case("laty")
 
 
                    filename_laty = "/Users/montoya/work/ice_data/Antarctica/ANT-32KM/ANT-32KM_latyparams.nc"
 
-                   call nc_read(filename_laty,"log10_mantle_visc",isos%now%eta,start=[1,1,1],count=[isos%par%nx,isos%par%ny,isos%par%n_lev])
+                   call nc_read(filename_laty,"log10_mantle_visc",isos%now%eta,start=[1,1,1],count=[isos%domain%nx,isos%domain%ny,isos%par%n_lev])
 
                    isos%now%eta = 10.**(isos%now%eta)
                    
-                   call calc_effective_viscosity_3d(isos%now%eta_eff,isos%now%eta,isos%par%nu,isos%par%dx,isos%par%dx)
+                   call calc_effective_viscosity_3d(isos%now%eta_eff,isos%now%eta,isos%par%nu,isos%domain%dx,isos%domain%dx)
                                    
                 case DEFAULT
 
@@ -297,7 +297,7 @@ module isostasy
 
                 end select
 
-                isos%now%eta_eff    = isos%now%eta_eff * isos%params%compressibility_correction
+                isos%now%eta_eff    = isos%now%eta_eff * isos%par%compressibility_correction
 
                 !Select lithosphere rigidity method
                 
@@ -312,7 +312,7 @@ module isostasy
 
                    isos%par%He_lith = 100.0   !km
 
-                   call calc_gaussian_rigidity(isos%now%He_lith,1.5*isos%par%He_lith, isos%par%He_lith, sign=1._wp,dx=isos%par%dx,dy=isos%par%dx) 
+                   call calc_gaussian_rigidity(isos%now%He_lith,1.5*isos%par%He_lith, isos%par%He_lith, sign=1._wp,dx=isos%domain%dx,dy=isos%domain%dx) 
 
                    isos%now%D_lith = (isos%par%E*1.e9) * (isos%now%He_lith*1.e3)**3 / (12.0*(1.0-isos%par%nu**2))
 
@@ -320,7 +320,7 @@ module isostasy
 
                    isos%par%He_lith = 100.0   !km
 
-                   call calc_gaussian_rigidity(isos%now%He_lith,1.5*isos%par%He_lith, isos%par%He_lith, sign=-1._wp,dx=isos%par%dx,dy=isos%par%dx) 
+                   call calc_gaussian_rigidity(isos%now%He_lith,1.5*isos%par%He_lith, isos%par%He_lith, sign=-1._wp,dx=isos%domain%dx,dy=isos%domain%dx) 
 
                    isos%now%D_lith = (isos%par%E*1.e9) * (isos%now%He_lith*1.e3)**3 / (12.0*(1.0-isos%par%nu**2))
 
@@ -328,7 +328,7 @@ module isostasy
 
                    filename_laty = "/Users/montoya/work/ice_data/Antarctica/ANT-32KM/ANT-32KM_latyparams.nc"
 
-                   call nc_read(filename_laty,"lithos_thck",isos%now%He_lith,start=[1,1],count=[isos%par%nx,isos%par%ny])
+                   call nc_read(filename_laty,"lithos_thck",isos%now%He_lith,start=[1,1],count=[isos%domain%nx,isos%domain%ny])
 
                    isos%now%He_lith = isos%now%He_lith*1.e-3  ! * 0.1  ! recheck for stability!!!
                    isos%now%D_lith = (isos%par%E*1e9) * (isos%now%He_lith*1e3)**3 / (12.0*(1.0-isos%par%nu**2))
@@ -359,9 +359,9 @@ module isostasy
                 
                 write(*,*) "    L_w (m):      ", isos%par%L_w 
                 write(*,*) "    nr:           ", isos%par%nr
-                write(*,*) "    nx:           ", isos%par%nx
-                write(*,*) "    ny:           ", isos%par%ny
-                write(*,*) "    dx (m):       ", isos%par%dx 
+                write(*,*) "    nx:           ", isos%domain%nx
+                write(*,*) "    ny:           ", isos%domain%ny
+                write(*,*) "    dx (m):       ", isos%domain%dx 
 
                 write(*,*) "    range(kei): ", minval(isos%domain%kei),    maxval(isos%domain%kei)
                 write(*,*) "    range(G0):  ", minval(isos%domain%G0),     maxval(isos%domain%G0)
@@ -454,7 +454,7 @@ module isostasy
         ! Call isos_update to diagnose rate of change
         ! (no change to z_bed will be applied since isos%par%time==time)
 
-        call isos_update(isos,H_ice,z_sl,time) 
+        call isos_update(isos, H_ice, z_sl, time)
             
         write(*,*) "isos_init_state:: "
         write(*,*) "  Initial time:   ", isos%par%time_prognostics 
@@ -527,7 +527,7 @@ module isostasy
 
                     ! Local lithosphere (LL)
                     ! (update every time because it is cheap)
-                    call calc_litho_local(isos%now%w, isos%now%q1, isos%now%z_bed, H_ice, z_sl, &
+                    call calc_litho_local(isos%now%w, isos%now%q, isos%now%z_bed, H_ice, z_sl, &
                         isos%par%rho_ice, isos%par%rho_seawater, isos%par%rho_uppermantle, isos%par%g)
 
                     ! Relaxing asthenosphere (RA)
@@ -539,7 +539,7 @@ module isostasy
                     
                     ! Elastic lithosphere (EL)
                     if (update_equil) then 
-                        call calc_litho_regional(isos%now%w, isos%now%q1, isos%now%z_bed, H_ice, &
+                        call calc_litho_regional(isos%now%w, isos%now%q, isos%now%z_bed, H_ice, &
                             z_sl,isos%domain%G0, isos%par%rho_ice, isos%par%rho_seawater, &
                             isos%par%rho_uppermantle,isos%par%rho_litho,isos%par%g)
                     end if 
@@ -553,7 +553,7 @@ module isostasy
 
                     ! 2D elastic lithosphere (2DEL)
                     if (update_equil) then
-                       !call calc_litho_regional(isos%now%w,isos%now%q1,isos%now%z_bed,H_ice,z_sl,isos%domain%G0)
+                       !call calc_litho_regional(isos%now%w,isos%now%q,isos%now%z_bed,H_ice,z_sl,isos%domain%G0)
  
                         write(*,*) "isos_update:: Error: method=3 not implemented yet."
                         stop 
@@ -578,8 +578,8 @@ module isostasy
                     endif
 
                     call calc_lvelva_viscous_square(isos%now%dzbdt, isos%now%w, &
-                        isos%now%w,isos%now%q1,isos%par%nu,isos%now%D_lith, isos%now%eta_eff, &
-                        isos%par%rho_uppermantle,isos%par%rho_litho,isos%par%g,isos%par%dx,dt_now)
+                        isos%now%w,isos%now%q,isos%par%nu,isos%now%D_lith, isos%now%eta_eff, &
+                        isos%par%rho_uppermantle,isos%par%rho_litho,isos%par%g,isos%domain%dx,dt_now)
 
                  end select
 
@@ -703,11 +703,6 @@ module isostasy
         if (allocated(domain%K))            deallocate(domain%K)
         if (allocated(domain%kappa))        deallocate(domain%kappa)
 
-        if (allocated(domain%forward_fftplan_r2r))       deallocate(domain%forward_fftplan_r2r)
-        if (allocated(domain%backward_fftplan_r2r))        deallocate(domain%backward_fftplan_r2r)
-        if (allocated(domain%forward_dftplan_r2c))        deallocate(domain%forward_dftplan_r2c)
-        if (allocated(domain%backward_dftplan_c2r))        deallocate(domain%backward_dftplan_c2r)
-
         if (allocated(domain%kei))       deallocate(domain%kei)
         if (allocated(domain%G0))        deallocate(domain%G0)
         if (allocated(domain%GF))        deallocate(domain%GF)
@@ -756,7 +751,7 @@ module isostasy
         implicit none
         integer, intent(IN) :: nx
         integer, intent(IN) :: ny
-        type(isos_state_class), intent(INOUT) :: domain
+        type(isos_domain_class), intent(INOUT) :: domain
 
         allocate(domain%dx_matrix(nx,ny))
         allocate(domain%dy_matrix(nx,ny))

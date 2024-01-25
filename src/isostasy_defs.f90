@@ -39,7 +39,8 @@ module isostasy_defs
         real(wp) :: g 
         real(wp) :: r_earth 
         real(wp) :: m_earth
-        logical            :: static_load       ! [-] Load static / transient
+        real(wp) :: A_ocean_pd
+
         character(len=56)  :: visc_method       ! [-] Method use to prescribe asthenosphere's viscosity field
         real(wp)           :: visc_c            ! [Pa s] Channel viscosity (for LV-ELVA only)
         real(wp)           :: thck_c            ! [km] Channel thickness (for LV-ELVA only)

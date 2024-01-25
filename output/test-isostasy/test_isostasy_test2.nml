@@ -6,9 +6,6 @@
     visc            = 2.e21              ! [Pa s] Asthenosphere's viscosity, visc=1e21 for Bueler et al (2007)     |test1:1.e21|test2:2.e21 |test3:1.e21 | test4:1.e21| test5:1.e21 
     tau             = 200.0              ! [yr] Relaxation time 
 
-    ! Static or transient load
-    static_load     = .true.               ! [-] test1: .true. | test2: .true. | test3*: .true. | test4: .false. | test5: .false.
-
     ! Physical constants
     E               =  128.0                ! [GPa] Young's modulus | test1: 66 |  test2: 128 | test3: 66   | test4: 66   | test5: 66
     nu              =  0.28                 ! [-] Poisson's ratio   | test1: 0.5| test2: 0.28 | test3: 0.28 | test4: 0.28 | test5: 0.28

@@ -3,23 +3,20 @@
     dt_prognostics         = 1.                 ! [yr] Max. timestep to recalculate bedrock uplift and rate of change     | test1: 10 | test2: 10 | test3*: 1  | test4: 1 | test5: 1
     dt_diagnostics         = 1.                 ! [yr] Min. timestep to recalculate equilibrium lithospheric displacement | test1: 50 | test2: 50 | test3*: 1  | test4: 1 | test5: 1
     He_lith         = 150.                ! [km] Effective elastic thickness lithosphere                            | test1: 88 | test2: 70  | test3*: 150 | test4: - | test5: 40 (otherwise unstable)
-    visc            = 1.e21              ! [Pa s] Asthenosphere's viscosity, visc=1e21 for Bueler et al (2007)     |test1:1.e21|test2: 2.e21| 
+    visc            = 1.e21              ! [Pa s] Asthenosphere viscosity, visc=1e21 for Bueler et al (2007)     |test1:1.e21|test2: 2.e21| 
     tau             = 200.0              ! [yr] Relaxation time 
 
-    ! Static or transient load
-    static_load     = .true.               ! [-] test1: .true. | test2: .true. | test3*: .true. | test4: .false. | test5: .false.
-
     ! Physical constants
-    E               = 66.0                  ! [GPa] Young's modulus | test1: 66 | test2: 128
-    nu              = 0.28                  ! [-] Poisson's ratio   | test1: 0.5| test2: 0.28 | test3: 0.28 | test4: 0.28 | test5: 0.28
+    E               = 66.0                  ! [GPa] Young modulus | test1: 66 | test2: 128
+    nu              = 0.28                  ! [-] Poisson ratio   | test1: 0.5| test2: 0.28 | test3: 0.28 | test4: 0.28 | test5: 0.28
     rho_ice         = 910.                  ! [kg/m^3] 910          | test1: 910| test2: 931  | test3: 910  | test4: 910  | test4: 910
     rho_seawater          = 1028.0                ! [kg/m^3] 
     rho_water           = 1000.0                ! [kg/m^3] 
     rho_uppermantle           = 3700.0                ! [kg/m^3] | test1: 3300 | test2: 3300  | test3: 3700  | test4: 3700  | test4: 3700
     rho_litho           = 2600.0                ! [kg/m^3] 
     g               = 9.81                  ! [m/s^2]
-    r_earth         = 6.378e6               ! [m]  Earth's radius, Coulon et al (2021) 
-    m_earth         = 5.972e24              ! [kg] Earth's mass,   Coulon et al (2021) 
+    r_earth         = 6.378e6               ! [m]  Earth radius, Coulon et al (2021) 
+    m_earth         = 5.972e24              ! [kg] Earth mass,   Coulon et al (2021) 
 
     ! Viscous asthenosphere-related parameters 
     visc_method     = uniform               ! test1: uniform | test2: viscous_channel | test3a: uniform | test3b: uniform | test3c: gaussian_minus | test3d: gaussian_plus | test4: laty | test5: uniform
