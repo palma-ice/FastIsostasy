@@ -1,0 +1,21 @@
+FC = gfortran
+
+INC_NC = -I/usr/include
+LIB_NC = -L/usr/lib/x86_64-linux-gnu -lnetcdff -Wl,-Bsymbolic-functions -Wl,-z,relro -Wl,-z,now -lnetcdf -lnetcdf -ldl -lm
+
+FFTWROOT = /usr/lib/x86_64-linux-gnu
+INC_FFTW =
+LIB_FFTW = -L$(FFTWROOT)/lib -lfftw3 -lm
+
+FFLAGS = -ffree-line-length-none -I$(objdir) -J$(objdir)
+
+ifeq ($(parallel), 1)
+    # Overwrite default choices with openmp relevant choices 
+    FFLAGS  = -I$(objdir) -J$(objdir) -m64 -ffree-line-length-none -fomit-frame-pointer -fopenmp
+endif
+
+LFLAGS = $(LIB_NC) $(LIB_FFTW)
+
+DFLAGS_NODEBUG = -O2
+DFLAGS_DEBUG   = -w -g -p -ggdb -ffpe-trap=invalid,zero,overflow,underflow -fbacktrace -fcheck=all
+DFLAGS_PROFILE = -O2 -pg
