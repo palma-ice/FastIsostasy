@@ -576,7 +576,8 @@ module isostasy
 
                     else
 
-!                       call calc_load_local(isos%now%q1,isos%now%z_bed,H_ice,z_sl,isos%par%rho_ice,isos%par%rho_sw,isos%par%g)
+                       ! bad                       call calc_load_local(isos%now%q1,isos%now%z_bed,H_ice,z_sl,isos%par%rho_ice,isos%par%rho_sw,isos%par%g)
+                       ! good below
                        call calc_load_local(isos%now%q1,-isos%now%w1,H_ice,z_sl,isos%par%rho_ice,isos%par%rho_sw,isos%par%g)
                        
                      endif
@@ -1270,7 +1271,7 @@ module isostasy
         else
             ! Ocean
 
-           q = rho_sw*g*(z_sl-z_bed) 
+           q = 0. ! recheck this !!!    rho_sw*g*(z_sl-z_bed) 
 
         end if
 
@@ -1304,8 +1305,11 @@ module isostasy
         else
             ! Ocean
 
-           q = rho_sw*g*(z_sl-z_bed)
+           q = 0. ! recheck  this !! rho_sw*g*(z_sl-z_bed)
 
+!           print*,'hola: stopping here, check this with jan'
+!           stop
+           
         end if
 
         return 

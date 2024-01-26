@@ -73,19 +73,19 @@ program test_isostasy
     !experiment = "constant_thickness"
     !experiment = "variable_tau"
     !experiment = "point_load"
-    !  experiment = "test0" ! 1000 m radius ice disk of 1000 m heights, solved with ELRA (case=2)
+    !experiment = "test0" ! 1000 m radius ice disk of 1000 m heights, solved with ELRA (case=2)
     
 ! tests in Swierczek-Jereczek et al. (2023), GMD.
     
-!     experiment = "test1" ! 1000 m radius ice disk of 1000 m heights, solved with ELVA Benchmark: analytical (Bueler et al. 2007); dtt = 1; dtout = 1000. ; time_end = 50.e3
-!      experiment = "test2"   ! Benchmark: Spada et al. (2011) disc
+     experiment = "test1" ! 1000 m radius ice disk of 1000 m heights, solved with ELVA Benchmark: analytical (Bueler et al. 2007); dtt = 1; dtout = 1000. ; time_end = 50.e3
+    !  experiment = "test2"   ! Benchmark: Spada et al. (2011) disc
 
-!      experiment = "test3a"  ! Gaussian reduction of lithospheric thickness at centre
+    !  experiment = "test3a"  ! Gaussian reduction of lithospheric thickness at centre
     !  experiment = "test3b"  ! Gaussian increase of lithospheric thickness at centre
     !  experiment = "test3c"  ! Gaussian reduction of viscosity at centre
     !  experiment = "test3d"  ! Gaussian increase of viscosity at centre
     !  experiment = "test4"  ! ais ice6g_d 
-      experiment = "test5"  ! Lucía's Greenland ice-sheet load (since 15 ka)
+    !  experiment = "test5"  ! Lucía's Greenland ice-sheet load (since 15 ka)
     
      
     write(*,*) "experiment = ", trim(experiment)
@@ -364,7 +364,7 @@ program test_isostasy
 
             filename = "/Users/montoya/work/ice_data/Antarctica/ANT-32KM/ANT-32KM_ICE-6G_D.nc"
             
-            Nct = nc_size(filename,"time")
+            nct = nc_size(filename,"time")
             ncx = nc_size(filename,"xc")
             ncy = nc_size(filename,"yc")
 
@@ -413,11 +413,50 @@ program test_isostasy
             H_ice = T_ice(:,:,1)
             H_ice_ref = T_ice(:,:,1)
 
-            print*,'stop: need to use Jans bathymetry at first time step'
-            stop
-
+!            print*,'stop: need to use Jans bathymetry at first time step'
+!            stop
            
+             ! Read in z_bed
+
+            filename = "/Users/montoya/work/ice_data/Antarctica/ANT-32KM/ANT-32KM_zbed_laty.nc"
             
+            nct = nc_size(filename,"t")
+            ncx = nc_size(filename,"xc")
+            ncy = nc_size(filename,"yc")
+
+            if (time_end.lt.nt) then
+
+               print*,'Need to increase time_end to read full data length'
+               stop
+               
+            endif
+
+            if (ncx.ne.nx) then
+                           
+               print*,'ncx not equal to nx'
+               stop
+               
+            endif
+
+            if (ncy.ne.ny) then
+                           
+               print*,'ncx not equal to nx'
+               stop
+               
+            endif
+
+! already done above            allocate(time_ice(nct))
+            allocate(z_bed_ice(ncx,ncy,nct))
+
+            
+            call nc_read(filename,"t",time_ice,start=[1],count=[nct])
+            time_ice = -1.e3 * time_ice
+
+            call nc_read(filename,"b",z_bed_ice,start=[1,1,1],count=[ncx,ncy,nct])
+            
+            z_bed = z_bed_ice(:,:,1)
+            z_bed_ref = z_bed_ice(:,:,1)
+
 
         case("test5")
 
@@ -478,9 +517,9 @@ program test_isostasy
             enddo
             
             H_ice = T_ice(:,:,1)
-            z_bed = z_bed_ice(:,:,1)
-            
             H_ice_ref = T_ice(:,:,1)
+
+            z_bed = z_bed_ice(:,:,1)
             z_bed_ref = z_bed_ice(:,:,1)
 
 !            print*,'check load at first time step - zero over land and large over ocean'
