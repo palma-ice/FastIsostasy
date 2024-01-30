@@ -14,18 +14,18 @@ module green_functions
     
     contains
 
-    subroutine calc_greens_function_scaling(G0,kei2D,L_w,D_lith,dx,dy)
-        ! The Green's function (Eq. 3 of Coulon et al, 2021)
-        ! gives displacement G in [m] as a function of the distance
-        ! r from the point load P_b [Pa]. 
 
-        ! Here G0 is calculated, which is G without including the point load.
-        ! G0 has units of [m N-1]. 
-        ! This can then be multiplied with the actual magnitude of the
-        ! point load to obtain G.
-        ! G = G0 * P_b = [m N-1] * [Pa] = [m]. 
+    ! The Green's function (Eq. 3 of Coulon et al, 2021) gives displacement G in [m]
+    ! as a function of the distance r from the point load P_b [Pa]. 
 
-        ! Note that L_w contains information about rho_uppermantle. 
+    ! Here G0 is calculated, which is G without including the point load. G0 has units
+    ! of [m N-1]. This can then be multiplied with the actual magnitude of the
+    ! point load to obtain G.
+    ! G = G0 * P_b = [m N-1] * [Pa] = [m]. 
+
+    ! Note that L_w contains information about rho_uppermantle. 
+    subroutine calc_greens_function_scaling(G0, kei2D, L_w, D_lith, dx, dy)
+
 
         implicit none
 
@@ -42,15 +42,14 @@ module green_functions
 
     end subroutine calc_greens_function_scaling
 
-    subroutine calc_ge_filter_2D(filt,dx,dy) 
+    subroutine calc_GE_filter_2D(filt, dx, dy)
         ! Calculate 2D Green Function
 
         implicit none 
 
         real(wp), intent(OUT) :: filt(:,:) 
-!        real(wp), intent(IN)  :: GE(:,:)
-        real(wp), intent(IN)  :: dx 
-        real(wp), intent(IN)  :: dy   
+        real(wp), intent(IN)  :: dx
+        real(wp), intent(IN)  :: dy
 
         ! Local variables 
         integer  :: i, j, i1, j1, n, n2
@@ -73,8 +72,9 @@ module green_functions
 
 
         ! Get size of filter array and half-width
-        n  = size(filt,1) 
-        n2 = (n-1)/2 
+        n  = size(filt, 1)
+        write(*,*) "n = ", n
+        n2 = (n-1) / 2 
        
         ! Safety check
         if (size(filt,1) .ne. size(filt,2)) then 
@@ -87,7 +87,7 @@ module green_functions
         if (mod(n,2) .ne. 1) then 
             write(*,*) "calc_ge_filt:: error: n can only be odd."
             write(*,*) "n = ", n
-            stop  
+            stop
         end if 
 
 
@@ -97,29 +97,26 @@ module green_functions
 
         filt = 0.
         
-        do j = -n2, n2 
+        do j = -n2, n2
         do i = -n2, n2
 
-            x  = i*dx 
-            y  = j*dy 
-            r  = sqrt(x**2+y**2)  
+            x  = i*dx
+            y  = j*dy
+            r  = sqrt(x**2+y**2)
 
             ! Get actual index of array
-            i1 = i+1+n2 
-            j1 = j+1+n2 
+            i1 = i+1+n2
+            j1 = j+1+n2
 
             ! Get correct GE value for this point
+            filt(i1,j1) = get_ge_value(r, rn_vals, ge_vals) * 1.e-12 *(dx*dy) /(9.81*max(r,dx))
+            ! TODO: recheck 9.81
 
-            
-            filt(i1,j1) = get_ge_value(r,rn_vals,ge_vals) * 1.e-12 *(dx*dy) /(9.81*max(r,dx)) ! mmr-recheck 9.81
-
-         end do
+        end do
         end do
 
         return 
       end subroutine calc_GE_filter_2D
-
-
 
       function get_ge_value(r,rn_vals,ge_vals) result(ge)
 

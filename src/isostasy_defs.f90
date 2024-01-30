@@ -87,10 +87,10 @@ module isostasy_defs
         type(c_ptr)             :: forward_dftplan_r2c
         type(c_ptr)             :: backward_dftplan_c2r
 
-        real(wp), allocatable :: kei(:,:)           ! Kelvin function filter values
-        real(wp), allocatable :: G0(:,:)            ! Green's function values
-        real(wp), allocatable :: GE(:,:)            ! Green's function for elastic displacement (Farrell 1972)
-        real(wp), allocatable :: GN(:,:)            ! Green's function for geoid values
+        real(wp), allocatable :: kei(:,:)   ! Kelvin function filter values
+        real(wp), allocatable :: G0(:,:)    ! Green's function values
+        real(wp), allocatable :: GE(:,:)    ! Green's function for elastic displacement (Farrell 1972)
+        real(wp), allocatable :: GN(:,:)    ! Green's function for geoid values
     end type isos_domain_class
 
     type isos_state_class 

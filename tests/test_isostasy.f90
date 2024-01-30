@@ -201,6 +201,7 @@ program test_isostasy
         stop
     endif
     
+    ! TODO: dy optionally different from dx
     nx      = int( (xmax-xmin) / dx ) + 1
     dy      = dx
     ymax    = abs(ymin)
@@ -256,7 +257,7 @@ program test_isostasy
     write(*,*) "Initial fields defined."
 
     ! Initialize bedrock model (allocate fields)
-    call isos_init(isos1, path_par, "isostasy", nx, ny, dx, dx)
+    call isos_init(isos1, path_par, "isostasy", nx, ny, dx, dy)
 
     ! Define ice thickness field based on experiment being run...
     select case(trim(experiment))

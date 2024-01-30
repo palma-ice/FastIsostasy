@@ -77,16 +77,17 @@ module isostasy
         integer, intent(IN), optional           :: n_lev
         
         !Lithosphere effective thickness (and therefore ridigidity)
-        character(len=*), intent(IN), optional :: rigidity_method
+        character(len=*), intent(IN), optional  :: rigidity_method
 
         ! Local variables
-        integer                 :: nsq
+        ! integer                 :: nsq
         real(wp)                :: radius_fac
         real(wp)                :: filter_scaling
         real(wp)                :: D_lith_const
         character*256           :: filename_laty
 
         ! First, load parameters from parameter file `filename`
+        write(*,*) "Defining params..."
         call isos_par_load(isos%par, filename, group)
         isos%par%n_lev = 1.             ! By default one level in asthenosphere
 
@@ -99,9 +100,9 @@ module isostasy
         ! Overwrite physical constants with arguments if available
         if (present(E))                 isos%par%E                  = E
         if (present(nu))                isos%par%nu                 = nu
-        if (present(rho_water))         isos%par%rho_water          = rho_water
         if (present(rho_ice))           isos%par%rho_ice            = rho_ice
         if (present(rho_seawater))      isos%par%rho_seawater       = rho_seawater
+        if (present(rho_water))         isos%par%rho_water          = rho_water
         if (present(rho_uppermantle))   isos%par%rho_uppermantle    = rho_uppermantle
         if (present(rho_litho))         isos%par%rho_litho          = rho_litho
         if (present(g))                 isos%par%g                  = g
@@ -112,11 +113,12 @@ module isostasy
         if (present(rigidity_method))   isos%par%rigidity_method    = rigidity_method
         if (present(visc_method))       isos%par%visc_method        = visc_method
 
-        if (present(visc_c))            isos%par%visc_c             = visc_c   
+        if (present(visc_c))            isos%par%visc_c             = visc_c
         if (present(thck_c))            isos%par%thck_c             = thck_c
         if (present(n_lev))             isos%par%n_lev              = n_lev
 
-        call allocate_isos(isos)
+        write(*,*) "Allocating fields..."
+        call allocate_isos(isos, nx, ny)
 
         ! Init scalar fields of domain
         ! nsq = max(nx, ny) 
@@ -125,22 +127,23 @@ module isostasy
         isos%domain%ny = ny
         isos%domain%dx = dx
         isos%domain%dy = dy
-        isos%domain%mu = 2. * pi / ((nx-1) * dx)    ! 2 * pi / L
+        isos%domain%mu = 2._wp * pi / ((nx-1) * dx)    ! 2 * pi / L
 
         ! Init plans
+        write(*,*) "Computing FFT plans..."
         isos%domain%forward_fftplan_r2r = fftw_plan_r2r_2d(nx, ny, isos%now%w, &
             isos%now%w, FFTW_DHT, FFTW_DHT, FFTW_ESTIMATE)
         isos%domain%backward_fftplan_r2r = fftw_plan_r2r_2d(nx, ny, isos%now%w, &
             isos%now%w, FFTW_DHT, FFTW_DHT, FFTW_ESTIMATE)
-
-        ! TODO recheck - shouldnt this be -1 (forward)
         isos%domain%forward_dftplan_r2c = fftw_plan_dft_r2c_2d(nx, ny, isos%now%w, &
             isos%now%cplx_out_aux, 1)
         isos%domain%backward_dftplan_c2r = fftw_plan_dft_c2r_2d(nx, ny, &
             isos%now%cplx_out_aux, isos%now%w, 1)
+        ! TODO: recheck - shouldnt this be -1 (forward)
 
         ! Init domain
-        if (correct_distortion) then
+        write(*,*) "Complementing domain informations..."
+        if (isos%par%correct_distortion) then
             ! TODO: implement correct expression for K
             isos%domain%K(:, :) = 1
         else
@@ -153,18 +156,24 @@ module isostasy
         call convenient_calc_kappa(isos%domain)
 
         ! Init parameters
+        write(*,*) "Complementing params informations..."
         isos%par%sec_per_year = 3600.0*24.0*365.0               ! [s]
-        isos%par%compressibility_correction = 1.5 / (1 + nu)    ! [1]
+        isos%par%compressibility_correction = 1.5 / (1 + isos%par%nu)
         call calc_density_correction_factor(isos%par)
         call calc_homogeneous_rigidity(D_lith_const, isos%par%E, &
             isos%par%He_lith, isos%par%nu)
         call calc_flexural_lengthscale(isos%par%L_w, D_lith_const, &
             isos%par%rho_uppermantle, isos%par%g)
 
+        ! Populate 2D D_lith field to have it available
+        isos%domain%D_lith = D_lith_const
+
+        write(*,*) "Selecting case..."
         select case(isos%par%method)
 
             ! use ELRA, which requires a homogeneous L_w, D_Lith and thus He_lith
             case(2)
+                write(*,*) "Using ELRA..."
 
                 ! Modify the relative radius to use for the regional filter
                 ! depending on whether we want to include the forbulge at
@@ -197,27 +206,27 @@ module isostasy
 
                 ! Calculate the reference Green's function values
                 call calc_greens_function_scaling(isos%domain%G0, isos%domain%kei, &
-                    isos%par%L_w, D_lith_const,dx=isos%domain%dx,dy=isos%domain%dx)
+                    isos%par%L_w, D_lith_const, dx=isos%domain%dx, dy=isos%domain%dx)
 
                 ! Populate 2D D_lith field to have it available
-                isos%domain%D_lith  = D_lith_const
                 isos%domain%eta_eff = isos%par%visc
                 
             ! LV-ELVA method is being used, which allows for a non-constant value of L_w,
             ! D_Lith and thus He_lith. ELVA is a particular case of LV-ELVA with constant
             ! values value of L_w, D_Lith and thus He_lith everywhere.
             case(4)
+                write(*,*) "Using LV-ELVA..."
 
-                call calc_ge_filter_2D(isos%domain%GE, dx=isos%domain%dx, dy=isos%domain%dx) 
+                write(*,*) "Initialising elastic Green kernel..."
+                call calc_GE_filter_2D(isos%domain%GE, dx=isos%domain%dx, dy=isos%domain%dx) 
              
+                write(*,*) "Initialising geoid Green kernel..."
                 if (isos%par%interactive_sealevel) then
                     call calc_GN_filter_2D(isos%domain%GN, isos%par%m_earth, &
                         isos%par%r_earth, dx=isos%domain%dx, dy=isos%domain%dx)
                 endif
               
-                ! Populate 2D D_lith field to have it available
-                isos%domain%D_lith = D_lith_const
-
+                write(*,*) "Choosing rigidity method..."
                 select case(trim(isos%par%rigidity_method))
                     ! TODO: use calc rigidity functions
                     case("uniform")
@@ -225,7 +234,7 @@ module isostasy
                         isos%domain%He_lith  = isos%par%He_lith     ! [km]
 
                     case("gaussian_plus")
-                        isos%par%He_lith = 100.0   !km
+                        isos%par%He_lith = 100.0                    ! [km]
                         call calc_gaussian_rigidity(isos%domain%He_lith, &
                             1.5*isos%par%He_lith, isos%par%He_lith, sign=1._wp, &
                             dx=isos%domain%dx, dy=isos%domain%dx) 
@@ -233,7 +242,7 @@ module isostasy
                             isos%domain%He_lith, isos%par%nu)
 
                     case("gaussian_minus")
-                        isos%par%He_lith = 100.0   !km
+                        isos%par%He_lith = 100.0                    ! [km]
                         call calc_gaussian_rigidity(isos%domain%He_lith, &
                             1.5*isos%par%He_lith, isos%par%He_lith, sign=-1._wp, &
                             dx=isos%domain%dx, dy=isos%domain%dx) 
@@ -314,10 +323,11 @@ module isostasy
                 write(*,*) "    range(He_lith):  ", minval(isos%domain%He_lith),    maxval(isos%domain%He_lith)
                 
                 write(*,*) "    L_w (m):      ", isos%par%L_w 
-                write(*,*) "    nr:           ", isos%par%nr
+                ! write(*,*) "    nr:           ", isos%par%nr
                 write(*,*) "    nx:           ", isos%domain%nx
                 write(*,*) "    ny:           ", isos%domain%ny
-                write(*,*) "    dx (m):       ", isos%domain%dx 
+                write(*,*) "    dx (m):       ", isos%domain%dx
+                write(*,*) "    dy (m):       ", isos%domain%dy
 
                 write(*,*) "    range(kei): ", minval(isos%domain%kei),     maxval(isos%domain%kei)
                 write(*,*) "    range(G0):  ", minval(isos%domain%G0),      maxval(isos%domain%G0)
@@ -641,17 +651,18 @@ module isostasy
         return
     end subroutine isos_par_load
 
-    subroutine allocate_isos(isos)
+    subroutine allocate_isos(isos, nx, ny)
         implicit none 
         type(isos_class), intent(INOUT) :: isos
+        integer, intent(IN)             :: nx, ny
 
         ! First ensure arrays are not allocated
         call deallocate_isos_domain(isos%domain)
         call deallocate_isos_state(isos%now)
         call deallocate_isos_state(isos%ref)
-        call allocate_isos_domain(isos%domain, isos%domain%nx, isos%domain%ny)
-        call allocate_isos_state(isos%now, isos%domain%nx, isos%domain%ny)
-        call allocate_isos_state(isos%ref, isos%domain%nx, isos%domain%ny)
+        call allocate_isos_domain(isos%domain, nx, ny)
+        call allocate_isos_state(isos%now, nx, ny)
+        call allocate_isos_state(isos%ref, nx, ny)
 
         return
     end subroutine allocate_isos
