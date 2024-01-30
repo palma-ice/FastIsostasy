@@ -30,6 +30,7 @@ module isostasy_defs
         real(wp) :: rho_seawater 
         real(wp) :: rho_uppermantle
         real(wp) :: rho_litho 
+        real(wp) :: Vden_factor
         
         real(wp) :: E 
         real(wp) :: nu
@@ -73,6 +74,7 @@ module isostasy_defs
         real(wp), allocatable   :: A(:,:)           ! [m^2] Cell area
         real(wp), allocatable   :: K(:,:)           ! [1] Distortion matrix
         real(wp), allocatable   :: kappa(:,:)       ! Pseudodifferential operator
+        logical,  allocatable   :: maskactive(:,:)  ! [1] Active mask
 
         type(c_ptr)             :: forward_fftplan_r2r
         type(c_ptr)             :: backward_fftplan_r2r
@@ -113,9 +115,10 @@ module isostasy_defs
         real(wp), allocatable :: canom_load(:,:)    ! [kg m^-2] Load column anomaly
         real(wp), allocatable :: canom_full(:,:)    ! [kg m^-2] Full column anomaly
         real(wp), allocatable :: mass_anom(:,:)     ! [kg] Mass anomaly
-        real(wp), allocatable :: maskocean(:,:)     ! [1] Ocean mask
-        real(wp), allocatable :: maskactive(:,:)    ! [1] Active mask
-        real(wp), allocatable :: maskgrounded(:,:)  ! [1] Grounded mask
+
+        logical, allocatable :: maskocean(:,:)      ! [1] Ocean mask
+        logical, allocatable :: maskgrounded(:,:)   ! [1] Grounded mask
+        logical, allocatable :: maskcontinent(:,:)  ! [1] Continent mask
     end type isos_state_class
 
     type isos_class

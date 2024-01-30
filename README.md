@@ -1,13 +1,20 @@
 # isostasy
-Stand-alone isostasy model
+Stand-alone model of regional glacial isostatic adjustment (GIA).
 
-This compact module is built to run simple bedrock isostasy models.
-So far, the implementations include:
+This compact module is built to run regional GIA models, which compute the deformational
+response to changes in the surface load and, optionally, the gravitational response,
+the heterogeneous sea-surface height and the sea-level contribution, as defined in
+Goelzer et al. (2020) and extended in Swierczek-Jereczek et al. (2024).
 
-1. Local lithosphere, relaxing asthenosphere (LLRA)
-2. Elastic lithosphere, relaxing asthenosphere (ELRA)
-3. Elementary GIA model (EGIA) - work in progress!
-4. Elastic lithosphere, viscous asthenosphere (ELVA)
+So far, the implementations of the deformational response include:
+
+1. Local lithosphere, relaxing asthenosphere (LLRA).
+2. Elastic lithosphere, relaxing asthenosphere (ELRA).
+3. Laterally-Variable ELRA (LV-ELRA), as described in Coulon et al. (2021) and renamed
+   in Swierczek-Jerecze et al. (2024). This is work in progress!
+4. Laterally-Variable Elastic Lithosphere/Viscous Asthenosphere (LV-ELVA), as described
+   in Swierczek-Jereczek et al. (2024). Note that this is a generalisation of ELVA, as
+   described in Bueler et al. (2007).
 
 ## Initial configuration and running the program
 

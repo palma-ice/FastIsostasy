@@ -8,6 +8,7 @@ module isos_utils
     
     public :: extend_array
     public :: reduce_array
+    public :: maskfield
     public :: isos_set_field
     public :: isos_set_smoothed_field
     public :: smooth_gauss_2D
@@ -174,6 +175,30 @@ module isos_utils
         return
     
     end subroutine reduce_array
+
+    ! Mask the input field
+    subroutine maskfield(out, in, mask, nx, ny)
+        implicit none 
+
+        real(wp), intent(INOUT) :: out(:,:) 
+        real(wp), intent(IN)    :: in(:,:)
+        logical, intent(IN)     :: mask(:,:)
+        integer, intent(IN)     :: nx, ny
+
+        integer     :: i, j
+
+        do i = 1, nx
+            do j = 1, ny
+                if (mask(i,j)) then
+                    out(i,j) = in(i,j)
+                else
+                    out(i,j) = 0.0_wp
+                endif
+            enddo
+        enddo
+
+        return
+    end subroutine maskfield
 
     subroutine isos_set_field(var, var_values, mask_values, mask)
         ! Impose multiple var values according to the corresponding

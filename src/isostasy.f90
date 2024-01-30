@@ -1,4 +1,5 @@
-
+! TODO: We should rename the module to something more specific. For instance:
+! RegionalGIA
 module isostasy 
     ! Isostasy (Greek ísos "equal", stásis "standstill") is the state of 
     ! gravitational equilibrium between Earth's crust and mantle such that 
@@ -17,6 +18,7 @@ module isostasy
     use solver_xlra
     use convolutions
     use solver_lv_elva
+    use sea_level
     use ncio
 
     implicit none
@@ -89,11 +91,14 @@ module isostasy
         allocate(dx_matrix(nx,ny))
         allocate(dy_matrix(nx,ny))
 
+        ! TODO: check if I am assigning values before allocation!
         ! By default one level in asthenosphere
         isos%par%n_lev = 1.        
         
         ! First, load parameters from parameter file `filename`
         call isos_par_load(isos%par, filename, group)
+        isos%par%Vden_factor = isos%par%rho_ice / isos%par%rho_water &
+            - isos%par%rho_ice / isos%par%rho_seawater
 
         if (present(interactive_sealevel))  isos%par%interactive_sealevel   = interactive_sealevel
         if (present(correct_distortion))    isos%par%correct_distortion     = correct_distortion
@@ -432,6 +437,12 @@ module isostasy
         isos%par%time_diagnostics = 1e10 
         isos%par%time_prognostics = 1e10
 
+        isos%now%maskocean = .false.
+        isos%now%maskgrounded = .false.
+        isos%now%maskcontinent = .false.
+
+        isos%domain%maskactive = .true.
+
         write(*,*) "isos_init:: complete." 
 
         return 
@@ -741,6 +752,7 @@ module isostasy
         if (allocated(domain%A))            deallocate(domain%A)
         if (allocated(domain%K))            deallocate(domain%K)
         if (allocated(domain%kappa))        deallocate(domain%kappa)
+        if (allocated(domain%maskactive))   deallocate(domain%maskactive)
 
         if (allocated(domain%kei))       deallocate(domain%kei)
         if (allocated(domain%G0))        deallocate(domain%G0)
@@ -778,9 +790,10 @@ module isostasy
         if (allocated(state%canom_load))        deallocate(state%canom_load)
         if (allocated(state%canom_full))        deallocate(state%canom_full)
         if (allocated(state%mass_anom))         deallocate(state%mass_anom)
+
         if (allocated(state%maskocean))         deallocate(state%maskocean)
-        if (allocated(state%maskactive))        deallocate(state%maskactive)
         if (allocated(state%maskgrounded))      deallocate(state%maskgrounded)
+        if (allocated(state%maskcontinent))     deallocate(state%maskcontinent)
 
         return 
 
@@ -797,6 +810,7 @@ module isostasy
         allocate(domain%A(nx,ny))
         allocate(domain%K(nx,ny))
         allocate(domain%kappa(nx,ny))
+        allocate(domain%maskactive(nx,ny))
 
         allocate(domain%kei(nx,ny))
         allocate(domain%G0(nx,ny))
@@ -847,9 +861,10 @@ module isostasy
         allocate(state%canom_load(nx,ny))
         allocate(state%canom_full(nx,ny))
         allocate(state%mass_anom(nx,ny))
+
         allocate(state%maskocean(nx,ny))
-        allocate(state%maskactive(nx,ny))
         allocate(state%maskgrounded(nx,ny))
+        allocate(state%maskcontinent(nx,ny))
 
         return
 
