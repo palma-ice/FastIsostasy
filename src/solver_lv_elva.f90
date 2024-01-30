@@ -11,7 +11,7 @@ module solver_lv_elva
 
     private
     
-    public :: calc_lvelva_square
+    ! public :: calc_lvelva_square
     public :: calc_lvelva
     public :: calc_effective_viscosity_3layer_channel
     public :: calc_effective_viscosity_3d
@@ -25,6 +25,7 @@ module solver_lv_elva
 
     contains
 
+    ! TODO: either adapt this method or delete it!
     subroutine calc_lvelva_square(dzbdt, w, canom_full, nu, mu, D_lith, eta, &
         kappa, nsq, par, domain)
     
@@ -34,24 +35,24 @@ module solver_lv_elva
       
         implicit none
 
-        real(wp), intent(OUT)   :: dzbdt(:,:)
-        real(wp), intent(INOUT) :: w(:,:)
-        real(wp), intent(IN)    :: canom_full(:,:)
+        real(wp), intent(OUT)   :: dzbdt(:, :)
+        real(wp), intent(INOUT) :: w(:, :)
+        real(wp), intent(IN)    :: canom_full(:, :)
         real(wp), intent(IN)    :: nu
         real(wp), intent(IN)    :: mu
-        real(wp), intent(IN)    :: D_lith(:,:)
-        real(wp), intent(IN)    :: eta(:,:)
-        real(wp), intent(INOUT) :: kappa(:,:)
+        real(wp), intent(IN)    :: D_lith(:, :)
+        real(wp), intent(IN)    :: eta(:, :)
+        real(wp), intent(INOUT) :: kappa(:, :)
         integer, intent(IN)     :: nsq
         type(isos_param_class)  :: par
         type(isos_domain_class) :: domain
 
         ! Local variables
-        real(wp), allocatable :: sq_dzbdt(:,:)
-        real(wp), allocatable :: sq_w(:,:)
-        real(wp), allocatable :: sq_canom_full(:,:)
-        real(wp), allocatable :: sq_D_lith(:,:)
-        real(wp), allocatable :: sq_eta(:,:)    
+        real(wp), allocatable :: sq_dzbdt(:, :)
+        real(wp), allocatable :: sq_w(:, :)
+        real(wp), allocatable :: sq_canom_full(:, :)
+        real(wp), allocatable :: sq_D_lith(:, :)
+        real(wp), allocatable :: sq_eta(:, :)    
 
         ! Step 0: determine size of square array and allocate variables
         allocate(sq_dzbdt(nsq,nsq))
@@ -69,94 +70,80 @@ module solver_lv_elva
         call extend_array(sq_eta, eta, fill_with="mirror", val=0.0_wp)
 
         ! Step 2: solve
-        call calc_lvelva(sq_dzbdt, sq_w, sq_canom_full, nu, mu, sq_D_lith, &
-            sq_eta, kappa, nsq, nsq, par, domain)
+        ! call calc_lvelva(sq_dzbdt, sq_w, sq_canom_full, nu, mu, sq_D_lith, &
+        !     sq_eta, kappa, nsq, nsq, par, domain)
 
         ! Step 3: get solution on original grid
         call reduce_array(dzbdt, sq_dzbdt)
         call reduce_array(w, sq_w)
         
         return
-
     end subroutine calc_lvelva_square
 
 
     ! Calculate vertical displacement rate (viscous part) on rectangular domain.
     subroutine calc_lvelva(dzbdt, u, canom_full, nu, mu, D_lith, eta, &
-        kappa, nx, ny, par, domain)
+        kappa, nx, ny, dx_matrix, dy_matrix, sec_per_year, forward_plan, backward_plan)
 
         implicit none
 
         real(wp), parameter :: epsilon = 1.e-2 
         
-        real(wp), intent(INOUT) :: dzbdt(:,:)
-        real(wp), intent(INOUT) :: u(:,:)
-        real(wp), intent(INOUT) :: canom_full(:,:)
+        real(wp), intent(INOUT) :: dzbdt(:, :)
+        real(wp), intent(IN)    :: u(:, :)
+        real(wp), intent(IN)    :: canom_full(:, :)
         real(wp), intent(IN)    :: nu
         real(wp), intent(IN)    :: mu
-        real(wp), intent(IN)    :: D_lith(:,:) 
-        real(wp), intent(IN)    :: eta(:,:)   ! [Pa s] Viscosity, eta=1e21 by default. 
-        real(wp), intent(INOUT) :: kappa(:,:)
+        real(wp), intent(IN)    :: D_lith(:, :) 
+        real(wp), intent(IN)    :: eta(:, :)   ! [Pa s] Viscosity, eta=1e21 by default. 
+        real(wp), intent(IN)    :: kappa(:, :)
         integer, intent(IN)     :: nx, ny
-        type(isos_param_class)  :: par
-        type(isos_domain_class) :: domain
+        real(wp), intent(IN)    :: sec_per_year
+        real(wp), intent(IN)    :: dx_matrix(:, :)
+        real(wp), intent(IN)    :: dy_matrix(:, :)
+        type(c_ptr), intent(IN) :: forward_plan
+        type(c_ptr), intent(IN) :: backward_plan
 
-        real(wp), allocatable :: f(:,:)
-        real(wp), allocatable :: f_hat(:,:)
+        real(wp), allocatable :: f(:, :)
+        real(wp), allocatable :: f_hat(:, :)
+        real(wp), allocatable :: dudt_hat(:, :)
 
-        real(wp), allocatable :: prod(:,:)
-        real(wp), allocatable :: prod_hat(:,:)
+        real(wp), allocatable :: u_x(:, :)
+        real(wp), allocatable :: u_xy(:, :)
+        real(wp), allocatable :: u_xx(:, :)
+        real(wp), allocatable :: u_yy(:, :)
 
-        real(wp), allocatable :: dudt(:,:)
-        real(wp), allocatable :: u_x(:,:)
-        real(wp), allocatable :: u_y(:,:)
+        real(wp), allocatable :: Mxy(:, :)
+        real(wp), allocatable :: Mxy_x(:, :)
+        real(wp), allocatable :: Mxy_xy(:, :)
 
-        real(wp), allocatable :: u_xx(:,:)
-        real(wp), allocatable :: u_xy(:,:)
-        real(wp), allocatable :: u_yy(:,:)
+        real(wp), allocatable :: Mx(:, :) 
+        real(wp), allocatable :: Mx_xx(:, :)
+        real(wp), allocatable :: My(:, :)
+        real(wp), allocatable :: My_yy(:, :)
 
-        real(wp), allocatable :: Mx(:,:) 
-        real(wp), allocatable :: My(:,:)
+        allocate(f(nx, ny))
+        allocate(f_hat(nx, ny))
+        allocate(dudt_hat(nx, ny))
 
-        real(wp), allocatable :: Mxy(:,:)
-        real(wp), allocatable :: Mxy_x(:,:)
-        real(wp), allocatable :: Myx_y(:,:)
+        allocate(u_x(nx, ny))
+        allocate(u_xy(nx, ny))
+        allocate(u_xx(nx, ny))
+        allocate(u_yy(nx, ny))
 
-        real(wp), allocatable :: Mx_xx(:,:)
-        real(wp), allocatable :: My_yy(:,:)
-        
-        real(wp), allocatable :: Mxy_xy(:,:)
+        allocate(Mx(nx, ny))
+        allocate(My(nx, ny))
 
-        allocate(f(nx,ny))
-        allocate(f_hat(nx,ny))
-
-        allocate(prod(nx,ny))
-        allocate(prod_hat(nx,ny))
-
-        allocate(dudt(nx,ny))
-
-        allocate(u_x(nx,ny))
-        allocate(u_y(nx,ny))
-
-        allocate(u_xx(nx,ny))
-        allocate(u_xy(nx,ny))
-        allocate(u_yy(nx,ny))
-
-        allocate(Mx(nx,ny))
-        allocate(My(nx,ny))
-
-        allocate(Mxy_x(nx,ny))
-        allocate(Myx_y(nx,ny))
-        
-        allocate(Mx_xx(nx,ny))
-        allocate(My_yy(nx,ny))
-        allocate(Mxy_xy(nx,ny))
+        allocate(Mx_xx(nx, ny))
+        allocate(My_yy(nx, ny))
+        allocate(Mxy_x(nx, ny))
+        allocate(Mxy_xy(nx, ny))
 
         ! Finite differences
-        call calc_derivative_xx(u_xx, u, domain%dx, nx, ny)
-        call calc_derivative_yy(u_yy, u, domain%dy, nx, ny)
-        call calc_derivative_x(u_x, u, domain%dx, nx, ny)
-        call calc_derivative_y(u_xy, u_x, domain%dy, nx, ny)
+        call calc_derivative_x(u_x, u, dx_matrix, nx, ny)
+        call calc_derivative_y(u_xy, u_x, dy_matrix, nx, ny)
+        call calc_derivative_xx(u_xx, u, dx_matrix, nx, ny)
+        call calc_derivative_yy(u_yy, u, dy_matrix, nx, ny)
 
         ! Ventsel and Krauthammer (2001): Thin Plates and Shells.
         ! Theory, Analysis, and Applications. Eq (2.13, 2.23)
@@ -165,42 +152,39 @@ module solver_lv_elva
         Mxy = -D_lith*(1.0-nu)*u_xy
 
         ! Finite differences
-        call calc_derivative_xx(Mx_xx, Mx, domain%dx, nx, ny)
-        call calc_derivative_yy(My_yy, My, domain%dy, nx, ny)
-        call calc_derivative_x(Mxy_x, Mxy, domain%dx, nx, ny)
-        call calc_derivative_y(Mxy_xy, Mxy_x, domain%dy, nx, ny)
+        call calc_derivative_x(Mxy_x, Mxy, dx_matrix, nx, ny)
+        call calc_derivative_y(Mxy_xy, Mxy_x, dy_matrix, nx, ny)
+        call calc_derivative_xx(Mx_xx, Mx, dx_matrix, nx, ny)
+        call calc_derivative_yy(My_yy, My, dy_matrix, nx, ny)
 
         f = (canom_full + Mx_xx + 2.0*Mxy_xy + My_yy) / (2. * eta)
-        call calc_fft_forward_r2r(domain%forward_fftplan_r2r, f, f_hat)
+        call calc_fft_forward_r2r(forward_plan, f, f_hat)
 
-        prod_hat = f_hat / kappa / mu
-        call calc_fft_backward_r2r(domain%backward_fftplan_r2r, prod_hat, prod)
-        dudt = prod  ! [m/s]
-
-        dudt  = dudt - 0.25 * (dudt(1,1) + dudt(nx,ny) + dudt(1,ny) + dudt(nx,1))
+        dudt_hat = f_hat / kappa / mu
+        call calc_fft_backward_r2r(backward_plan, dudt_hat, dzbdt)
+        call apply_zerobc_at_corners(dzbdt, nx, ny)
 
         ! Rate of viscous asthenosphere uplift per unit time (seconds)
-        dzbdt = dudt * par%sec_per_year  !  [m/s] x [s/a] = [m/a] 
+        dzbdt = dzbdt * sec_per_year  !  [m/s] x [s/a] = [m/a]
 
         deallocate(f)
         deallocate(f_hat)
-        deallocate(prod)
-        deallocate(prod_hat)
-        deallocate(dudt)
+        deallocate(dudt_hat)
         
         deallocate(u_x)
-        deallocate(u_y)
-        
-        deallocate(u_xx)
         deallocate(u_xy)
+        deallocate(u_xx)
         deallocate(u_yy)
 
-        deallocate(Mx_xx)
+        deallocate(Mxy)
+        deallocate(Mxy_x)
         deallocate(Mxy_xy)
+        deallocate(Mx)
+        deallocate(Mx_xx)
+        deallocate(My)
         deallocate(My_yy)
 
         return
-
     end subroutine calc_lvelva
 
     subroutine calc_effective_viscosity_3layer_channel(eta_eff, visc_c, thck_c, He_lith, &
@@ -208,10 +192,10 @@ module solver_lv_elva
 
         implicit none
 
-        real(wp), intent(INOUT)  :: eta_eff(:,:)
+        real(wp), intent(INOUT)  :: eta_eff(:, :)
         real(wp), intent(IN)     :: visc_c
         real(wp), intent(IN)     :: thck_c
-        real(wp), intent(IN)     :: He_lith !(:,:) 
+        real(wp), intent(IN)     :: He_lith !(:, :) 
         integer,  intent(IN)     :: n_lev
         real(wp), intent(IN)     :: dx, dy
         
@@ -219,16 +203,16 @@ module solver_lv_elva
         real(wp) :: xcntr, ycntr, xmax, xmin, ymax, ymin
         real(wp), allocatable :: xc(:), yc(:)
 
-        real(wp), allocatable ::  R(:,:)
+        real(wp), allocatable ::  R(:, :)
         real(wp), allocatable ::  eta(:,:,:)
-        real(wp), allocatable ::  eta_ratio(:,:)
-        real(wp), allocatable ::  eta_c(:,:)
+        real(wp), allocatable ::  eta_ratio(:, :)
+        real(wp), allocatable ::  eta_c(:, :)
         real(wp), allocatable ::  dz(:,:,:)
-        real(wp), allocatable ::  dz_c(:,:)
-        real(wp), allocatable ::  eta_ratiom1(:,:)
-        real(wp), allocatable ::  c(:,:)
-        real(wp), allocatable ::  s(:,:)
-        real(wp), allocatable :: kappa(:,:)
+        real(wp), allocatable ::  dz_c(:, :)
+        real(wp), allocatable ::  eta_ratiom1(:, :)
+        real(wp), allocatable ::  c(:, :)
+        real(wp), allocatable ::  s(:, :)
+        real(wp), allocatable :: kappa(:, :)
        
         integer  :: i, j, k, nx, ny
 
@@ -237,16 +221,16 @@ module solver_lv_elva
         
         allocate(xc(nx))
         allocate(yc(ny))
-        allocate(R(nx,ny))
-        allocate(eta_ratio(nx,ny))
-        allocate(eta_ratiom1(nx,ny))
-        allocate(c(nx,ny))
-        allocate(s(nx,ny))
+        allocate(R(nx, ny))
+        allocate(eta_ratio(nx, ny))
+        allocate(eta_ratiom1(nx, ny))
+        allocate(c(nx, ny))
+        allocate(s(nx, ny))
         allocate(eta(nx,ny,n_lev))
-        allocate(eta_c(nx,ny))
-        allocate(dz_c(nx,ny))
+        allocate(eta_c(nx, ny))
+        allocate(dz_c(nx, ny))
         allocate(dz(nx,ny,n_lev))
-        allocate(kappa(nx,ny))
+        allocate(kappa(nx, ny))
 
         if (n_lev.lt.2) then
 
@@ -291,7 +275,7 @@ module solver_lv_elva
         
             ! Start with n-th layer: viscous half space
             
-            eta_eff(:,:) = eta(:,:,n_lev)
+            eta_eff(:, :) = eta(:,:,n_lev)
             
             do k = 1, n_lev-1
 
@@ -335,14 +319,13 @@ module solver_lv_elva
         deallocate(kappa)
      
         return
-        
     end subroutine calc_effective_viscosity_3layer_channel
 
     subroutine calc_effective_viscosity_3d(eta_eff,eta,dx,dy)
 
         implicit none
 
-        real(wp), intent(INOUT)  :: eta_eff(:,:)
+        real(wp), intent(INOUT)  :: eta_eff(:, :)
         real(wp), intent(IN)     :: eta(:,:,:)
         real(wp), intent(IN)     :: dx, dy
         
@@ -350,15 +333,15 @@ module solver_lv_elva
         real(wp) :: xcntr, ycntr, xmax, xmin, ymax, ymin
         real(wp), allocatable :: xc(:), yc(:)
 
-        real(wp), allocatable ::  R(:,:)
-        real(wp), allocatable ::  eta_ratio(:,:)
-        real(wp), allocatable ::  eta_c(:,:)
+        real(wp), allocatable ::  R(:, :)
+        real(wp), allocatable ::  eta_ratio(:, :)
+        real(wp), allocatable ::  eta_c(:, :)
         real(wp), allocatable ::  dz(:,:,:)
-        real(wp), allocatable ::  dz_c(:,:)
-        real(wp), allocatable ::  eta_ratiom1(:,:)
-        real(wp), allocatable ::  c(:,:)
-        real(wp), allocatable ::  s(:,:)
-        real(wp), allocatable :: kappa(:,:)
+        real(wp), allocatable ::  dz_c(:, :)
+        real(wp), allocatable ::  eta_ratiom1(:, :)
+        real(wp), allocatable ::  c(:, :)
+        real(wp), allocatable ::  s(:, :)
+        real(wp), allocatable :: kappa(:, :)
        
         integer  :: i, j, k, nx, ny, n_lev
 
@@ -369,15 +352,15 @@ module solver_lv_elva
         
         allocate(xc(nx))
         allocate(yc(ny))        
-        allocate(R(nx,ny))
-        allocate(eta_ratio(nx,ny))
-        allocate(eta_ratiom1(nx,ny))
-        allocate(c(nx,ny))
-        allocate(s(nx,ny))
-        allocate(eta_c(nx,ny))
-        allocate(dz_c(nx,ny))
+        allocate(R(nx, ny))
+        allocate(eta_ratio(nx, ny))
+        allocate(eta_ratiom1(nx, ny))
+        allocate(c(nx, ny))
+        allocate(s(nx, ny))
+        allocate(eta_c(nx, ny))
+        allocate(dz_c(nx, ny))
         allocate(dz(nx,ny,n_lev))
-        allocate(kappa(nx,ny))
+        allocate(kappa(nx, ny))
 
 ! mmr recheck this 
 
@@ -420,7 +403,7 @@ module solver_lv_elva
         
             ! Start with n-th layer: viscous half space
             
-            eta_eff(:,:) = eta(:,:,n_lev)
+            eta_eff(:, :) = eta(:,:,n_lev)
             
             do k = 1, n_lev-1
 
@@ -466,10 +449,10 @@ module solver_lv_elva
     subroutine calc_beta(beta, kappa, mu, D_lith, rho_uppermantle, g) 
         ! Calculate analytical solution as in Bueler et al 2007 (eq 11)
                     
-        real(wp), intent(OUT)  :: beta(:,:) 
+        real(wp), intent(OUT)  :: beta(:, :) 
         real(wp), intent(OUT)  :: mu      
-        real(wp), intent(IN)   :: kappa(:,:)
-        real(wp), intent(IN)   :: D_lith(:,:)
+        real(wp), intent(IN)   :: kappa(:, :)
+        real(wp), intent(IN)   :: D_lith(:, :)
         real(wp), intent(IN)   :: rho_uppermantle
         real(wp), intent(IN)   :: g 
         
@@ -513,7 +496,7 @@ module solver_lv_elva
     subroutine calc_kappa(kappa, nx, ny)
 
         integer, intent(IN)     :: nx, ny
-        real(wp), intent(OUT)   :: kappa(:,:)
+        real(wp), intent(OUT)   :: kappa(:, :)
 
         integer :: i, j, ic, jc, ip, iq
 
@@ -541,100 +524,5 @@ module solver_lv_elva
 
         return
     end subroutine calc_kappa
-
-
-
-    ! http://www.fftw.org/fftw3_doc/The-Discrete-Hartley-Transform.html
-
-    ! The discrete Hartley transform (DHT) is an invertible linear transform closely
-    ! related to the DFT. In the DFT, one multiplies each input by cos - i * sin
-    ! (a complex exponential), whereas in the DHT each input is multiplied by simply cos +
-    ! sin. Thus, the DHT transforms n real numbers to n real numbers, and has the convenient
-    ! property of being its own inverse. In FFTW, a DHT (of any positive n) can be specified
-    ! by an r2r kind of FFTW_DHT.
-
-    ! Like the DFT, in FFTW the DHT is unnormalized, so computing a DHT of size n followed
-    ! by another DHT of the same size will result in the original array multiplied by n.
-
-    ! The DHT was originally proposed as a more efficient alternative to the DFT for real
-    ! data, but it was subsequently shown that a specialized DFT (such as FFTW’s r2hc or r2c
-    ! transforms) could be just as fast. In FFTW, the DHT is actually computed by
-    ! post-processing an r2hc transform, so there is ordinarily no reason to prefer it from
-    ! a performance perspective. However, we have heard rumors that the DHT might be the
-    ! most appropriate transform in its own right for certain applications, and we would be
-    ! very interested to hear from anyone who finds it useful.
-
-    subroutine calc_fft_forward_r2r(plan, in, out)
-
-        implicit none 
-        type(c_ptr), intent(IN)     :: plan
-        real(wp), intent(INOUT)     :: in(:,:)
-        real(wp), intent(INOUT)     :: out(:,:)
-
-        call fftw_execute_r2r(plan, in, out)
-
-        return
-      
-    end subroutine calc_fft_forward_r2r
-
-    subroutine calc_fft_backward_r2r(plan, in, out)
-
-        implicit none 
-
-        type(c_ptr), intent(IN)     :: plan
-        real(wp), intent(INOUT)     :: in(:,:)
-        real(wp), intent(INOUT)     :: out(:,:)
-
-        integer(kind=4)             :: m, n
-
-        m = size(in, 1)
-        n = size(in, 2)
-
-        call fftw_execute_r2r(plan, in, out)
-        out = out / (m*n*1.)
-
-        return
-    end subroutine calc_fft_backward_r2r
-
-
-    !!!!!!
-    ! http://www.fftw.org/fftw3_doc/Real_002ddata-DFTs.html
-    ! Fftw computes an unnormalized transform: computing an r2c
-    ! followed by a c2r transform (or vice versa) will result in the
-    ! original data multiplied by the size of the transform (the
-    ! product of the logical dimensions). An r2c transform produces
-    ! the same output as a FFTW_FORWARD complex DFT of the same input,
-    ! and a c2r transform is correspondingly equivalent to
-    ! FFTW_BACKWARD.
-      
-    subroutine calc_fft_forward_r2c(plan, in, out)
-
-        implicit none 
-
-        type(c_ptr), intent(IN)     :: plan
-        real(wp), intent(INOUT)     :: in(:,:)
-        complex(wp), intent(INOUT)  :: out(:,:)
-
-        call fftw_execute_dft_r2c(plan, in, out)
-
-        return
-    end subroutine calc_fft_forward_r2c
-
-    subroutine calc_fft_backward_c2r(plan, in, out)
-        implicit none
-
-        type(c_ptr), intent(IN)    :: plan
-        complex(wp), intent(INOUT) :: in(:,:)
-        real(wp), intent(INOUT)    :: out(:,:)
-
-        integer(kind=4)            :: m,n
-
-        m = size(in,1)
-        n = size(in,2)
-        call fftw_execute_dft_c2r(plan, in, out)
-        out = out / (m*n*1.)
-
-        return
-    end subroutine calc_fft_backward_c2r
 
 end module solver_lv_elva

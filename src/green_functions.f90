@@ -160,6 +160,7 @@ module green_functions
 
       end function get_GE_value
 
+    ! Compute geoid's Green function (Coulon et al. 2021) to determine geoid displacement
     subroutine calc_GN_filter_2D(filt,m_earth,r_earth,dx,dy) 
         ! Calculate 2D Green Function
 

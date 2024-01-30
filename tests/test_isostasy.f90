@@ -32,7 +32,7 @@ program test_isostasy
     real(wp) :: time_now
     real(wp) :: xmin, xmax, dx
     real(wp) :: ymin, ymax, dy
-    real(wp) :: xcntr, ycntr                        
+    real(wp) :: xcntr, ycntr
     real(wp), allocatable :: xc(:)
     real(wp), allocatable :: yc(:)
 
@@ -41,7 +41,8 @@ program test_isostasy
     real(wp), allocatable :: z_sl_ref(:,:) 
     
     real(wp), allocatable :: z_bed(:,:) 
-    real(wp), allocatable :: H_ice(:,:),  T_ice(:,:,:), z_bed_ice(:,:,:), time_ice(:), xc_ice(:), yc_ice(:)
+    real(wp), allocatable :: H_ice(:,:), T_ice(:,:,:), z_bed_ice(:,:,:)
+    real(wp), allocatable :: time_ice(:), xc_ice(:), yc_ice(:)
     real(wp), allocatable :: z_sl(:,:) 
     
     real(wp), allocatable :: mask(:,:)
@@ -193,6 +194,7 @@ program test_isostasy
     write(*,*) "dt_out    = ", dt_out
 
     ! === Define grid information ============
+    ! TODO: make this more general
     xmax = abs(xmin)
     if (mod((xmax-xmin),dx).ne.0.) then
         print*,'you must have an integer number of points in x-domain'
@@ -277,9 +279,9 @@ program test_isostasy
             mask(2*int(nx/3.0)+1:nx,:) = 2.0 
 
             ! Define tau field using the mask
-!mmr           call isos_set_field(isos1%now%tau,[1e2,1e3,3e3],[0.0_wp,1.0_wp,2.0_wp],mask,dx,sigma=150e3)
+!mmr           call isos_set_field(isos1%domain%tau,[1e2,1e3,3e3],[0.0_wp,1.0_wp,2.0_wp],mask,dx,sigma=150e3)
 
-            call isos_set_smoothed_field(isos1%now%tau, [1.e2_wp,1.e3_wp,3.e3_wp], &
+            call isos_set_smoothed_field(isos1%domain%tau, [1.e2_wp,1.e3_wp,3.e3_wp], &
                 [0.0_wp,1.0_wp,2.0_wp], mask, dx, 150.e3_wp)
 
         case("point_load")
@@ -499,7 +501,7 @@ program test_isostasy
 
                ! mmr: comment this to spare time; enable for test1 only
                 call isosbench_elva_disk(z_bed_bench, r0, h0, eta, isos1%domain%dx, &
-                    isos1%now%D_lith(1,1), isos1%par%rho_ice, isos1%par%rho_uppermantle, &
+                    isos1%domain%D_lith(1,1), isos1%par%rho_ice, isos1%par%rho_uppermantle, &
                     isos1%par%g,time)
 
                 ! Write to file 
@@ -551,7 +553,7 @@ program test_isostasy
         call nc_write(filename, "z_bed_ref", isos%ref%z_bed, units="m", &
             long_name="Bedrock elevation reference", dim1="xc", dim2="yc",start=[1,1])
 
-        call nc_write(filename, "tau", isos%now%tau, units="yr", &
+        call nc_write(filename, "tau", isos%domain%tau, units="yr", &
             long_name="Asthenosphere relaxation timescale", &
             dim1="xc",dim2="yc",start=[1,1]) 
 
@@ -621,15 +623,15 @@ program test_isostasy
             long_name="Displacement (elastic)", &
             dim1="xc", dim2="yc", dim3="time", start=[1,1,n], ncid=ncid)
 
-        call nc_write(filename, "eta_eff", isos%now%eta_eff, units="Pa s", &
+        call nc_write(filename, "eta_eff", isos%domain%eta_eff, units="Pa s", &
             long_name="Asthenosphere effective viscosity", &
             dim1="xc", dim2="yc", dim3="time", start=[1,1,n], ncid=ncid)
 
-        call nc_write(filename, "He_lith", isos%now%He_lith, units="km", &
+        call nc_write(filename, "He_lith", isos%domain%He_lith, units="km", &
             long_name="Lithosphere effective thickness", &
             dim1="xc",dim2="yc",dim3="time",start=[1,1,n],ncid=ncid)
 
-        call nc_write(filename, "D_lith", isos%now%D_lith, units="N m", &
+        call nc_write(filename, "D_lith", isos%domain%D_lith, units="N m", &
             long_name="Lithosphere effective rigidity", &
             dim1="xc",dim2="yc",dim3="time",start=[1,1,n],ncid=ncid)
 

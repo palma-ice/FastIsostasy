@@ -76,6 +76,12 @@ module isostasy_defs
         real(wp), allocatable   :: kappa(:,:)       ! Pseudodifferential operator
         logical,  allocatable   :: maskactive(:,:)  ! [1] Active mask
 
+        real(wp), allocatable :: He_lith(:,:)       ! [m]  Effective elastic thickness of the lithosphere
+        real(wp), allocatable :: D_lith(:,:)        ! [N-m] Lithosphere flexural rigidity
+        real(wp), allocatable :: eta(:,:,:)         ! [Pa-s]3D mantle viscosity
+        real(wp), allocatable :: eta_eff(:,:)       ! [Pa-s] Effective asthenosphere viscosity
+        real(wp), allocatable :: tau(:,:)           ! [yr] Asthenospheric relaxation timescale field
+
         type(c_ptr)             :: forward_fftplan_r2r
         type(c_ptr)             :: backward_fftplan_r2r
         type(c_ptr)             :: forward_dftplan_r2c
@@ -91,12 +97,6 @@ module isostasy_defs
         integer               :: count_updates      ! [1] Number of sea-level updates since beginnning of simulation
         real(wp)              :: t                  ! [yr] Time
         real(wp)              :: bsl                ! [m] Barystatic sea level
-        
-        real(wp), allocatable :: He_lith(:,:)       ! [m]  Effective elastic thickness of the lithosphere
-        real(wp), allocatable :: D_lith(:,:)        ! [N-m] Lithosphere flexural rigidity
-        real(wp), allocatable :: eta(:,:,:)           ! [Pa-s]3D mantle viscosity
-        real(wp), allocatable :: eta_eff(:,:)       ! [Pa-s] Effective asthenosphere viscosity
-        real(wp), allocatable :: tau(:,:)           ! [yr] Asthenospheric relaxation timescale field
        
         real(wp), allocatable       :: z_bed(:,:)         ! Bedrock elevation         [m]
         real(wp), allocatable       :: dzbdt(:,:)         ! Rate of bedrock uplift    [m/a]

@@ -2,8 +2,7 @@
 module convolutions
 
     use isostasy_defs, only : wp, pi, isos_domain_class
-    use solver_lv_elva, only : calc_fft_backward_r2r, calc_fft_forward_r2r, &
-        calc_fft_backward_c2r, calc_fft_forward_r2c
+    use isos_utils
 
     use, intrinsic :: iso_c_binding
     implicit none
@@ -16,7 +15,6 @@ module convolutions
     public :: convolve_load_elastic_plate
     public :: convenient_samesize_fftconvolution
     public :: samesize_fftconvolution
-    public :: apply_zerobc_at_corners
 
     contains
 
@@ -191,13 +189,5 @@ module convolutions
 
         return
     end subroutine samesize_fftconvolution
-
-    subroutine apply_zerobc_at_corners(x, nx, ny)
-        real(wp), intent(INOUT) :: x(:, :)
-        integer, intent(IN)     :: nx, ny
-
-        x = x - 0.25 * (x(1,1) + x(nx,ny) + x(1,ny) + x(nx,1))
-        return
-    end subroutine apply_zerobc_at_corners
 
 end module convolutions

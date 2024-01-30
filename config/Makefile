@@ -32,14 +32,18 @@ endif
 ##
 ###############################################
 
-
+# 0 dependence
 $(objdir)/isostasy_defs.o: $(srcdir)/isostasy_defs.f90
 	$(FC) $(DFLAGS) $(FFLAGS) -c -o $@ $<
 
-$(objdir)/isos_utils.o: $(srcdir)/isos_utils.f90 $(objdir)/isostasy_defs.o
+$(objdir)/ncio.o: $(srcdir)/ncio.f90
+	$(FC) $(DFLAGS) $(FFLAGS) $(INC_NC) -c -o $@ $<
+
+$(objdir)/nml.o: $(srcdir)/nml.f90
 	$(FC) $(DFLAGS) $(FFLAGS) -c -o $@ $<
 
-$(objdir)/convolutions.o: $(srcdir)/convolutions.f90 $(objdir)/isostasy_defs.o
+# 1 dependence
+$(objdir)/isos_utils.o: $(srcdir)/isos_utils.f90 $(objdir)/isostasy_defs.o
 	$(FC) $(DFLAGS) $(FFLAGS) -c -o $@ $<
 
 $(objdir)/finite_differences.o: $(srcdir)/finite_differences.f90 $(objdir)/isostasy_defs.o
@@ -51,19 +55,21 @@ $(objdir)/green_functions.o: $(srcdir)/green_functions.f90 $(objdir)/isostasy_de
 $(objdir)/kelvin_function.o: $(srcdir)/kelvin_function.f90 $(objdir)/isostasy_defs.o
 	$(FC) $(DFLAGS) $(FFLAGS) -c -o $@ $<
 
-$(objdir)/solver_xlra.o: $(srcdir)/solver_xlra.f90 $(objdir)/isostasy_defs.o
+# 2 dependences
+$(objdir)/convolutions.o: $(srcdir)/convolutions.f90 $(objdir)/isostasy_defs.o $(objdir)/isos_utils.o
 	$(FC) $(DFLAGS) $(FFLAGS) -c -o $@ $<
 
-$(objdir)/ncio.o: $(srcdir)/ncio.f90
-	$(FC) $(DFLAGS) $(FFLAGS) $(INC_NC) -c -o $@ $<
-
-$(objdir)/nml.o: $(srcdir)/nml.f90
+$(objdir)/solver_xlra.o: $(srcdir)/solver_xlra.f90 $(objdir)/isostasy_defs.o $(objdir)/convolutions.o
 	$(FC) $(DFLAGS) $(FFLAGS) -c -o $@ $<
 
-$(objdir)/solver_lv_elva.o: $(srcdir)/solver_lv_elva.f90 $(objdir)/isostasy_defs.o $(objdir)/nml.o $(objdir)/finite_differences.o $(objdir)/isos_utils.o
+$(objdir)/sealevel.o: $(srcdir)/sealevel.f90 $(objdir)/isostasy_defs.o $(objdir)/isos_utils.o
 	$(FC) $(DFLAGS) $(FFLAGS) -c -o $@ $<
 
-$(objdir)/isostasy.o: $(srcdir)/isostasy.f90 $(objdir)/isostasy_defs.o $(objdir)/solver_lv_elva.o $(objdir)/nml.o $(objdir)/ncio.o $(objdir)/green_functions.o $(objdir)/kelvin_function.o 
+# > 2 dependences
+$(objdir)/solver_lv_elva.o: $(srcdir)/solver_lv_elva.f90 $(objdir)/isostasy_defs.o $(objdir)/finite_differences.o $(objdir)/isos_utils.o
+	$(FC) $(DFLAGS) $(FFLAGS) -c -o $@ $<
+
+$(objdir)/isostasy.o: $(srcdir)/isostasy.f90 $(objdir)/isostasy_defs.o $(objdir)/isos_utils.o $(objdir)/solver_lv_elva.o $(objdir)/nml.o $(objdir)/ncio.o $(objdir)/green_functions.o $(objdir)/kelvin_function.o $(objdir)/sealevel.o $(objdir)/solver_xlra.o
 	$(FC) $(DFLAGS) $(FFLAGS) -c -o $@ $<
 
 $(objdir)/isostasy_benchmarks.o: $(srcdir)/isostasy_benchmarks.f90 $(objdir)/isostasy_defs.o
@@ -75,6 +81,7 @@ isostasy_libs = 		$(objdir)/isostasy_defs.o \
 						$(objdir)/finite_differences.o \
 						$(objdir)/green_functions.o \
 						$(objdir)/kelvin_function.o \
+						$(objdir)/sealevel.o \
 						$(objdir)/solver_xlra.o \
 						$(objdir)/solver_lv_elva.o \
 						$(objdir)/isostasy.o \

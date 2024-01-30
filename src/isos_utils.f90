@@ -1,11 +1,25 @@
 module isos_utils
 
-    use isostasy_defs, only : wp, pi
+    use, intrinsic :: iso_c_binding
+    use isostasy_defs, only : wp, pi, isos_domain_class, isos_param_class
 
     implicit none
+    include 'fftw3.f03'
 
     private
     
+    public :: calc_density_correction_factor
+    public :: calc_flexural_lengthscale
+    public :: calc_homogeneous_rigidity
+    public :: calc_heterogeneous_rigidity
+
+    public :: apply_zerobc_at_corners
+
+    public :: calc_fft_backward_r2r
+    public :: calc_fft_forward_r2r
+    public :: calc_fft_backward_c2r
+    public :: calc_fft_forward_r2c
+
     public :: extend_array
     public :: reduce_array
     public :: maskfield
@@ -15,11 +29,162 @@ module isos_utils
     public :: gauss_values
     public :: calc_gaussian_rigidity
     public :: calc_gaussian_viscosity
-    public :: calc_homogeneous_rigidity
     
     contains
 
+    ! ===== COMPUTE SECONDARY PHYSICAL CONSTANTS FROM PRIMARY ONES ======
 
+    ! See Goelzer et al. (2020)
+    subroutine calc_density_correction_factor(par)
+        implicit none
+        type(isos_param_class), intent(INOUT)   :: par
+
+        par%Vden_factor = par%rho_ice / par%rho_water - par%rho_ice / par%rho_seawater
+        return
+    end subroutine calc_density_correction_factor
+
+    ! Calculate the flexural length scale (Coulon et al, 2021, Eq. in text after Eq. 3)
+    ! Note: will be on the order of 100km
+    subroutine calc_flexural_lengthscale(L_w, D_lith_const, rho_uppermantle, g)
+        implicit none
+        real(wp), intent(INOUT) ::L_w
+        real(wp), intent(IN)    :: D_lith_const, rho_uppermantle, g
+
+        L_w = (D_lith_const / (rho_uppermantle*g))**0.25
+        return
+    end subroutine calc_flexural_lengthscale
+
+
+    ! Calculate flexural rigidity based on effective elastic thickness of the lithosphere
+    ! (He_lith), Young's modulus and Poisson's ratio. See Coulon et al. (2021) Eq. 5 & 6.
+    subroutine calc_homogeneous_rigidity(D_lith, E, He_lith, nu)
+        implicit none
+        real(wp), intent(OUT) :: D_lith
+        real(wp), intent(IN)  :: E
+        real(wp), intent(IN)  :: He_lith
+        real(wp), intent(IN)  :: nu
+
+        D_lith = (E*1e9) * (He_lith*1e3)**3 / (12.0*(1.0-nu**2))
+        return
+    end subroutine calc_homogeneous_rigidity
+
+    subroutine calc_heterogeneous_rigidity(D_lith, E, He_lith, nu)
+        implicit none
+        real(wp), intent(OUT)   :: D_lith(:,:)
+        real(wp), intent(IN)    :: E
+        real(wp), intent(IN)    :: He_lith(:,:)
+        real(wp), intent(IN)    :: nu
+
+        D_lith = (E*1e9) * (He_lith*1e3)**3 / (12.0*(1.0-nu**2))
+
+        return
+    end subroutine calc_heterogeneous_rigidity
+
+    ! ===== BC FUNCTIONS ==============================
+
+    subroutine apply_zerobc_at_corners(x, nx, ny)
+        real(wp), intent(INOUT) :: x(:, :)
+        integer, intent(IN)     :: nx, ny
+
+        x = x - 0.25 * (x(1,1) + x(nx,ny) + x(1,ny) + x(nx,1))
+        return
+    end subroutine apply_zerobc_at_corners
+
+
+    ! ===== FFT Functions ==============================
+
+    ! http://www.fftw.org/fftw3_doc/The-Discrete-Hartley-Transform.html
+
+    ! The discrete Hartley transform (DHT) is an invertible linear transform closely
+    ! related to the DFT. In the DFT, one multiplies each input by cos - i * sin
+    ! (a complex exponential), whereas in the DHT each input is multiplied by simply cos +
+    ! sin. Thus, the DHT transforms n real numbers to n real numbers, and has the convenient
+    ! property of being its own inverse. In FFTW, a DHT (of any positive n) can be specified
+    ! by an r2r kind of FFTW_DHT.
+
+    ! Like the DFT, in FFTW the DHT is unnormalized, so computing a DHT of size n followed
+    ! by another DHT of the same size will result in the original array multiplied by n.
+
+    ! The DHT was originally proposed as a more efficient alternative to the DFT for real
+    ! data, but it was subsequently shown that a specialized DFT (such as FFTW’s r2hc or r2c
+    ! transforms) could be just as fast. In FFTW, the DHT is actually computed by
+    ! post-processing an r2hc transform, so there is ordinarily no reason to prefer it from
+    ! a performance perspective. However, we have heard rumors that the DHT might be the
+    ! most appropriate transform in its own right for certain applications, and we would be
+    ! very interested to hear from anyone who finds it useful.
+
+    subroutine calc_fft_forward_r2r(plan, in, out)
+
+        implicit none 
+        type(c_ptr), intent(IN)     :: plan
+        real(wp), intent(INOUT)     :: in(:, :)
+        real(wp), intent(INOUT)     :: out(:, :)
+
+        call fftw_execute_r2r(plan, in, out)
+
+        return
+      
+    end subroutine calc_fft_forward_r2r
+
+    subroutine calc_fft_backward_r2r(plan, in, out)
+
+        implicit none 
+
+        type(c_ptr), intent(IN)     :: plan
+        real(wp), intent(INOUT)     :: in(:, :)
+        real(wp), intent(INOUT)     :: out(:, :)
+
+        integer(kind=4)             :: m, n
+
+        m = size(in, 1)
+        n = size(in, 2)
+
+        call fftw_execute_r2r(plan, in, out)
+        out = out / (m*n*1.)
+
+        return
+    end subroutine calc_fft_backward_r2r
+
+
+    !!!!!!
+    ! http://www.fftw.org/fftw3_doc/Real_002ddata-DFTs.html
+    ! Fftw computes an unnormalized transform: computing an r2c
+    ! followed by a c2r transform (or vice versa) will result in the
+    ! original data multiplied by the size of the transform (the
+    ! product of the logical dimensions). An r2c transform produces
+    ! the same output as a FFTW_FORWARD complex DFT of the same input,
+    ! and a c2r transform is correspondingly equivalent to
+    ! FFTW_BACKWARD.
+      
+    subroutine calc_fft_forward_r2c(plan, in, out)
+
+        implicit none 
+
+        type(c_ptr), intent(IN)     :: plan
+        real(wp), intent(INOUT)     :: in(:, :)
+        complex(wp), intent(INOUT)  :: out(:, :)
+
+        call fftw_execute_dft_r2c(plan, in, out)
+
+        return
+    end subroutine calc_fft_forward_r2c
+
+    subroutine calc_fft_backward_c2r(plan, in, out)
+        implicit none
+
+        type(c_ptr), intent(IN)    :: plan
+        complex(wp), intent(INOUT) :: in(:, :)
+        real(wp), intent(INOUT)    :: out(:, :)
+
+        integer(kind=4)            :: m,n
+
+        m = size(in,1)
+        n = size(in,2)
+        call fftw_execute_dft_c2r(plan, in, out)
+        out = out / (m*n*1.)
+
+        return
+    end subroutine calc_fft_backward_c2r
 
     ! ===== ARRAY SIZING FUNCTIONS ==============================
 
@@ -123,14 +288,11 @@ module isos_utils
             if (j1 .lt. ny1) then 
                 ve(i0:i1,j1+1:ny1) = v(:,ny:ny-(ny1-j1)+1:-1)
             end if
-            
-            ! To do - populate the corners too. For now ignore, and keep 
+            ! TODO: populate the corners too. For now ignore, and keep 
             ! extended array values equal to fill_value=0.0. 
-
         end if 
 
         return
-    
     end subroutine extend_array
 
     subroutine reduce_array(v,ve)
@@ -173,7 +335,6 @@ module isos_utils
         v = ve(i0:i1,j0:j1)
 
         return
-    
     end subroutine reduce_array
 
     ! Mask the input field
@@ -231,7 +392,6 @@ module isos_utils
         end do
         
         return
-
     end subroutine isos_set_field
 
     subroutine isos_set_smoothed_field(var, var_values, mask_values, mask, dx, sigma)
@@ -263,7 +423,6 @@ module isos_utils
         call smooth_gauss_2D(var, dx,sigma)
         
         return
-
     end subroutine isos_set_smoothed_field
 
     subroutine smooth_gauss_2D(var, dx, sigma, mask_apply, mask_use)
@@ -388,8 +547,7 @@ module isos_utils
         ! Get variable on normal grid 
         var = var_ext(1:nx,1:ny)
 
-        return 
-
+        return
     end subroutine smooth_gauss_2D
 
     function gauss_values(dx,dy,sigma,n) result(filt)
@@ -430,8 +588,7 @@ module isos_utils
         ! Normalize to ensure sum to 1
         filt = filt / sum(filt)
 
-        return 
-
+        return
     end function gauss_values
 
 
@@ -487,7 +644,6 @@ module isos_utils
         eta = exp(log10(1.e21 / eta)) * eta
         
         return
-        
     end subroutine calc_gaussian_viscosity
 
     subroutine calc_gaussian_rigidity(He_lith,He_lith_0, He_lith_1,sign,dx,dy)
@@ -541,39 +697,7 @@ module isos_utils
         enddo
         
         return
-        
     end subroutine calc_gaussian_rigidity
 
-    subroutine calc_homogeneous_rigidity(D_lith, E, He_lith, nu)
-        implicit none
-        real(wp), intent(OUT) :: D_lith
-        real(wp), intent(IN)  :: E
-        real(wp), intent(IN)  :: He_lith
-        real(wp), intent(IN)  :: nu
-
-        D_lith = (E*1e9) * (He_lith*1e3)**3 / (12.0*(1.0-nu**2))
-
-        return
-
-    end subroutine calc_homogeneous_rigidity
-
-    subroutine calc_heterogeneous_rigidity(D_lith, E, He_lith, nu, nx, ny)
-        implicit none
-        real(wp), intent(OUT)   :: D_lith(:,:)
-        real(wp), intent(IN)    :: E
-        real(wp), intent(IN)    :: He_lith(:,:)
-        real(wp), intent(IN)    :: nu
-        integer,  intent(IN)    :: nx, ny
-        integer  :: i, j
-
-        do i = 1, nx
-            do j = 1, ny
-                call calc_homogeneous_rigidity(D_lith(i, j), E, He_lith(i, j), nu)
-            enddo
-        enddo
-
-        return
-
-    end subroutine calc_heterogeneous_rigidity
 
 end module isos_utils

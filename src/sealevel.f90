@@ -1,35 +1,38 @@
 module sea_level
 
-    use isostasy_defs, only : wp, isos_param_class, isos_state_class, isos_domain_class, isos_class
+    use isostasy_defs, only : wp, isos_class
     use isos_utils
 
     implicit none
 
-    private
-    public :: calc_sealevel
+    public :: calc_columnanoms_load
+    public :: calc_columnanoms_solidearth
+    ! public :: calc_seasurfaceheight
+    public :: calc_masks
+    public :: calc_sl_contribution
 
     contains
 
     ! calc_sealevel()
     ! Update the sea level based on the new ice thickness field
-    subroutine calc_sealevel(Hice, isos, update_diagnostics)
-        implicit none
-        real(wp), intent(IN)            :: Hice(:,:)
-        type(isos_class), intent(INOUT) :: isos
-        logical, intent(IN)             :: update_diagnostics
+    ! subroutine calc_sealevel(Hice, isos, update_diagnostics)
+    !     implicit none
+    !     real(wp), intent(IN)            :: Hice(:,:)
+    !     type(isos_class), intent(INOUT) :: isos
+    !     logical, intent(IN)             :: update_diagnostics
 
-        call calc_columnanoms_load(Hice, isos)  ! Part 1
-        call calc_columnanom_solidearth(isos)
+    !     call calc_columnanoms_load(Hice, isos)  ! Part 1
+    !     call calc_columnanoms_solidearth(isos)
 
-        if (update_diagnostics) then
-            call calc_seasurfaceheight(isos)    ! Part 2
-            call calc_masks(isos)               ! Part 3
-            call calc_sl_contribution(isos)     ! Part 4
-            isos%now%count_updates = isos%now%count_updates + 1
-        endif
+    !     if (update_diagnostics) then
+    !         call calc_seasurfaceheight(isos)    ! Part 2
+    !         call calc_masks(isos)               ! Part 3
+    !         call calc_sl_contribution(isos)     ! Part 4
+    !         isos%now%count_updates = isos%now%count_updates + 1
+    !     endif
 
-        return
-    end subroutine calc_sealevel
+    !     return
+    ! end subroutine calc_sealevel
 
     
     !!!!!!!!!!!!!!!!!!!!!! Part 1 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -48,7 +51,7 @@ module sea_level
     end subroutine calc_columnanoms_load
 
     !
-    subroutine calc_columnanom_solidearth(isos)
+    subroutine calc_columnanoms_solidearth(isos)
         implicit none
         type(isos_class), intent(INOUT)   :: isos
 
@@ -56,7 +59,7 @@ module sea_level
         call add_columnanom(isos%par%rho_litho, isos%now%we, isos%ref%we, isos%now%canom_full)
         call add_columnanom(isos%par%rho_uppermantle, isos%now%w, isos%ref%w, isos%now%canom_full)
         return
-    end subroutine calc_columnanom_solidearth
+    end subroutine calc_columnanoms_solidearth
 
     !
     subroutine add_columnanom(rho, H_now, H_ref, canom)
