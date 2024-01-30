@@ -1,37 +1,31 @@
 &isostasy
-    method          = 4                  ! 0: constant lithospheric displacement; 1: LLRA; 2: ELRA, 3: EGIA, 4: ELVA or LV-ELVA (test1, test2, test3*, GrIS, test4 AIS, test5 gris) 
-    dt_prognostics         = 1.                ! [yr] Max. timestep to recalculate bedrock uplift and rate of change     | test1: 10 | test2: 10  | test3*: 1  | test4: 1 | test5: 1
-    dt_diagnostics         = 1.                ! [yr] Min. timestep to recalculate equilibrium lithospheric displacement | test1: 50 | test2: 50  | test3*: 1  | test4: 1 | test5: 1
-    He_lith         = 88.                ! [km] Effective elastic thickness lithosphere                            | test1: 88 | test2: 70  | test3*: 88 | test4: - | test5: 40 (otherwise unstable)
-    visc            = 1.e21              ! [Pa s] Asthenosphere viscosity, visc=1e21 for Bueler et al (2007)     |test1:1.e21|test2: 2.e21| 
-    tau             = 200.0              ! [yr] Relaxation time 
+    ! Options
+    interactive_sealevel = .false.  ! Sea level interacts with solid Earth deformation?
+    correct_distortion = .false.    ! Account for distortion of projection?
+    method          = 4             ! 0: constant lithospheric displacement; 1: LLRA; 2: ELRA, 3: EGIA, 4: ELVA
+    dt_prognostics  = 1.            ! [yr] Max. timestep to recalculate prognostics
+    dt_diagnostics  = 10.           ! [yr] Min. timestep to recalculate diagnostics
+    visc_method     = uniform       ! Type of viscosity field for sub-lithospheric mantle
+    rigidity_method = uniform       ! Type of thickness filed for elastic lithosphere
+
+    ! 1D reference model
+    He_lith         = 88.           ! [km] Effective elastic thickness lithosphere
+    visc            = 1.e21         ! [Pa s] Asthenosphere viscosity, visc=1e21 for Bueler et al. (2007)
+    tau             = 200.0         ! [yr] Relaxation time 
+    visc_c          = 1.e21         ! [Pa s] Channel viscosity 
+    thck_c          = 600.          ! [km]   Channel thickness
+    n_lev           = 5             ! [-]    Number of layers (including lithosphere)
 
     ! Physical constants
-    E               = 66.0                  ! [GPa] Young modulus | test1: 66 | test2: 128
-    nu              = 0.5                   ! [-] Poisson ratio   | test1: 0.5| test2: 0.28 | test3: 0.28 | test4: 0.28 | test5: 0.28
-    rho_ice         = 910.                  ! [kg/m^3] 910          | test1: 910| test2: 931  | test3: 910  | test4: 910  | test4: 910
-    rho_seawater          = 1028.0                ! [kg/m^3] 
-    rho_water           = 1000.0                ! [kg/m^3] 
-    rho_uppermantle           = 3300.0                ! [kg/m^3] | test1: 3300 | test2: 3300  | test3: 3700  | test4: 3700  | test4: 3700
-    rho_litho           = 2600.0                ! [kg/m^3] 
-    g               = 9.81                  ! [m/s^2]
-    r_earth         = 6.378e6               ! [m]  Earth radius, Coulon et al (2021) 
-    m_earth         = 5.972e24              ! [kg] Earth mass,   Coulon et al (2021) 
-
-    ! Viscous asthenosphere-related parameters 
-    visc_method     = uniform              ! test1: uniform | test2: viscous_channel | test3a: uniform | test3b: uniform | test3c: gaussian_minus | test3d: gaussian_plus | test4: laty | test5: uniform
-    
-    !Channel viscosity (for test2, test4)
-    visc_c     = 1.e21                      ! [Pa s] Channel viscosity 
-    thck_c     = 600.                       ! [km]   Channel thickness
-    n_lev      = 5                          ! [-]    Number of layers (including lithosphere) | test2: 3 | test4: 5 
-
-    !Calculate visco-elastic coupling (for test2, test3)
-    viscoelastic_coupling = .false.         ! test1: .false. | test2: .true. | test3*: .false. | test4: .false. | test5: .false.
-    
-    ! Lithosphere effective thickness (and therefore ridigidity)
-    rigidity_method = uniform               ! test1: uniform | test2: uniform | test3a: gaussian_minus | test3b: gaussian_plus | test3c: uniform | test3d: uniform | test4: laty | test5: uniform
-
-    ! Calculate geoid (for test2, test4?)
-    calc_geoid = .false.                    ! test1: .false. | test2: .true. | test3*: .false. | test4: .false. | test5: .false.
+    E               = 66.0          ! [GPa] Young modulus
+    nu              = 0.28          ! [-] Poisson ratio
+    rho_ice         = 910.          ! [kg/m^3]
+    rho_seawater    = 1028.0        ! [kg/m^3]
+    rho_water       = 1000.0        ! [kg/m^3]
+    rho_uppermantle = 3400.0        ! [kg/m^3]
+    rho_litho       = 3200.0        ! [kg/m^3]  If 0: decouple the elastic displacement from the viscous one
+    g               = 9.81          ! [m/s^2]
+    r_earth         = 6.378e6       ! [m]  Earth radius, Coulon et al. (2021)
+    m_earth         = 5.972e24      ! [kg] Earth mass,   Coulon et al. (2021)
+    A_ocean_pd      = 3.625e14      ! [m^2] Ocean surface as in Goelzer et al. (2020)
 /
