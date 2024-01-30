@@ -81,7 +81,7 @@ module isostasy_defs
 
         real(wp), allocatable :: kei(:,:)           ! Kelvin function filter values
         real(wp), allocatable :: G0(:,:)            ! Green's function values
-        real(wp), allocatable :: GF(:,:)            ! Green's function values (Farrell 1972)
+        real(wp), allocatable :: GE(:,:)            ! Green's function for elastic displacement (Farrell 1972)
         real(wp), allocatable :: GN(:,:)            ! Green's function for geoid values
     end type isos_domain_class
 

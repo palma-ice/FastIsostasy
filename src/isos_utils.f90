@@ -14,6 +14,7 @@ module isos_utils
     public :: gauss_values
     public :: calc_gaussian_rigidity
     public :: calc_gaussian_viscosity
+    public :: calc_homogeneous_rigidity
     
     contains
 
@@ -220,8 +221,8 @@ module isos_utils
         real(wp), intent(IN)  :: var_values(:)
         real(wp), intent(IN)  :: mask_values(:)
         real(wp), intent(IN)  :: mask(:,:) 
-        real(wp), intent(IN)  :: dx 
-        real(wp), intent(IN)  :: sigma 
+        real(wp), intent(IN)  :: dx
+        real(wp), intent(IN)  :: sigma
 
         ! Safety check 
         if (sigma .le. dx) then 
@@ -234,13 +235,13 @@ module isos_utils
         call isos_set_field(var, var_values, mask_values, mask)
         
         ! Apply Gaussian smoothing as desired
-        call smooth_gauss_2D(var,dx=dx,sigma=sigma)
+        call smooth_gauss_2D(var, dx,sigma)
         
         return
 
     end subroutine isos_set_smoothed_field
 
-    subroutine smooth_gauss_2D(var,dx,sigma,mask_apply,mask_use)
+    subroutine smooth_gauss_2D(var, dx, sigma, mask_apply, mask_use)
         ! Smooth out a field to avoid noise 
         ! mask_apply designates where smoothing should be applied 
         ! mask_use   designates which points can be considered in the smoothing filter 
@@ -486,13 +487,13 @@ module isos_utils
 
         
         do i = 1, nx
-           xc(i) = dx*(i-1)
+            xc(i) = dx*(i-1)
         end do
         xmin = xc(1)
         xmax = xc(nx)
 
         do j = 1, ny
-           yc(j) = dy*(j-1)
+            yc(j) = dy*(j-1)
         enddo
         ymin = yc(1)
         ymax = yc(ny)
@@ -507,14 +508,47 @@ module isos_utils
         He_lith_sigma_m1 = reshape ([ (4.0/Lx)**2,  0.0_wp, 0.0_wp,  (4.0/Ly)**2], shape = shape(he_lith_sigma_m1))
 
         do i = 1, nx
-           do j = 1, ny
-              He_lith(i,j) = He_lith_0 +   &
-                   sign*He_lith_1 * exp(-0.5*dot_product([xc(i),yc(j)]-[xcntr,ycntr], matmul(He_lith_sigma_m1, [xc(i),yc(j)]-[xcntr,ycntr]) ))
-           enddo
+            do j = 1, ny
+                He_lith(i,j) = He_lith_0 + sign*He_lith_1 * &
+                    exp(-0.5*dot_product([xc(i),yc(j)]-[xcntr,ycntr], &
+                    matmul(He_lith_sigma_m1, [xc(i),yc(j)]-[xcntr,ycntr]) ))
+            enddo
         enddo
         
         return
         
-      end subroutine calc_gaussian_rigidity
+    end subroutine calc_gaussian_rigidity
+
+    subroutine calc_homogeneous_rigidity(D_lith, E, He_lith, nu)
+        implicit none
+        real(wp), intent(OUT) :: D_lith
+        real(wp), intent(IN)  :: E
+        real(wp), intent(IN)  :: He_lith
+        real(wp), intent(IN)  :: nu
+
+        D_lith = (E*1e9) * (He_lith*1e3)**3 / (12.0*(1.0-nu**2))
+
+        return
+
+    end subroutine calc_homogeneous_rigidity
+
+    subroutine calc_heterogeneous_rigidity(D_lith, E, He_lith, nu, nx, ny)
+        implicit none
+        real(wp), intent(OUT)   :: D_lith(:,:)
+        real(wp), intent(IN)    :: E
+        real(wp), intent(IN)    :: He_lith(:,:)
+        real(wp), intent(IN)    :: nu
+        integer,  intent(IN)    :: nx, ny
+        integer  :: i, j
+
+        do i = 1, nx
+            do j = 1, ny
+                call calc_homogeneous_rigidity(D_lith(i, j), E, He_lith(i, j), nu)
+            enddo
+        enddo
+
+        return
+
+    end subroutine calc_heterogeneous_rigidity
 
 end module isos_utils

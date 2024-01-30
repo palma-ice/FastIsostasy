@@ -2,16 +2,21 @@
 module convolutions
 
     use isostasy_defs, only : wp, pi, isos_domain_class
+    use solver_lv_elva, only : calc_fft_backward_r2r, calc_fft_forward_r2r, &
+        calc_fft_backward_c2r, calc_fft_forward_r2c
 
+    use, intrinsic :: iso_c_binding
     implicit none
+    include 'fftw3.f03'
 
     private
     
     public :: convenient_calc_convolution_indices
     public :: calc_convolution_indices
     public :: convolve_load_elastic_plate
-    public :: convolve_load_elastic_plate_fft
-    public :: calc_geoid_displacement
+    public :: convenient_samesize_fftconvolution
+    public :: samesize_fftconvolution
+    public :: apply_zerobc_at_corners
 
     contains
 
@@ -117,92 +122,82 @@ module convolutions
 
     end subroutine convolve_load_elastic_plate
 
-    subroutine convolve_load_elastic_plate_fft(w1, q1, GG, i1, i2, j1, j2, nx, ny)
-        ! Spread the load q1 [Pa] from each point in the grid
-        ! via the regional Green's function scaling GG [m N-1]
+    subroutine convenient_samesize_fftconvolution(out, in1, in2, domain)
+
+        real(wp), intent(OUT)   :: out(:,:)
+        real(wp), intent(IN)    :: in1(:,:)
+        real(wp), intent(IN)    :: in2(:,:)
+        type(isos_domain_class), intent(In)  :: domain
+
+        call samesize_fftconvolution(out, in1, in2, domain%i1, domain%i2, &
+            domain%j1, domain%j2, domain%nx, domain%ny, &
+            domain%forward_fftplan_r2r, domain%backward_fftplan_r2r)
+        return
+    end subroutine convenient_samesize_fftconvolution
+    
+    ! Compute "out" as the (fft-based) convolution of "in1" and "in2"
+    subroutine samesize_fftconvolution(out, in1, in2, i1, i2, j1, j2, nx, ny, &
+        forward_plan, backward_plan)
 
         implicit none
 
-        real(wp), intent(OUT)   :: w1(:,:)        ! [m] Lithospheric displacement
-        real(wp), intent(IN)    :: q1(:,:)        ! [Pa] Lithospheric loading
-        real(wp), intent(IN)    :: GG(:,:)        ! Regional scaling filter
+        real(wp), intent(OUT)   :: out(:,:)
+        real(wp), intent(IN)    :: in1(:,:)
+        real(wp), intent(IN)    :: in2(:,:)
         integer, intent(IN)     :: i1, i2, j1, j2, nx, ny
 
         ! Local variables
-        real(wp), allocatable :: q1_ext(:,:)
-        real(wp), allocatable :: GG_ext(:,:)
-        real(wp), allocatable :: w_ext(:,:)
-        complex(wp), allocatable :: q1_ext_hat(:,:)
-        complex(wp), allocatable :: GG_ext_hat(:,:)
-        complex(wp), allocatable :: w_ext_hat(:,:)
+        real(wp), allocatable :: out_ext(:,:)
+        real(wp), allocatable :: in1_ext(:,:)
+        real(wp), allocatable :: in2_ext(:,:)
+        complex(wp), allocatable :: out_ext_hat(:,:)
+        complex(wp), allocatable :: in1_ext_hat(:,:)
+        complex(wp), allocatable :: in2_ext_hat(:,:)
         
+        type(c_ptr), intent(IN)     :: forward_plan
+        type(c_ptr), intent(IN)     :: backward_plan
+
         real(wp), allocatable :: w_reg(:,:)
 
-        integer :: i, j, nr
-
-        ! Size of regional neighborhood 
-        nr = size(GG, 1) !(size(GG,1)-1)/2
-
-        if ((nr.ne.nx).or.(nr.ne.ny)) then
-           print*,'nr, nx, ny =', nr, nx, ny
-           stop
-        endif
-
+        integer :: i, j
 
         ! Populate load on extended grid
-        allocate(    q1_ext(1:2*nx-1,1:2*ny-1))
-        allocate(    GG_ext(1:2*nx-1,1:2*ny-1))
-        allocate(GG_ext_hat(1:2*nx-1,1:2*ny-1))
-        allocate(q1_ext_hat(1:2*nx-1,1:2*ny-1))
-        allocate(     w_ext(1:2*nx-1,1:2*ny-1))
-        allocate( w_ext_hat(1:2*nx-1,1:2*ny-1))
+        allocate(    out_ext(1:2*nx-1,1:2*ny-1))
+        allocate(    in1_ext(1:2*nx-1,1:2*ny-1))
+        allocate(    in2_ext(1:2*nx-1,1:2*ny-1))
+        allocate(out_ext_hat(1:2*nx-1,1:2*ny-1))
+        allocate(in1_ext_hat(1:2*nx-1,1:2*ny-1))
+        allocate(in2_ext_hat(1:2*nx-1,1:2*ny-1))
 
         ! Pad with zeros
-        q1_ext = 0.
-        GG_ext = 0.
-        
-        ! First fill in main grid points with current point load
-        q1_ext(1:nx,1:ny) = q1 
+        in1_ext = 0.
+        in2_ext = 0.
+        in1_ext(1:nx,1:ny) = in1
+        in2_ext(1:nx,1:ny) = in2
 
-        ! First fill in main grid points with current point load
-        GG_ext(1:nx,1:ny) = GG
-
-        call calc_fft_forward_r2c(GG_ext,GG_ext_hat)
-
-        ! ! Fourier transfor q1_ext
-
-        call calc_fft_forward_r2c(q1_ext,q1_ext_hat)
+        ! TODO: we can precompute this
+        call calc_fft_forward_r2c(forward_plan, in1_ext, in1_ext_hat)
+        call calc_fft_forward_r2c(forward_plan, in2_ext, in2_ext_hat)
 
         ! Multiply both
-
-        w_ext_hat =  q1_ext_hat * GG_ext_hat
+        out_ext_hat =  in1_ext_hat * in2_ext_hat
 
         ! Invert product
+        call calc_fft_backward_c2r(backward_plan, out_ext_hat, out_ext)
 
-        call calc_fft_backward_c2r(w_ext_hat,w_ext)
-
+        ! TODO: check if normalisation is correctly accounted for in the new version.
         ! normalisation is needed because of the FFTW definition
-        w1(1:nx,1:ny) = w_ext(i1:i2, j1:j2) * ((2*nx-1) * (2*ny-1)) ** 0.5  ! sqrt
+        out(1:nx,1:ny) = out_ext(i1:i2, j1:j2) ! * ((2*nx-1) * (2*ny-1)) ** 0.5  ! sqrt
 
         return
-    end subroutine convolve_load_elastic_plate_fft
+    end subroutine samesize_fftconvolution
 
-    subroutine calc_geoid_displacement(ssh_perturb, q, gn, i1, i2, j1, j2, nx, ny)
+    subroutine apply_zerobc_at_corners(x, nx, ny)
+        real(wp), intent(INOUT) :: x(:, :)
+        integer, intent(IN)     :: nx, ny
 
-        implicit none
-      
-        real(wp), intent(INOUT)  :: ssh_perturb(:,:)
-        real(wp), intent(IN)     :: GN(:,:)
-        real(wp), intent(IN)     :: q(:,:)
-        integer, intent(IN)     :: i1, i2, j1, j2, nx, ny
-
-    ! recheck convol     
-    !      call convolve_load_elastic_plate(ssh_perturb,q,GN)
-        call convolve_load_elastic_plate_fft(ssh_perturb, q, GN, i1, i2, j1, j2, nx, ny)
-        
-        ssh_perturb  = ssh_perturb - 0.25 * (ssh_perturb(1,1) + ssh_perturb(nx,ny) & 
-            + ssh_perturb(1,ny) + ssh_perturb(nx,1))
-
-    end subroutine calc_geoid_displacement
+        x = x - 0.25 * (x(1,1) + x(nx,ny) + x(1,ny) + x(nx,1))
+        return
+    end subroutine apply_zerobc_at_corners
 
 end module convolutions

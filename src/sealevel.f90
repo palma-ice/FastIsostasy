@@ -104,7 +104,8 @@ module sea_level
     subroutine calc_maskocean(isos)
         implicit none
         type(isos_class), intent(INOUT)   :: isos
-        isos%now%maskocean = real((isos%now%ssh - isos%now%z_bed) > 0) * (1 - real(isos%now%maskgrounded))
+        isos%now%maskocean = real((isos%now%ssh - isos%now%z_bed) > 0) * &
+            (1 - real(isos%now%maskgrounded))
     end subroutine calc_maskocean
 
     !
@@ -120,7 +121,7 @@ module sea_level
         implicit none
         type(isos_class), intent(INOUT)   :: isos
 
-        isos%now%Haf = isos%now%Hice + min(isos%now%z_bed - isos%now%ssh, 0) *
+        isos%now%Haf = isos%now%Hice + min(isos%now%z_bed - isos%now%ssh, 0) * &
             (isos%par%rho_sw / isos%par%rho_ice)
     end subroutine calc_height_above_floatation
 

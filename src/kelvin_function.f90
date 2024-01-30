@@ -199,6 +199,7 @@ module kelvin_function
         allocate(rn(n))
         allocate(kei(n)) 
 
+        ! TODO: move this into a file in isostasy_data
         tbl = [  0.0000,  -0.78540E+00, &
                     0.0100,  -0.78526E+00, &
                     0.0200,  -0.78490E+00, &

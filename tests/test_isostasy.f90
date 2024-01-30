@@ -3,9 +3,10 @@ program test_isostasy
     use ncio
     
     use isostasy_defs, only : sp, dp, wp
-    use isostasy 
+    use isostasy
     use isostasy_benchmarks
-    use ice
+    use isos_utils
+    ! use ice
     
     implicit none
     
@@ -46,10 +47,10 @@ program test_isostasy
     real(wp), allocatable :: mask(:,:)
     real(wp), allocatable :: z_bed_bench(:,:)
 
-    character(len=256) :: fldr_path, filename
+    character(len=256)  :: fldr_path, filename
 
-    type(isos_class) :: isos1
-    type(ice_class) :: ice
+    type(isos_class)    :: isos1
+    ! type(ice_class)     :: ice
 
     ! mmr recheck
     
@@ -77,7 +78,7 @@ program test_isostasy
     
     !   experiment = "test1" ! 1000 m radius ice disk of 1000 m heights, solved with ELVA Benchmark: analytical (Bueler et al. 2007); dtt = 1; dtout = 1000. ; time_end = 50.e3
 
-      experiment = "test2"   ! Benchmark: Spada et al. (2011) disc
+    experiment = "test2"   ! Benchmark: Spada et al. (2011) disc
 
     !  experiment = "test3a"  ! Gaussian reduction of lithospheric thickness at centre
     !  experiment = "test3b"  ! Gaussian increase of lithospheric thickness at centre
@@ -89,74 +90,74 @@ program test_isostasy
      
     write(*,*) "experiment = ", trim(experiment)
 
-       select case(trim(experiment))
+        select case(trim(experiment))
 
-       case("test0")
-          
-             time_init = 0. 
-             time_end  = 2000 
-             dtt       = 10. 
-             dt_out    = 100. 
-             dx = 50.e3 
-             xmin = -3000.e3 
-             ymin = xmin !* 2
-          
-       case("test1")
+        case("test0")
+            
+                time_init = 0. 
+                time_end  = 2000 
+                dtt       = 10. 
+                dt_out    = 100. 
+                dx = 50.e3 
+                xmin = -3000.e3 
+                ymin = xmin !* 2
+            
+        case("test1")
 
-          time_init = 0. 
-          time_end  = 50.e3 
-          dtt       = 1.0 
-          dt_out    = 1.e3
-          dx        = 50.e3 
-          xmin      = -3000.e3 
-          ymin      = xmin
+            time_init = 0. 
+            time_end  = 50.e3 
+            dtt       = 1.0 
+            dt_out    = 1.e3
+            dx        = 50.e3 
+            xmin      = -3000.e3 
+            ymin      = xmin
 
-       case("test2")
+        case("test2")
 
-          time_init = 0. 
-          time_end  = 50.e3 
-          dtt       = 10.0 
-          dt_out    = 1.e3
-          dx        = 50.e3 
-          xmin      = -3000.e3 
-          ymin      = xmin
+            time_init = 0. 
+            time_end  = 50.e3 
+            dtt       = 10.0 
+            dt_out    = 1.e3
+            dx        = 50.e3 
+            xmin      = -3000.e3 
+            ymin      = xmin
 
-       case("test3a","test3b","test3c","test3d")
-          
-          time_init = 0. 
-          time_end  = 50.e3 
-          dtt       = 1.0 
-          dt_out    = 1.e3
-          dx        = 50.e3 
-          xmin      = -3000.e3 
-          ymin      = xmin
+        case("test3a","test3b","test3c","test3d")
+            
+            time_init = 0. 
+            time_end  = 50.e3 
+            dtt       = 1.0 
+            dt_out    = 1.e3
+            dx        = 50.e3 
+            xmin      = -3000.e3 
+            ymin      = xmin
 
-       case("test4")
-          
-          time_init =  -122.5e3 
-          time_end  =     2.5e3
-          dtt       = 1.0  
-          dt_out    = 1.e3 
-          dx = 32.e3 
-          xmin = -3040.e3 
-          ymin = xmin
-   
-       case("test5")
-          
-          time_init = 0. 
-          time_end  = 15.e3 
-          dtt       = 1.0   
-          dt_out    = 1.e3 
-          dx = 16.e3 
-          xmin = -840.e3 
-          ymin = -1440.e3
+        case("test4")
+            
+            time_init =  -122.5e3 
+            time_end  =     2.5e3
+            dtt       = 1.0  
+            dt_out    = 1.e3 
+            dx = 32.e3 
+            xmin = -3040.e3 
+            ymin = xmin
+    
+        case("test5")
+            
+            time_init = 0. 
+            time_end  = 15.e3 
+            dtt       = 1.0   
+            dt_out    = 1.e3 
+            dx = 16.e3 
+            xmin = -840.e3 
+            ymin = -1440.e3
 
-       case("DEFAULT")
+        case("DEFAULT")
 
-          write(*,*) 'Default values needed, stopping'
-          stop
-          
-      end select
+            write(*,*) 'Default values needed, stopping'
+            stop
+
+        end select
 
     
     ! === Define runtime information =========
@@ -192,22 +193,20 @@ program test_isostasy
     write(*,*) "dt_out    = ", dt_out
 
     ! === Define grid information ============
-
-    
     xmax = abs(xmin)
     if (mod((xmax-xmin),dx).ne.0.) then
-       print*,'you must have an integer number of points in x-domain'
-       stop
+        print*,'you must have an integer number of points in x-domain'
+        stop
     endif
     
-    nx   = int( (xmax-xmin) / dx ) + 1
-    dy = dx
-    ymax = abs(ymin)
-    ny   = int( (ymax-ymin) / dy ) + 1
+    nx      = int( (xmax-xmin) / dx ) + 1
+    dy      = dx
+    ymax    = abs(ymin)
+    ny      = int( (ymax-ymin) / dy ) + 1
     
     if (mod((ymax-ymin),dy).ne.0.) then
-       print*,'you must have an integer number of points in y-domain'
-       stop
+        print*,'you must have an integer number of points in y-domain'
+        stop
     endif
 
     allocate(xc(nx))
@@ -254,12 +253,10 @@ program test_isostasy
 
     write(*,*) "Initial fields defined."
 
-    ! Initialize bedrock model (allocate fields)  
-    call isos_init(isos1,path_par,"isostasy",nx,ny,dx) 
+    ! Initialize bedrock model (allocate fields)
+    call isos_init(isos1, path_par, "isostasy", nx, ny, dx, dx)
 
-    
     ! Define ice thickness field based on experiment being run...
-    
     select case(trim(experiment))
 
         case("constant_thickness")
@@ -282,7 +279,8 @@ program test_isostasy
             ! Define tau field using the mask
 !mmr           call isos_set_field(isos1%now%tau,[1e2,1e3,3e3],[0.0_wp,1.0_wp,2.0_wp],mask,dx,sigma=150e3)
 
-            call isos_set_smoothed_field(isos1%now%tau,[1.e2_wp,1.e3_wp,3.e3_wp],[0.0_wp,1.0_wp,2.0_wp],mask,dx,sigma=150.e3_wp) 
+            call isos_set_smoothed_field(isos1%now%tau, [1.e2_wp,1.e3_wp,3.e3_wp], &
+                [0.0_wp,1.0_wp,2.0_wp], mask, dx, 150.e3_wp)
 
         case("point_load")
             ! Define ice thickness only in one grid point 
@@ -466,7 +464,7 @@ program test_isostasy
 
     
     ! Initialize writing output
-    call isos_write_init(isos1,xc,yc,file_out,time_init)
+    call isos_write_init(isos1, xc, yc, file_out, time_init)
 
     ! Determine total number of iterations to run
     nt = ceiling((time_end-time_init)/dtt) + 1 
@@ -476,12 +474,15 @@ program test_isostasy
     do n = 1, nt 
 
         time = time_init + (n-1)*dtt
-        call interp_linear(time_ice,T_ice,time,H_ice) 
+        call interp_linear(time_ice, T_ice, time, H_ice)
+
+        ! TODO: check if following lines can be deleted. It looks like an obvious "yes", but
+        ! maybe I am missing something?)
         ! H_ice = H_ice
         ! z_bed = z_bed
 
         ! Update bedrock
-        call isos_update(isos1,H_ice,z_sl,time)
+        call isos_update(isos1, H_ice, time, z_sl)
 
         
         if (mod(time-time_init,dt_out) .eq. 0.0) then
@@ -497,19 +498,19 @@ program test_isostasy
                ! Calculate analytical solution to elva_disk
 
                ! mmr: comment this to spare time; enable for test1 only
-               
-                       call isosbench_elva_disk(z_bed_bench,r0,h0,eta,isos1%par%dx,isos1%now%D_lith(1,1), &
-                           isos1%par%rho_ice,isos1%par%rho_uppermantle,isos1%par%g,time)
+                call isosbench_elva_disk(z_bed_bench, r0, h0, eta, isos1%domain%dx, &
+                    isos1%now%D_lith(1,1), isos1%par%rho_ice, isos1%par%rho_uppermantle, &
+                    isos1%par%g,time)
 
-                    ! Write to file 
-                    call isos_write_step(isos1,file_out,time,H_ice,z_sl,z_bed_bench)
+                ! Write to file 
+                call isos_write_step(isos1, file_out, time, H_ice, z_sl, z_bed_bench)
 
                 case DEFAULT
 
                     z_bed_bench = 0.0 
                     
-                    ! Write to file 
-                    call isos_write_step(isos1,file_out,time,H_ice,z_sl)
+                    ! Write to file
+                    call isos_write_step(isos1, file_out, time, H_ice, z_sl)
 
             end select
             
@@ -517,14 +518,13 @@ program test_isostasy
 
         write(*,*) "time = ", time
 
-    end do 
+    end do
 
-contains
+    contains
 
+    subroutine isos_write_init(isos, xc, yc, filename, time_init)
 
-    subroutine isos_write_init(isos,xc,yc,filename,time_init)
-
-        implicit none 
+        implicit none
 
         type(isos_class), intent(IN) :: isos 
         real(wp),         intent(IN) :: xc(:)
@@ -544,27 +544,26 @@ contains
         call nc_write_dim(filename,"time",x=time_init,dx=1.0_wp,nx=1,units="year",unlimited=.TRUE.)
 
         ! Write dimensions for regional filter too
-        call nc_write_dim(filename,"xf",x=0,dx=1,nx=size(isos%now%G0,1),units="pt")
-        call nc_write_dim(filename,"yf",x=0,dx=1,nx=size(isos%now%G0,2),units="pt")
+        call nc_write_dim(filename, "xf", x=0, dx=1, nx=size(isos%domain%G0,1), units="pt")
+        call nc_write_dim(filename, "yf", x=0, dx=1, nx=size(isos%domain%G0,2), units="pt")
 
         ! Write constant fields 
-        call nc_write(filename,"z_bed_ref",isos%ref%z_bed,units="m",long_name="Bedrock elevation reference", &
-                        dim1="xc",dim2="yc",start=[1,1]) 
+        call nc_write(filename, "z_bed_ref", isos%ref%z_bed, units="m", &
+            long_name="Bedrock elevation reference", dim1="xc", dim2="yc",start=[1,1])
 
-        call nc_write(filename,"tau",isos%now%tau,units="yr",long_name="Asthenosphere relaxation timescale", &
-                        dim1="xc",dim2="yc",start=[1,1]) 
+        call nc_write(filename, "tau", isos%now%tau, units="yr", &
+            long_name="Asthenosphere relaxation timescale", &
+            dim1="xc",dim2="yc",start=[1,1]) 
 
-        call nc_write(filename,"kei",isos%now%kei,units="",long_name="Kelvin function filter", &
-             dim1="xf",dim2="yf",start=[1,1])
+        call nc_write(filename, "kei", isos%domain%kei, units="", &
+            long_name="Kelvin function filter", dim1="xf",dim2="yf", start=[1,1])
 
-        call nc_write(filename,"G0",isos%now%G0,units="",long_name="Regional elastic plate filter", &
-             dim1="xf",dim2="yf",start=[1,1])
+        call nc_write(filename,"G0",isos%domain%G0, units="", &
+            long_name="Regional elastic plate filter", dim1="xf", dim2="yf", start=[1,1])
 
-! recheck convol
-!       call nc_write(filename,"GN",isos%now%GN,units="",long_name="Geoid's elastic plate filter", &
-!            dim1="xf",dim2="yf",start=[1,1])
-       call nc_write(filename,"GN",isos%now%GN,units="",long_name="Geoid's elastic plate filter", &
-            dim1="xc",dim2="yc",start=[1,1])
+        ! TODO recheck convol
+        call nc_write(filename, "GN", isos%domain%GN, units="", &
+                long_name="Geoid's elastic plate filter", dim1="xc", dim2="yc", start=[1,1])
 
         return
 
@@ -574,7 +573,7 @@ contains
 
         implicit none 
         
-        type(isos_class), intent(IN) :: isos        
+        type(isos_class), intent(IN) :: isos
         character(len=*), intent(IN) :: filename
         real(wp),         intent(IN) :: time
         real(wp),         intent(IN) :: H_ice(:,:) 
@@ -598,29 +597,45 @@ contains
         
         ! Write variables
 
-        call nc_write(filename,"H_ice",H_ice,units="m",long_name="Ice thickness", &
-              dim1="xc",dim2="yc",dim3="time",start=[1,1,n],ncid=ncid)
-        call nc_write(filename,"z_sl",z_sl,units="m",long_name="Sea level elevation", &
-              dim1="xc",dim2="yc",dim3="time",start=[1,1,n],ncid=ncid)
+        call nc_write(filename, "H_ice", H_ice, units="m", long_name="Ice thickness", &
+              dim1="xc", dim2="yc", dim3="time", start=[1,1,n], ncid=ncid)
+
+        call nc_write(filename, "z_sl", z_sl,units="m", long_name="Sea level elevation", &
+              dim1="xc", dim2="yc", dim3="time", start=[1,1,n], ncid=ncid)
+
         call nc_write(filename,"z_bed",isos%now%z_bed,units="m",long_name="Bedrock elevation", &
              dim1="xc",dim2="yc",dim3="time",start=[1,1,n],ncid=ncid)
-        call nc_write(filename,"dzbdt",isos%now%dzbdt,units="m/yr",long_name="Bedrock elevation change", &
-             dim1="xc",dim2="yc",dim3="time",start=[1,1,n],ncid=ncid)
-        call nc_write(filename,"q_load",isos%now%q1,units="N/m2",long_name="Load", &                                        
-             dim1="xc",dim2="yc",dim3="time",start=[1,1,n],ncid=ncid)                                            
 
-        call nc_write(filename,"w_VA",-isos%now%w2,units="m",long_name="Displacement (viscous)", &                                        
-             dim1="xc",dim2="yc",dim3="time",start=[1,1,n],ncid=ncid)                                            
-        call nc_write(filename,"z_bed_EL",-isos%now%w1,units="m",long_name="Displacement (elastic)", &
-             dim1="xc",dim2="yc",dim3="time",start=[1,1,n],ncid=ncid)                                           
-        call nc_write(filename,"eta_eff",isos%now%eta_eff,units="Pa s",long_name="Asthenosphere effective viscosity", &
-             dim1="xc",dim2="yc",dim3="time",start=[1,1,n],ncid=ncid)                                           
-        call nc_write(filename,"He_lith",isos%now%He_lith,units="km",long_name="Lithosphere effective thickness", &
-             dim1="xc",dim2="yc",dim3="time",start=[1,1,n],ncid=ncid)
-        call nc_write(filename,"D_lith",isos%now%D_lith,units="N m",long_name="Lithosphere effective rigidity", &
-             dim1="xc",dim2="yc",dim3="time",start=[1,1,n],ncid=ncid)                                           
-        call nc_write(filename,"w_geoid",-isos%now%ssh_perturb,units="m",long_name="Geoid displacement", &                                        
-             dim1="xc",dim2="yc",dim3="time",start=[1,1,n],ncid=ncid)                                            
+        call nc_write(filename, "dzbdt", isos%now%dzbdt, units="m/yr", &
+            long_name="Bedrock elevation change", &
+            dim1="xc", dim2="yc", dim3="time", start=[1,1,n], ncid=ncid)
+
+        call nc_write(filename,"q_load",isos%now%q, units="N/m2", long_name="Load", &
+            dim1="xc", dim2="yc", dim3="time", start=[1,1,n], ncid=ncid)
+
+        call nc_write(filename, "w_viscous", -isos%now%w, units="m", &
+            long_name="Displacement (viscous)", &
+            dim1="xc", dim2="yc", dim3="time", start=[1,1,n], ncid=ncid)
+
+        call nc_write(filename, "w_elastic", -isos%now%we, units="m", &
+            long_name="Displacement (elastic)", &
+            dim1="xc", dim2="yc", dim3="time", start=[1,1,n], ncid=ncid)
+
+        call nc_write(filename, "eta_eff", isos%now%eta_eff, units="Pa s", &
+            long_name="Asthenosphere effective viscosity", &
+            dim1="xc", dim2="yc", dim3="time", start=[1,1,n], ncid=ncid)
+
+        call nc_write(filename, "He_lith", isos%now%He_lith, units="km", &
+            long_name="Lithosphere effective thickness", &
+            dim1="xc",dim2="yc",dim3="time",start=[1,1,n],ncid=ncid)
+
+        call nc_write(filename, "D_lith", isos%now%D_lith, units="N m", &
+            long_name="Lithosphere effective rigidity", &
+            dim1="xc",dim2="yc",dim3="time",start=[1,1,n],ncid=ncid)
+
+        call nc_write(filename,"w_geoid",-isos%now%ssh_perturb,units="m", &
+            long_name="Geoid displacement", &
+            dim1="xc",dim2="yc",dim3="time",start=[1,1,n],ncid=ncid)
 
         if (present(z_bed_bench)) then 
             ! Compare with benchmark solution 

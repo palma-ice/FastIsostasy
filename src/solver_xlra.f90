@@ -1,7 +1,8 @@
 module solver_xlra
 
     use isostasy_defs, only : wp, pi
-
+    use convolutions
+    
     implicit none
 
     private
@@ -12,25 +13,24 @@ module solver_xlra
     
     contains
 
-
-    elemental subroutine calc_asthenosphere_relax(dzbdt,z_bed,z_bed_ref,w_b,tau)
+    ! TODO: this can be easily extended to LV-ELRA
+    subroutine calc_asthenosphere_relax(dzbdt, z_bed, z_bed_ref, w_b, tau)
         ! Calculate rate of change of vertical bedrock height
         ! from a relaxing asthenosphere.
         implicit none
 
-        real(wp), intent(OUT) :: dzbdt 
-        real(wp), intent(IN)  :: z_bed 
-        real(wp), intent(IN)  :: z_bed_ref
-        real(wp), intent(IN)  :: w_b        ! w_b = w1-w0
-        real(wp), intent(IN)  :: tau
+        real(wp), intent(OUT) :: dzbdt(:, :)
+        real(wp), intent(IN)  :: z_bed(:, :)
+        real(wp), intent(IN)  :: z_bed_ref(:, :)
+        real(wp), intent(IN)  :: w_b(:, :)        ! w_b = w1-w0
+        real(wp), intent(IN)  :: tau(:, :)
 
         dzbdt = -((z_bed-z_bed_ref) + w_b) / tau
-        
         return
-
     end subroutine calc_asthenosphere_relax
 
-    elemental subroutine calc_litho_local(w,q,z_bed,H_ice,z_sl,rho_ice,rho_seawater,rho_uppermantle,g)
+    subroutine calc_litho_local(w, q, z_bed, H_ice, z_sl, rho_ice, rho_seawater, &
+        rho_uppermantle, g)
         ! Calculate the local lithospheric loading from ice or ocean weight 
         ! in units of [Pa] and local equilibrium displacement w [m].
 
@@ -65,7 +65,8 @@ module solver_xlra
     end subroutine calc_litho_local
 
 
-    subroutine calc_litho_regional(w,q1,z_bed,H_ice,z_sl,GG,rho_ice,rho_seawater,rho_uppermantle,rho_litho,g)
+    subroutine calc_litho_regional(w, q1, z_bed, H_ice, z_sl, GG, rho_ice, &
+        rho_seawater, rho_uppermantle, rho_litho, g)
         ! Calculate the load on the lithosphere as
         ! distributed on an elastic plate. 
 
@@ -84,14 +85,16 @@ module solver_xlra
         real(wp), intent(IN)    :: g 
 
         ! Calculate local lithospheric load and displacement first
-        call calc_litho_local(w,q1,z_bed,H_ice,z_sl,rho_ice,rho_seawater,rho_uppermantle,g)
+        ! TODO: replace with new load
+        ! call calc_litho_local(w, q1, z_bed, H_ice, z_sl, rho_ice, rho_seawater, &
+        !     rho_uppermantle, g)
         
         ! Convolve the estimated point load with the regional
         ! filter to obtain the distributed load w. 
 
         ! recheck for stability
-        call convolve_load_elastic_plate_fft(w,q1,GG) ! recheck convol
-        ! call convolve_load_elastic_plate(w,q1,GG)
+        ! call convolve_load_elastic_plate_fft(w,q1,GG) ! recheck convol
+        call convolve_load_elastic_plate(w, q1, GG)
 
         return
 

@@ -11,7 +11,8 @@ module solver_lv_elva
 
     private
     
-    public :: calc_lvelva_viscous_square
+    public :: calc_lvelva_square
+    public :: calc_lvelva
     public :: calc_effective_viscosity_3layer_channel
     public :: calc_effective_viscosity_3d
     public :: calc_fft_backward_r2r
@@ -20,10 +21,11 @@ module solver_lv_elva
     public :: calc_fft_forward_r2c
     public :: calc_kappa
     public :: calc_beta
+    public :: convenient_calc_kappa
 
     contains
 
-    subroutine calc_lvelva_viscous_square(dzbdt, w, canom_full, nu, mu, D_lith, eta, &
+    subroutine calc_lvelva_square(dzbdt, w, canom_full, nu, mu, D_lith, eta, &
         kappa, nsq, par, domain)
     
         ! Extend a given domain [nx,ny] so that it is square based on the largest dimension
@@ -35,7 +37,8 @@ module solver_lv_elva
         real(wp), intent(OUT)   :: dzbdt(:,:)
         real(wp), intent(INOUT) :: w(:,:)
         real(wp), intent(IN)    :: canom_full(:,:)
-        real(wp), intent(IN)    :: nu, mu
+        real(wp), intent(IN)    :: nu
+        real(wp), intent(IN)    :: mu
         real(wp), intent(IN)    :: D_lith(:,:)
         real(wp), intent(IN)    :: eta(:,:)
         real(wp), intent(INOUT) :: kappa(:,:)
@@ -66,7 +69,7 @@ module solver_lv_elva
         call extend_array(sq_eta, eta, fill_with="mirror", val=0.0_wp)
 
         ! Step 2: solve
-        call calc_lv_asthenosphere_viscous(sq_dzbdt, sq_w, sq_canom_full, nu, mu, sq_D_lith, &
+        call calc_lvelva(sq_dzbdt, sq_w, sq_canom_full, nu, mu, sq_D_lith, &
             sq_eta, kappa, nsq, nsq, par, domain)
 
         ! Step 3: get solution on original grid
@@ -75,11 +78,11 @@ module solver_lv_elva
         
         return
 
-    end subroutine calc_lvelva_viscous_square
+    end subroutine calc_lvelva_square
 
 
     ! Calculate vertical displacement rate (viscous part) on rectangular domain.
-    subroutine calc_lv_asthenosphere_viscous(dzbdt, u, canom_full, nu, mu, D_lith, eta, &
+    subroutine calc_lvelva(dzbdt, u, canom_full, nu, mu, D_lith, eta, &
         kappa, nx, ny, par, domain)
 
         implicit none
@@ -89,7 +92,8 @@ module solver_lv_elva
         real(wp), intent(INOUT) :: dzbdt(:,:)
         real(wp), intent(INOUT) :: u(:,:)
         real(wp), intent(INOUT) :: canom_full(:,:)
-        real(wp), intent(IN)    :: nu, mu
+        real(wp), intent(IN)    :: nu
+        real(wp), intent(IN)    :: mu
         real(wp), intent(IN)    :: D_lith(:,:) 
         real(wp), intent(IN)    :: eta(:,:)   ! [Pa s] Viscosity, eta=1e21 by default. 
         real(wp), intent(INOUT) :: kappa(:,:)
@@ -197,7 +201,7 @@ module solver_lv_elva
 
         return
 
-    end subroutine calc_lv_asthenosphere_viscous
+    end subroutine calc_lvelva
 
     subroutine calc_effective_viscosity_3layer_channel(eta_eff, visc_c, thck_c, He_lith, &
         n_lev, dx, dy)

@@ -1,7 +1,7 @@
 module ice
 
-    use nml 
-    use ncio 
+    use nml
+    use ncio
 
     use, intrinsic :: iso_fortran_env, only: error_unit
 
@@ -18,21 +18,21 @@ module ice
     real(wp), parameter :: pi        = 3.14159265359
 
     type series_type
-        character(len=512) :: filename 
+        character(len=512) :: filename
         real(wp), allocatable :: time(:), var(:), sigma(:)
-    end type 
+    end type
 
     type ice_class 
-        type(series_type) :: series 
-        integer :: method 
-        real(wp) :: H_ice_const 
-        real(wp) :: time, H_ice, sigma  
-    end type 
+        type(series_type) :: series
+        integer :: method
+        real(wp) :: H_ice_const
+        real(wp) :: time, H_ice, sigma
+    end type
 
     private
-    public :: ice_class 
-    public :: ice_init 
-    public :: ice_update 
+    public :: ice_class
+    public :: ice_init
+    public :: ice_update
 
 contains 
 
