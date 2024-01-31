@@ -135,10 +135,10 @@ module isostasy
             isos%now%w, FFTW_DHT, FFTW_DHT, FFTW_ESTIMATE)
         isos%domain%backward_fftplan_r2r = fftw_plan_r2r_2d(nx, ny, isos%now%w, &
             isos%now%w, FFTW_DHT, FFTW_DHT, FFTW_ESTIMATE)
-        isos%domain%forward_dftplan_r2c = fftw_plan_dft_r2c_2d(nx, ny, isos%now%w, &
-            isos%now%cplx_out_aux, 1)
-        isos%domain%backward_dftplan_c2r = fftw_plan_dft_c2r_2d(nx, ny, &
-            isos%now%cplx_out_aux, isos%now%w, 1)
+        isos%domain%forward_dftplan_r2c = fftw_plan_dft_r2c_2d(2*nx-1, 2*ny-1, &
+            isos%domain%GE, isos%domain%FGE, 1)
+        isos%domain%backward_dftplan_c2r = fftw_plan_dft_c2r_2d(2*nx-1, 2*ny-1, &
+            isos%domain%FGE, isos%domain%GE, 1)
         ! TODO: recheck - shouldnt this be -1 (forward)
 
         ! Init domain
@@ -219,11 +219,15 @@ module isostasy
 
                 write(*,*) "Initialising elastic Green kernel..."
                 call calc_GE_filter_2D(isos%domain%GE, dx=isos%domain%dx, dy=isos%domain%dx) 
-             
+                call calc_fft_forward_r2c(isos%domain%forward_dftplan_r2c, isos%domain%GE, &
+                    isos%domain%FGE)
+
                 write(*,*) "Initialising geoid Green kernel..."
                 if (isos%par%interactive_sealevel) then
                     call calc_GN_filter_2D(isos%domain%GN, isos%par%m_earth, &
                         isos%par%r_earth, dx=isos%domain%dx, dy=isos%domain%dx)
+                    call calc_fft_backward_c2r(isos%domain%backward_dftplan_c2r, &
+                        isos%domain%FGE, isos%domain%GE)
                 endif
               
                 write(*,*) "Choosing rigidity method..."
@@ -497,17 +501,22 @@ module isostasy
             call calc_columnanoms_load(H_ice, isos)
 
             if (update_diagnostics) then
-                call convenient_samesize_fftconvolution(isos%now%we, &
-                    isos%domain%GE, isos%now%canom_load, isos%domain)
-                call apply_zerobc_at_corners(isos%now%we, &
-                    isos%domain%nx, isos%domain%ny)
+                call precomputed_fftconvolution(isos%now%we, isos%domain%FGE, &
+                    isos%now%canom_load * isos%domain%K, isos%domain%i1, isos%domain%i2, &
+                    isos%domain%j1, isos%domain%j2, isos%domain%offset, &
+                    isos%domain%nx, isos%domain%ny, &
+                    isos%domain%forward_dftplan_r2c, isos%domain%backward_dftplan_c2r)
+                call apply_zerobc_at_corners(isos%now%we, isos%domain%nx, isos%domain%ny)
             endif
 
             call calc_columnanoms_solidearth(isos)
 
             if (update_diagnostics .and. isos%par%interactive_sealevel) then
-                call convenient_samesize_fftconvolution(isos%now%ssh_perturb, &
-                    isos%domain%GN, isos%now%mass_anom, isos%domain)
+                call precomputed_fftconvolution(isos%now%ssh_perturb, isos%domain%FGN, &
+                    isos%now%mass_anom, isos%domain%i1, isos%domain%i2, &
+                    isos%domain%j1, isos%domain%j2, isos%domain%offset, &
+                    isos%domain%nx, isos%domain%ny, &
+                    isos%domain%forward_dftplan_r2c, isos%domain%backward_dftplan_c2r)
                 call apply_zerobc_at_corners(isos%now%ssh_perturb, &
                     isos%domain%nx, isos%domain%ny)
                 call calc_masks(isos)
@@ -691,18 +700,20 @@ module isostasy
         if (allocated(domain%kappa))        deallocate(domain%kappa)
         if (allocated(domain%maskactive))   deallocate(domain%maskactive)
 
-        if (allocated(domain%kei))       deallocate(domain%kei)
-        if (allocated(domain%G0))        deallocate(domain%G0)
-        if (allocated(domain%GE))        deallocate(domain%GE)
-        if (allocated(domain%GN))        deallocate(domain%GN)
-
         if (allocated(domain%He_lith))           deallocate(domain%He_lith)
         if (allocated(domain%D_lith))            deallocate(domain%D_lith)
         if (allocated(domain%eta))               deallocate(domain%eta)
         if (allocated(domain%eta_eff))           deallocate(domain%eta_eff)
         if (allocated(domain%tau))               deallocate(domain%tau)
 
-        return 
+        if (allocated(domain%kei))       deallocate(domain%kei)
+        if (allocated(domain%G0))        deallocate(domain%G0)
+        if (allocated(domain%GE))        deallocate(domain%GE)
+        if (allocated(domain%GN))        deallocate(domain%GN)
+
+        if (allocated(domain%GE))        deallocate(domain%FGE)
+        if (allocated(domain%GN))        deallocate(domain%FGN)
+        return
     end subroutine deallocate_isos_domain
 
     subroutine deallocate_isos_state(state)
@@ -750,16 +761,19 @@ module isostasy
         allocate(domain%kappa(nx, ny))
         allocate(domain%maskactive(nx, ny))
 
-        allocate(domain%kei(nx, ny))
-        allocate(domain%G0(nx, ny))
-        allocate(domain%GE(nx, ny))
-        allocate(domain%GN(nx, ny))
-
         allocate(domain%He_lith(nx, ny))
         allocate(domain%D_lith(nx, ny))
         allocate(domain%eta_eff(nx, ny))
         allocate(domain%tau(nx, ny))
         allocate(domain%eta(nx, ny, nz))
+
+        allocate(domain%kei(nx, ny))
+        allocate(domain%G0(nx, ny))
+        allocate(domain%GE(nx, ny))
+        allocate(domain%GN(nx, ny))
+
+        allocate(domain%FGE(2*nx-1, 2*ny-1))
+        allocate(domain%FGN(2*nx-1, 2*ny-1))
 
         return
     end subroutine allocate_isos_domain

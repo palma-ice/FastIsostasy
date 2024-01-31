@@ -94,8 +94,8 @@ module solver_xlra
 
         ! recheck for stability
         ! call convolve_load_elastic_plate_fft(w,q1,GG) ! recheck convol
-        call convolve_load_elastic_plate(w, q1, GG)
-
+        ! TODO: use new convolution method here
+        
         return
 
     end subroutine calc_litho_regional

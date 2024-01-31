@@ -505,21 +505,18 @@ program test_isostasy
                     isos1%domain%D_lith(1,1), isos1%par%rho_ice, isos1%par%rho_uppermantle, &
                     isos1%par%g,time)
 
-                ! Write to file 
                 call isos_write_step(isos1, file_out, time, H_ice, z_sl, z_bed_bench)
 
                 case DEFAULT
-
-                    z_bed_bench = 0.0 
-                    
-                    ! Write to file
+                    z_bed_bench = 0.0
                     call isos_write_step(isos1, file_out, time, H_ice, z_sl)
 
             end select
-            
-        end if 
+        end if
 
-        write(*,*) "time = ", time
+        if (mod(n, 100) .eq. 1) then
+            write(*,*) "time = ", time
+        endif
 
     end do
 
@@ -572,6 +569,7 @@ program test_isostasy
 
     end subroutine isos_write_init
 
+    ! Write results to file
     subroutine isos_write_step(isos,filename,time,H_ice,z_sl,z_bed_bench)
 
         implicit none 

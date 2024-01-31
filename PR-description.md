@@ -18,15 +18,17 @@ Modularity:
  operator in Fourier space as well as the FFT plans).
 
 
-Performance:
+Performance and accuracy:
 - FFT plans are precomputed
 - Convolution kernels are precomputed
 - Allocations inside the time loop are reduced
+- The normalisation of the FFT is only applied on the backtransform, as it should be!
 
 Sea-level:
 - Column anomalies are now used as forcing
 
-Misc:
+General physics:
+- Allow rectangular domain (without the need of a square extension)
 - Distortion factor included in computations
 
 
@@ -38,6 +40,9 @@ Formatting:
 - max column length is 94 characters for better rendering in github... etc.
 
 Misc:
-- Any future task is tagged with "TODO" as comment. This combines with the TODOS
- extension of VScode (and allows to spot tasks with a simple search across documents,
- even without the extension).
+- Any future task is tagged with "TODO" as comment. This combines well with the TODOS
+ extension of VScode and allows spotting tasks with a simple search across documents,
+ even without the VScode extension.
+- Removed the option of static load, which is very specific to benchmark tests and
+ makes the code longer / less intelegible. The performance advantage we were gaining
+ from the static load option is minor now that the computation is accelerated.

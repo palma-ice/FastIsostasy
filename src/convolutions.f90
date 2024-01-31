@@ -12,9 +12,9 @@ module convolutions
     
     public :: convenient_calc_convolution_indices
     public :: calc_convolution_indices
-    public :: convolve_load_elastic_plate
     public :: convenient_samesize_fftconvolution
     public :: samesize_fftconvolution
+    public :: precomputed_fftconvolution
 
     contains
 
@@ -23,7 +23,7 @@ module convolutions
         type(isos_domain_class), intent(INOUT)  :: domain
 
         call calc_convolution_indices(domain%i1, domain%i2, domain%j1, domain%j2, &
-            domain%convo_offset, domain%ny, domain%nx)
+            domain%offset, domain%ny, domain%nx)
         return
     end subroutine convenient_calc_convolution_indices
 
@@ -54,71 +54,6 @@ module convolutions
 
         return
     end subroutine calc_convolution_indices
-
-    subroutine convolve_load_elastic_plate(w1,q1,GG)
-        ! Spread the load q1 [Pa] from each point in the grid
-        ! via the regional Green's function scaling GG [m N-1]
-
-        implicit none
-
-        real(wp), intent(OUT) :: w1(:,:)        ! [m] Lithospheric displacement
-        real(wp), intent(IN)  :: q1(:,:)        ! [Pa] Lithospheric loading
-        real(wp), intent(IN)  :: GG(:,:)        ! Regional scaling filter
-
-        ! Local variables
-        !integer :: ip, jp, lpx, lpy
-        real(wp), allocatable :: q1_ext(:,:)
-        real(wp), allocatable :: w_reg(:,:)
-
-        integer :: i, j, nx ,ny, nr
-
-        nx = size(w1,1)
-        ny = size(w1,2)
-
-        ! Size of regional neighborhood 
-        nr = (size(GG,1)-1)/2 
-
-        ! Populate load on extended grid
-        allocate(q1_ext(1-nr:nx+nr,1-nr:ny+nr))
-
-        ! First fill in main grid points with current point load
-        q1_ext(1:nx,1:ny) = q1 
-
-        ! Populate the extended grid points
-        do i = 1, nx
-            q1_ext(i,1-nr:0)=q1_ext(i,1)
-            q1_ext(i,ny+1:ny+nr)=q1_ext(i,ny)
-        end do
-        do j = 1, ny
-            q1_ext(1-nr:0,j)=q1_ext(1,j)
-            q1_ext(NX+1:NX+nr,j)=q1_ext(nx,j)
-        end do
-        
-        ! Populate the extended grid corner points     
-        q1_ext(1-nr:0,1-nr:0)         = q1_ext(1,1)
-        q1_ext(1-nr:0,ny+1:ny+nr)     = q1_ext(1,ny)
-        q1_ext(nx+1:nx+nr,1-nr:0)     = q1_ext(nx,1)
-        q1_ext(nx+1:nx+nr,ny+1:ny+nr) = q1_ext(nx,ny)
-
-        ! ----- allocation de w_reg  et de croix -----------
-
-        allocate(w_reg(-nr:nr,-nr:nr))
-
-        w_reg = 0.
-        
-        do j = 1, ny
-            do i = 1, nx
-                ! Apply the neighborhood scaling to the deflection in the neighborhood
-                w_reg = GG * q1_ext(i-nr:i+nr,j-nr:j+nr)
-
-                ! Sum to get total deflection at current point due to all neighbors
-                w1(i,j) = sum(w_reg)
-            end do
-        end do
-
-        return
-
-    end subroutine convolve_load_elastic_plate
 
     subroutine convenient_samesize_fftconvolution(out, in1, in2, domain)
 
@@ -189,5 +124,47 @@ module convolutions
 
         return
     end subroutine samesize_fftconvolution
+
+    ! Compute `out` as the (fft-based) convolution of a precomputed `kernel` and
+    ! input field `in`.
+    subroutine precomputed_fftconvolution(out, kernel, in, i1, i2, j1, j2, &
+        offset, nx, ny, forward_plan, backward_plan)
+
+        implicit none
+
+        real(wp),    intent(OUT)    :: out(:, :)
+        complex(wp), intent(IN)     :: kernel(:, :)
+        real(wp), intent(IN)        :: in(:, :)
+        integer, intent(IN)         :: i1, i2, j1, j2, nx, ny, offset
+        type(c_ptr), intent(IN)     :: forward_plan
+        type(c_ptr), intent(IN)     :: backward_plan
+
+        ! Local variables
+        real(wp),    allocatable    :: helper_real(:, :)
+        complex(wp), allocatable    :: helper_cplx(:, :)
+
+        ! Populate load on extended grid
+        allocate(helper_real(2*nx-1, 2*ny-1))
+        allocate(helper_cplx(2*nx-1, 2*ny-1))
+
+        ! Zero-padded FFT
+        helper_real = 0.
+        helper_real(1:nx,1:ny) = in
+        call calc_fft_forward_r2c(forward_plan, helper_real, helper_cplx)
+        ! write(*,*) "helper real 1: ", sum(helper_real),  "helper cplx 1: ", sum(helper_cplx)
+
+        ! Multiply both
+        helper_cplx =  kernel * helper_cplx
+
+        ! Invert product
+        call calc_fft_backward_c2r(backward_plan, helper_cplx, helper_real)
+        ! write(*,*) "helper real 2: ", sum(helper_real),  "helper cplx 2: ", sum(helper_cplx)
+
+        ! TODO: check if normalisation is correctly accounted for in the new version.
+        ! normalisation is needed because of the FFTW definition
+        out(1:nx,1:ny) = helper_real(i1+offset:i2+offset, j1-offset:j2-offset)
+        ! write(*,*) "out: ", sum(out)
+        return
+    end subroutine precomputed_fftconvolution
 
 end module convolutions
