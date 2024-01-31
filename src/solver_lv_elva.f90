@@ -82,16 +82,16 @@ module solver_lv_elva
 
 
     ! Calculate vertical displacement rate (viscous part) on rectangular domain.
-    subroutine calc_lvelva(dzbdt, u, canom_full, nu, mu, D_lith, eta, &
+    subroutine calc_lvelva(dzbdt, u, canom_full, maskactive, g, nu, mu, D_lith, eta, &
         kappa, nx, ny, dx_matrix, dy_matrix, sec_per_year, forward_plan, backward_plan)
 
         implicit none
-
-        real(wp), parameter :: epsilon = 1.e-2 
         
         real(wp), intent(INOUT) :: dzbdt(:, :)
         real(wp), intent(IN)    :: u(:, :)
         real(wp), intent(IN)    :: canom_full(:, :)
+        logical,  intent(IN)    :: maskactive(:, :)
+        real(wp), intent(IN)    :: g
         real(wp), intent(IN)    :: nu
         real(wp), intent(IN)    :: mu
         real(wp), intent(IN)    :: D_lith(:, :) 
@@ -104,9 +104,10 @@ module solver_lv_elva
         type(c_ptr), intent(IN) :: forward_plan
         type(c_ptr), intent(IN) :: backward_plan
 
+        real(wp), allocatable :: p(:, :)
         real(wp), allocatable :: f(:, :)
         real(wp), allocatable :: f_hat(:, :)
-        real(wp), allocatable :: dudt_hat(:, :)
+        real(wp), allocatable :: dwdt_hat(:, :)
 
         real(wp), allocatable :: u_x(:, :)
         real(wp), allocatable :: u_xy(:, :)
@@ -122,9 +123,10 @@ module solver_lv_elva
         real(wp), allocatable :: My(:, :)
         real(wp), allocatable :: My_yy(:, :)
 
+        allocate(p(nx, ny))
         allocate(f(nx, ny))
         allocate(f_hat(nx, ny))
-        allocate(dudt_hat(nx, ny))
+        allocate(dwdt_hat(nx, ny))
 
         allocate(u_x(nx, ny))
         allocate(u_xy(nx, ny))
@@ -157,19 +159,22 @@ module solver_lv_elva
         call calc_derivative_xx(Mx_xx, Mx, dx_matrix, nx, ny)
         call calc_derivative_yy(My_yy, My, dy_matrix, nx, ny)
 
-        f = (canom_full + Mx_xx + 2.0*Mxy_xy + My_yy) / (2. * eta)
+        call maskfield(p, g * canom_full, maskactive, nx, ny)
+        f = (p + Mx_xx + 2.0_wp * Mxy_xy + My_yy) / (2.0_wp * eta)
         call calc_fft_forward_r2r(forward_plan, f, f_hat)
+        ! write(*,*) "sum(p) = ", sum(p), "sum(f) = ", sum(f), "sum(f_hat) = ", sum(f_hat)
 
-        dudt_hat = f_hat / kappa / mu
-        call calc_fft_backward_r2r(backward_plan, dudt_hat, dzbdt)
+        dwdt_hat = f_hat / (kappa / mu)
+        call calc_fft_backward_r2r(backward_plan, dwdt_hat, dzbdt)
         call apply_zerobc_at_corners(dzbdt, nx, ny)
 
         ! Rate of viscous asthenosphere uplift per unit time (seconds)
         dzbdt = dzbdt * sec_per_year  !  [m/s] x [s/a] = [m/a]
 
+        deallocate(p)
         deallocate(f)
         deallocate(f_hat)
-        deallocate(dudt_hat)
+        deallocate(dwdt_hat)
         
         deallocate(u_x)
         deallocate(u_xy)

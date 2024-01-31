@@ -624,6 +624,7 @@ program test_isostasy
             long_name="Displacement (elastic)", &
             dim1="xc", dim2="yc", dim3="time", start=[1,1,n], ncid=ncid)
 
+        ! TODO: parameters should be output as 2D fields, not 3D
         call nc_write(filename, "eta_eff", isos%domain%eta_eff, units="Pa s", &
             long_name="Asthenosphere effective viscosity", &
             dim1="xc", dim2="yc", dim3="time", start=[1,1,n], ncid=ncid)
@@ -639,6 +640,10 @@ program test_isostasy
         call nc_write(filename,"w_geoid",-isos%now%ssh_perturb,units="m", &
             long_name="Geoid displacement", &
             dim1="xc",dim2="yc",dim3="time",start=[1,1,n],ncid=ncid)
+
+        call nc_write(filename, "column_anomaly", isos%now%canom_full, units="N m^-2", &
+            long_name = "Anomaly in column pressure", &
+            dim1="xc", dim2="yc", dim3="time", start=[1,1,n], ncid=ncid)
 
         if (present(z_bed_bench)) then 
             ! Compare with benchmark solution 

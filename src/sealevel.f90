@@ -28,7 +28,7 @@ module sea_level
     !         call calc_seasurfaceheight(isos)    ! Part 2
     !         call calc_masks(isos)               ! Part 3
     !         call calc_sl_contribution(isos)     ! Part 4
-    !         isos%now%count_updates = isos%now%count_updates + 1
+
     !     endif
 
     !     return
@@ -42,12 +42,13 @@ module sea_level
         type(isos_class), intent(INOUT)     :: isos 
 
         isos%now%Hice = Hice
-        call maskfield(isos%now%Hsw, isos%now%ssh - isos%now%z_bed, isos%now%maskocean, &
-            isos%domain%nx, isos%domain%ny)
+        call maskfield(isos%now%Hseawater, isos%now%ssh - isos%now%z_bed, &
+            isos%now%maskocean, isos%domain%nx, isos%domain%ny)
 
         isos%now%canom_load(:, :) = 0
         call add_columnanom(isos%par%rho_ice, isos%now%Hice, isos%ref%Hice, isos%now%canom_load)
-        call add_columnanom(isos%par%rho_seawater, isos%now%Hsw, isos%ref%Hsw, isos%now%canom_load)
+        call add_columnanom(isos%par%rho_seawater, isos%now%Hseawater, isos%ref%Hseawater, &
+            isos%now%canom_load)
     end subroutine calc_columnanoms_load
 
     !
@@ -56,8 +57,8 @@ module sea_level
         type(isos_class), intent(INOUT)   :: isos
 
         isos%now%canom_full = isos%now%canom_load
-        call add_columnanom(isos%par%rho_litho, isos%now%we, isos%ref%we, isos%now%canom_full)
-        call add_columnanom(isos%par%rho_uppermantle, isos%now%w, isos%ref%w, isos%now%canom_full)
+        call add_columnanom(-isos%par%rho_litho, isos%now%we, isos%ref%we, isos%now%canom_full)
+        call add_columnanom(-isos%par%rho_uppermantle, isos%now%w, isos%ref%w, isos%now%canom_full)
         return
     end subroutine calc_columnanoms_solidearth
 

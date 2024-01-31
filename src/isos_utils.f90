@@ -1,7 +1,7 @@
 module isos_utils
 
     use, intrinsic :: iso_c_binding
-    use isostasy_defs, only : wp, pi, isos_domain_class, isos_param_class
+    use isostasy_defs, only : wp, pi, isos_domain_class, isos_param_class, isos_state_class
 
     implicit none
     include 'fftw3.f03'
@@ -19,6 +19,8 @@ module isos_utils
     public :: calc_fft_forward_r2r
     public :: calc_fft_backward_c2r
     public :: calc_fft_forward_r2c
+
+    public :: copy_state
 
     public :: extend_array
     public :: reduce_array
@@ -185,6 +187,37 @@ module isos_utils
 
         return
     end subroutine calc_fft_backward_c2r
+
+    ! ===== MISC ==============================
+
+    subroutine copy_state(ref, now)
+        implicit none
+        type(isos_state_class), intent(INOUT)   :: ref
+        type(isos_state_class), intent(IN)      :: now
+
+        ref%z_bed           = now%z_bed
+        ref%dzbdt           = now%dzbdt
+        ref%q               = now%q
+        ref%w               = now%w
+        ref%w_equilibrium   = now%w_equilibrium
+        ref%we              = now%we
+        ref%cplx_out_aux    = now%cplx_out_aux
+
+        ref%Haf             = now%Haf
+        ref%Hice            = now%Hice
+        ref%Hseawater       = now%Hseawater
+
+        ref%ssh             = now%ssh
+        ref%ssh_perturb     = now%ssh_perturb
+        ref%canom_load      = now%canom_load
+        ref%canom_full      = now%canom_full
+        ref%mass_anom       = now%mass_anom
+
+        ref%maskocean       = now%maskocean
+        ref%maskgrounded    = now%maskgrounded
+        ref%maskcontinent   = now%maskcontinent
+        return
+    end subroutine copy_state
 
     ! ===== ARRAY SIZING FUNCTIONS ==============================
 

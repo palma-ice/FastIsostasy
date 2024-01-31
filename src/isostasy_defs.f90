@@ -50,7 +50,6 @@ module isostasy_defs
         
         real(wp) :: L_w                         ! [m] Lithosphere flexural length scale (for method=2)
         integer  :: nr                          ! [-] Radius of convolution neighborhood, in number of grid points        
-        real(wp) :: mu                          ! [1/m] 2pi/L
         real(wp) :: time_diagnostics            ! [yr] Current model time of last diagnostic update
         real(wp) :: time_prognostics            ! [yr] Current model time of last prognostic update
 
@@ -94,7 +93,6 @@ module isostasy_defs
     end type isos_domain_class
 
     type isos_state_class 
-        integer               :: count_updates      ! [1] Number of sea-level updates since beginnning of simulation
         real(wp)              :: t                  ! [yr] Time
         real(wp)              :: bsl                ! [m] Barystatic sea level
        
@@ -106,12 +104,13 @@ module isostasy_defs
         real(wp), allocatable       :: we(:,:)            ! [m] Elastic displacement
         complex(wp), allocatable    :: cplx_out_aux(:,:)
 
-        real(wp), allocatable :: ssh_perturb(:,:)   ! [m] sea-surface height perturbation
         real(wp), allocatable :: Haf(:,:)           ! [m] Ice thickness above floatation
         real(wp), allocatable :: Hice(:,:)          ! [m] Thickness of ice column
-        real(wp), allocatable :: Hsw(:,:)           ! [m] Thickness of seawater column
+        real(wp), allocatable :: Hseawater(:,:)     ! [m] Thickness of seawater column
+        ! real(wp), allocatable :: Hsediment(:,:)     ! [m] Thickness of sediment column
 
         real(wp), allocatable :: ssh(:,:)           ! [m] sea-surface height
+        real(wp), allocatable :: ssh_perturb(:,:)   ! [m] sea-surface height perturbation
         real(wp), allocatable :: canom_load(:,:)    ! [kg m^-2] Load column anomaly
         real(wp), allocatable :: canom_full(:,:)    ! [kg m^-2] Full column anomaly
         real(wp), allocatable :: mass_anom(:,:)     ! [kg] Mass anomaly

@@ -177,13 +177,13 @@ module isostasy
 
                 ! Modify the relative radius to use for the regional filter
                 ! depending on whether we want to include the forbulge at
-                ! large radii. Large radius makes the code run slower though too. 
-                ! Set filter_scaling to < 1.0 to adjust for values of 
-                ! radius_fac <~ 5.0 
+                ! large radii. Large radius makes the code run slower though too.
+                ! Set filter_scaling to < 1.0 to adjust for values of
+                ! radius_fac <~ 5.0
 
                 ! Larger radius, no filter scaling needed
-                ! radius_fac      = 6.0 
-                ! filter_scaling  = 1.0 
+                ! radius_fac      = 6.0
+                ! filter_scaling  = 1.0
 
                 ! Smaller radius, filter scaling to improve accuracy
                 radius_fac      = 4.0 
@@ -363,26 +363,39 @@ module isostasy
         ! Later this can be overwritten.
         !mmr moved above        isos%domain%eta_eff    = isos%par%visc         ! [Pa s]
 
-        ! TODO: this should 
-        ! Intially ensure all variables are zero 
-        isos%ref%z_bed      = 0.0
-        isos%now%z_bed      = 0.0 
-        isos%now%dzbdt      = 0.0 
-
-        isos%now%w              = 0.0
-        isos%now%w_equilibrium  = 0.0
-        isos%now%ssh_perturb    = 0.0
-        isos%now%ssh            = 0.0
+        ! TODO: the initialisation below should be more generic!
 
         ! Set time to very large value in the future 
         isos%par%time_diagnostics = 1e10 
         isos%par%time_prognostics = 1e10
 
-        isos%now%maskocean = .false.
-        isos%now%maskgrounded = .false.
-        isos%now%maskcontinent = .false.
-
         isos%domain%maskactive = .true.
+
+        isos%now%bsl            = -1e10
+
+        isos%now%z_bed          = 0.0
+        isos%now%dzbdt          = 0.0
+        isos%now%q              = 0.0
+        isos%now%w              = 0.0
+        isos%now%w_equilibrium  = 0.0
+        isos%now%we             = 0.0
+        isos%now%cplx_out_aux   = 0.0
+
+        isos%now%Haf            = 0.0
+        isos%now%Hice           = 0.0
+        isos%now%Hseawater      = 0.0
+
+        isos%now%ssh            = 0.0
+        isos%now%ssh_perturb    = 0.0
+        isos%now%canom_load     = 0.0
+        isos%now%canom_full     = 0.0
+        isos%now%mass_anom      = 0.0
+
+        isos%now%maskocean      = .false.
+        isos%now%maskgrounded   = .false.
+        isos%now%maskcontinent  = .false.
+
+        call copy_state(isos%ref, isos%now)
 
         write(*,*) "isos_init:: complete." 
 
@@ -407,26 +420,25 @@ module isostasy
 
 !        character*256 filename
         
-        ! Store initial bedrock field 
+        ! Store initial bedrock field
         isos%now%z_bed = z_bed
         
         ! Store reference bedrock field
-        isos%ref%z_bed = z_bed_ref 
-        isos%now%dzbdt     = 0.0
+        isos%ref%z_bed = z_bed_ref
+        isos%now%dzbdt = 0.0
 
         nx = size(H_ice,1)
         ny = size(H_ice,2)
 
-        ! Define initial time of isostasy model 
+        ! Define initial time of isostasy model
         ! (set time_diagnostics earlier, so that it is definitely updated on the first timestep)
         isos%par%time_diagnostics = time - isos%par%dt_diagnostics
-        isos%par%time_prognostics = time 
+        isos%par%time_prognostics = time
 
         ! Call isos_update to diagnose rate of change
         ! (no change to z_bed will be applied since isos%par%time==time)
-
         call isos_update(isos, H_ice, time, z_sl)
-            
+
         write(*,*) "isos_init_state:: "
         write(*,*) "  Initial time:   ", isos%par%time_prognostics 
         write(*,*) "  range(He_lith): ", minval(isos%domain%He_lith), maxval(isos%domain%He_lith)
@@ -437,14 +449,14 @@ module isostasy
 
         ! Make sure tau does not contain zero values, if so
         ! output an error for diagnostics. Don't kill the program
-        ! so that external program can still write output as needed. 
-        if (minval(isos%domain%tau) .le. 0.0) then 
+        ! so that external program can still write output as needed.
+        if (minval(isos%domain%tau) .le. 0.0) then
             write(error_unit,*) "isos_init_state:: Error: tau initialized with zero values present. &
             &This will lead to the model crashing."
-            !stop 
-        end if 
+            !stop
+        end if
         
-        return 
+        return
 
     end subroutine isos_init_state
 
@@ -459,7 +471,7 @@ module isostasy
 
         ! Local variables
         
-        real(wp) :: dt, dt_now  
+        real(wp) :: dt, dt_now
         integer  :: n, nstep
         logical  :: update_diagnostics
  
@@ -471,7 +483,7 @@ module isostasy
         nstep = max(nstep, 1)
 
         ! Loop over iterations until maximum time is reached
-        do n = 1, nstep 
+        do n = 1, nstep
 
             ! Get current dt (either total time or maximum allowed timestep)
             dt_now = min(time-isos%par%time_prognostics, isos%par%dt_prognostics)
@@ -492,6 +504,7 @@ module isostasy
                 call apply_zerobc_at_corners(isos%now%we, &
                     isos%domain%nx, isos%domain%ny)
             endif
+            
             call calc_columnanoms_solidearth(isos)
 
             if (update_diagnostics .and. isos%par%interactive_sealevel) then
@@ -540,8 +553,9 @@ module isostasy
                     ! Relaxing asthenosphere (RA)
                     call calc_asthenosphere_relax(isos%now%dzbdt, isos%now%z_bed, &
                         isos%ref%z_bed, isos%now%w - isos%ref%w_equilibrium, isos%domain%tau)
-                    
-                case(3)     ! LV-ELRA
+
+                ! LV-ELRA
+                case(3)
 
                     if (update_diagnostics) then
                        !call calc_litho_regional(isos%now%w,isos%now%q,isos%now%z_bed,H_ice,z_sl,isos%domain%G0)
@@ -557,8 +571,8 @@ module isostasy
                     ! ELVA - Elastic Lithosphere (overlaying) Viscous Asthenosphere
                     ! or  LV-ELVA - laterally-variable ELVA
                     call calc_lvelva(isos%now%dzbdt, isos%now%w, isos%now%canom_full, &
-                        isos%par%nu, isos%par%mu, isos%domain%D_lith, isos%domain%eta_eff, &
-                        isos%domain%kappa, isos%domain%nx, isos%domain%ny, &
+                        isos%domain%maskactive, isos%par%g, isos%par%nu, isos%domain%mu, isos%domain%D_lith, &
+                        isos%domain%eta_eff, isos%domain%kappa, isos%domain%nx, isos%domain%ny, &
                         isos%domain%dx_matrix, isos%domain%dy_matrix, isos%par%sec_per_year, &
                         isos%domain%forward_fftplan_r2r, isos%domain%backward_fftplan_r2r)
                  end select
@@ -573,6 +587,7 @@ module isostasy
 
                isos%now%w = isos%now%w + isos%now%dzbdt*dt_now
                isos%now%z_bed = isos%now%z_bed + isos%now%dzbdt*dt_now
+            !    write(*,*) "sum(w) = ", sum(isos%now%w), "sum(dzbdt) = ", sum(isos%now%dzbdt), " dt_now = ", dt_now
 
                 ! Additionally apply bedrock adjustment field
                 if (present(dzbdt_corr)) then 
@@ -707,7 +722,7 @@ module isostasy
         if (allocated(state%ssh_perturb))       deallocate(state%ssh_perturb)
         if (allocated(state%Haf))               deallocate(state%Haf)
         if (allocated(state%Hice))              deallocate(state%Hice)
-        if (allocated(state%Hsw))               deallocate(state%Hsw)
+        if (allocated(state%Hseawater))               deallocate(state%Hseawater)
 
         if (allocated(state%ssh))               deallocate(state%ssh)
         if (allocated(state%canom_load))        deallocate(state%canom_load)
@@ -771,7 +786,7 @@ module isostasy
         allocate(state%ssh_perturb(nx, ny))
         allocate(state%Haf(nx, ny))
         allocate(state%Hice(nx, ny))
-        allocate(state%Hsw(nx, ny))
+        allocate(state%Hseawater(nx, ny))
 
         allocate(state%ssh(nx, ny))
         allocate(state%canom_load(nx, ny))
