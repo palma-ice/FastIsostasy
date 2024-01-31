@@ -72,9 +72,9 @@ module isos_utils
 
     subroutine calc_heterogeneous_rigidity(D_lith, E, He_lith, nu)
         implicit none
-        real(wp), intent(OUT)   :: D_lith(:,:)
+        real(wp), intent(OUT)   :: D_lith(:, :)
         real(wp), intent(IN)    :: E
-        real(wp), intent(IN)    :: He_lith(:,:)
+        real(wp), intent(IN)    :: He_lith(:, :)
         real(wp), intent(IN)    :: nu
 
         D_lith = (E*1e9) * (He_lith*1e3)**3 / (12.0*(1.0-nu**2))
@@ -228,8 +228,8 @@ module isos_utils
 
         implicit none
 
-        real(wp), intent(INOUT) :: ve(:,:) 
-        real(wp), intent(IN)    :: v(:,:)
+        real(wp), intent(INOUT) :: ve(:, :) 
+        real(wp), intent(IN)    :: v(:, :)
         character(len=*), intent(IN) :: fill_with
         real(wp), intent(IN), optional :: val
 
@@ -335,8 +335,8 @@ module isos_utils
 
         implicit none
 
-        real(wp), intent(INOUT) :: v(:,:)
-        real(wp), intent(IN)    :: ve(:,:) 
+        real(wp), intent(INOUT) :: v(:, :)
+        real(wp), intent(IN)    :: ve(:, :) 
         
         ! Local variables
         integer  :: i, j, nx, ny, nx1, ny1
@@ -374,9 +374,9 @@ module isos_utils
     subroutine maskfield(out, in, mask, nx, ny)
         implicit none 
 
-        real(wp), intent(INOUT) :: out(:,:) 
-        real(wp), intent(IN)    :: in(:,:)
-        logical, intent(IN)     :: mask(:,:)
+        real(wp), intent(INOUT) :: out(:, :) 
+        real(wp), intent(IN)    :: in(:, :)
+        logical, intent(IN)     :: mask(:, :)
         integer, intent(IN)     :: nx, ny
 
         integer     :: i, j
@@ -402,10 +402,10 @@ module isos_utils
 
         implicit none 
 
-        real(wp), intent(OUT) :: var(:,:) 
+        real(wp), intent(OUT) :: var(:, :) 
         real(wp), intent(IN)  :: var_values(:)
         real(wp), intent(IN)  :: mask_values(:)
-        real(wp), intent(IN)  :: mask(:,:) 
+        real(wp), intent(IN)  :: mask(:, :) 
 
         ! Local variables
         integer :: j, n 
@@ -435,10 +435,10 @@ module isos_utils
 
         implicit none 
 
-        real(wp), intent(OUT) :: var(:,:) 
+        real(wp), intent(OUT) :: var(:, :) 
         real(wp), intent(IN)  :: var_values(:)
         real(wp), intent(IN)  :: mask_values(:)
-        real(wp), intent(IN)  :: mask(:,:) 
+        real(wp), intent(IN)  :: mask(:, :) 
         real(wp), intent(IN)  :: dx
         real(wp), intent(IN)  :: sigma
 
@@ -465,20 +465,20 @@ module isos_utils
 
         implicit none
 
-        real(wp),   intent(INOUT) :: var(:,:)      ! [nx,ny] 2D variable
+        real(wp),   intent(INOUT) :: var(:, :)      ! [nx,ny] 2D variable
         real(wp),   intent(IN)    :: dx 
         real(wp),   intent(IN)    :: sigma  
-        logical,    intent(IN), optional :: mask_apply(:,:) 
-        logical,    intent(IN), optional :: mask_use(:,:) 
+        logical,    intent(IN), optional :: mask_apply(:, :) 
+        logical,    intent(IN), optional :: mask_use(:, :) 
 
         ! Local variables
         integer  :: i, j, nx, ny, n, n2, k 
-        real(wp), allocatable :: filter0(:,:), filter(:,:) 
-        real(wp), allocatable :: var_old(:,:) 
-        logical,  allocatable :: mask_apply_local(:,:) 
-        logical,  allocatable :: mask_use_local(:,:) 
+        real(wp), allocatable :: filter0(:, :), filter(:, :) 
+        real(wp), allocatable :: var_old(:, :) 
+        logical,  allocatable :: mask_apply_local(:, :) 
+        logical,  allocatable :: mask_use_local(:, :) 
 
-        real(wp), allocatable :: var_ext(:,:), var_ref_ext(:,:) 
+        real(wp), allocatable :: var_ext(:, :), var_ref_ext(:, :) 
 
         nx    = size(var,1)
         ny    = size(var,2)
@@ -627,7 +627,7 @@ module isos_utils
 
     subroutine calc_gaussian_viscosity(eta,eta_0,sign,dx,dy)
 
-        real(wp), intent(OUT) :: eta(:,:)
+        real(wp), intent(OUT) :: eta(:, :)
         real(wp), intent(IN) :: eta_0, sign, dx, dy
         real(wp) :: Lx, Ly, L, det_eta_sigma, f
         real(wp) :: xcntr, ycntr, xmax, xmin, ymax, ymin
@@ -682,7 +682,7 @@ module isos_utils
     subroutine calc_gaussian_rigidity(He_lith,He_lith_0, He_lith_1,sign,dx,dy)
 
         real(wp), intent(IN) :: He_lith_0, He_lith_1,sign, dx, dy
-        real(wp), intent(OUT) :: He_lith(:,:)
+        real(wp), intent(OUT) :: He_lith(:, :)
         real(wp) :: Lx, Ly, L, det_He_lith_sigma
         real(wp) :: xcntr, ycntr, xmax, xmin, ymax, ymin
 

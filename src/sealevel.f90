@@ -17,7 +17,7 @@ module sea_level
     ! Update the sea level based on the new ice thickness field
     ! subroutine calc_sealevel(Hice, isos, update_diagnostics)
     !     implicit none
-    !     real(wp), intent(IN)            :: Hice(:,:)
+    !     real(wp), intent(IN)            :: Hice(:, :)
     !     type(isos_class), intent(INOUT) :: isos
     !     logical, intent(IN)             :: update_diagnostics
 
@@ -38,7 +38,7 @@ module sea_level
     !!!!!!!!!!!!!!!!!!!!!! Part 1 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     subroutine calc_columnanoms_load(Hice, isos)
         implicit none
-        real(wp), intent(IN)                :: Hice(:,:)
+        real(wp), intent(IN)                :: Hice(:, :)
         type(isos_class), intent(INOUT)     :: isos 
 
         isos%now%Hice = Hice
@@ -71,9 +71,9 @@ module sea_level
         implicit none
 
         real(wp), intent(IN)    :: rho
-        real(wp), intent(IN)    :: H_now(:,:)
-        real(wp), intent(IN)    :: H_ref(:,:)
-        real(wp), intent(INOUT) :: canom(:,:)
+        real(wp), intent(IN)    :: H_now(:, :)
+        real(wp), intent(IN)    :: H_ref(:, :)
+        real(wp), intent(INOUT) :: canom(:, :)
 
         canom = canom + rho * (H_now - H_ref)
         return

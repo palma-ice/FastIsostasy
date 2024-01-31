@@ -29,7 +29,7 @@ module isostasy_benchmarks
 
         real(wp), allocatable :: kappa_mod(:)
         real(wp), allocatable :: rad(:) 
-        integer,  allocatable :: lrad(:,:)
+        integer,  allocatable :: lrad(:, :)
         
     contains
 
@@ -76,7 +76,7 @@ contains
 
         implicit none
 
-        real(wp), intent(INOUT) :: z_bed(:,:)   ! [m]
+        real(wp), intent(INOUT) :: z_bed(:, :)   ! [m]
         real(wp), intent(IN)    :: r0           ! Radius, r0=1000e3 m (1000 km) by default
         real(wp), intent(IN)    :: h0           ! Ice thickness, h0=1000 m by default
         real(wp), intent(IN)    :: eta          ! Viscosity, eta=1e21 Pa s by default
@@ -137,7 +137,7 @@ contains
        
         real(wp), allocatable, intent(OUT)  :: kappa_mod(:)
         real(wp), allocatable, intent(OUT)  :: r(:) 
-        integer,  allocatable, intent(OUT)  :: lr(:,:)
+        integer,  allocatable, intent(OUT)  :: lr(:, :)
 
         real(wp), intent(IN)                :: kappa_min
         real(wp), intent(IN)                :: kappa_max
@@ -147,10 +147,10 @@ contains
         real(wp), intent(IN)                :: dx
         
         ! Local variables
-        integer, allocatable                :: n(:,:)
+        integer, allocatable                :: n(:, :)
         real(wp)                            :: xd, yd
         integer                             :: i, j, ip, iq, ic, jc, k, nk, l, nl
-        real(wp), allocatable               :: dist2c(:,:)
+        real(wp), allocatable               :: dist2c(:, :)
         
         nk = int((kappa_max-kappa_min)/dk)
         nl = int(max(nx,ny)*sqrt(2.)/2) + 2
@@ -215,13 +215,13 @@ contains
         implicit none
 
         class(isos_analytical_elva_disk_load_class), intent(INOUT) :: me
-        real(wp), intent(OUT)         :: w(:,:)
+        real(wp), intent(OUT)         :: w(:, :)
         real(wp), intent(IN)          :: dx
         real(wp), intent(IN)          :: t
         
         ! Local variables
         real(wp), allocatable         :: wr(:)
-        integer(kind=4), allocatable  :: n(:,:)
+        integer(kind=4), allocatable  :: n(:, :)
         
         real(wp)                      :: ans
         real(wp)                      :: err

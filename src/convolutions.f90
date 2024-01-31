@@ -58,9 +58,9 @@ module convolutions
 
     subroutine convenient_samesize_fftconvolution(out, in1, in2, domain)
 
-        real(wp), intent(OUT)   :: out(:,:)
-        real(wp), intent(IN)    :: in1(:,:)
-        real(wp), intent(IN)    :: in2(:,:)
+        real(wp), intent(OUT)   :: out(:, :)
+        real(wp), intent(IN)    :: in1(:, :)
+        real(wp), intent(IN)    :: in2(:, :)
         type(isos_domain_class), intent(In)  :: domain
 
         call samesize_fftconvolution(out, in1, in2, domain%i1, domain%i2, &
@@ -75,23 +75,23 @@ module convolutions
 
         implicit none
 
-        real(wp), intent(OUT)   :: out(:,:)
-        real(wp), intent(IN)    :: in1(:,:)
-        real(wp), intent(IN)    :: in2(:,:)
+        real(wp), intent(OUT)   :: out(:, :)
+        real(wp), intent(IN)    :: in1(:, :)
+        real(wp), intent(IN)    :: in2(:, :)
         integer, intent(IN)     :: i1, i2, j1, j2, nx, ny
 
         ! Local variables
-        real(wp), allocatable :: out_ext(:,:)
-        real(wp), allocatable :: in1_ext(:,:)
-        real(wp), allocatable :: in2_ext(:,:)
-        complex(wp), allocatable :: out_ext_hat(:,:)
-        complex(wp), allocatable :: in1_ext_hat(:,:)
-        complex(wp), allocatable :: in2_ext_hat(:,:)
+        real(wp), allocatable :: out_ext(:, :)
+        real(wp), allocatable :: in1_ext(:, :)
+        real(wp), allocatable :: in2_ext(:, :)
+        complex(wp), allocatable :: out_ext_hat(:, :)
+        complex(wp), allocatable :: in1_ext_hat(:, :)
+        complex(wp), allocatable :: in2_ext_hat(:, :)
         
         type(c_ptr), intent(IN)     :: forward_plan
         type(c_ptr), intent(IN)     :: backward_plan
 
-        real(wp), allocatable :: w_reg(:,:)
+        real(wp), allocatable :: w_reg(:, :)
 
         integer :: i, j
 

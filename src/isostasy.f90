@@ -412,12 +412,12 @@ module isostasy
         implicit none
 
         type(isos_class), intent(INOUT) :: isos 
-        real(wp), intent(IN) :: z_bed(:,:)            ! [m] Current bedrock elevation 
-        real(wp), intent(IN) :: H_ice(:,:)            ! [m] Current ice thickness  
-        real(wp), intent(IN) :: z_sl(:,:)             ! [m] Current sea level 
-        real(wp), intent(IN) :: z_bed_ref(:,:)        ! [m] Reference bedrock elevation (with known load)
-        real(wp), intent(IN) :: H_ice_ref(:,:)        ! [m] Reference ice thickness (associated with reference z_bed)
-        real(wp), intent(IN) :: z_sl_ref(:,:)         ! [m] Reference sea level (associated with reference z_bed)
+        real(wp), intent(IN) :: z_bed(:, :)            ! [m] Current bedrock elevation 
+        real(wp), intent(IN) :: H_ice(:, :)            ! [m] Current ice thickness  
+        real(wp), intent(IN) :: z_sl(:, :)             ! [m] Current sea level 
+        real(wp), intent(IN) :: z_bed_ref(:, :)        ! [m] Reference bedrock elevation (with known load)
+        real(wp), intent(IN) :: H_ice_ref(:, :)        ! [m] Reference ice thickness (associated with reference z_bed)
+        real(wp), intent(IN) :: z_sl_ref(:, :)         ! [m] Reference sea level (associated with reference z_bed)
         real(wp), intent(IN) :: time                  ! [a] Initial time 
 
         ! Store initial bedrock field
@@ -460,9 +460,9 @@ module isostasy
         implicit none
 
         type(isos_class), intent(INOUT) :: isos 
-        real(wp), intent(IN) :: H_ice(:,:)                  ! [m] Current ice thickness 
+        real(wp), intent(IN) :: H_ice(:, :)                  ! [m] Current ice thickness 
         real(wp), intent(IN) :: time                        ! [a] Current time  
-        real(wp), intent(IN), optional :: dzbdt_corr(:,:)   ! [m/yr] Basal topography adjustment rate (ie, to relax from low resolution to high resolution) 
+        real(wp), intent(IN), optional :: dzbdt_corr(:, :)   ! [m/yr] Basal topography adjustment rate (ie, to relax from low resolution to high resolution) 
 
         ! Local variables
         

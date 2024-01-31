@@ -37,17 +37,17 @@ program test_isostasy
     real(wp), allocatable :: xc(:)
     real(wp), allocatable :: yc(:)
 
-    real(wp), allocatable :: z_bed_ref(:,:) 
-    real(wp), allocatable :: H_ice_ref(:,:) 
-    real(wp), allocatable :: z_sl_ref(:,:) 
+    real(wp), allocatable :: z_bed_ref(:, :) 
+    real(wp), allocatable :: H_ice_ref(:, :) 
+    real(wp), allocatable :: z_sl_ref(:, :) 
     
-    real(wp), allocatable :: z_bed(:,:) 
-    real(wp), allocatable :: H_ice(:,:), T_ice(:,:,:), z_bed_ice(:,:,:)
+    real(wp), allocatable :: z_bed(:, :) 
+    real(wp), allocatable :: H_ice(:, :), T_ice(:, : ,:), z_bed_ice(:, : ,:)
     real(wp), allocatable :: time_ice(:), xc_ice(:), yc_ice(:)
-    real(wp), allocatable :: z_sl(:,:) 
+    real(wp), allocatable :: z_sl(:, :) 
     
-    real(wp), allocatable :: mask(:,:)
-    real(wp), allocatable :: z_bed_bench(:,:)
+    real(wp), allocatable :: mask(:, :)
+    real(wp), allocatable :: z_bed_bench(:, :)
 
     character(len=256)  :: fldr_path, filename
 
@@ -315,7 +315,7 @@ program test_isostasy
             allocate(T_ice(nx,ny,1))
             allocate(time_ice(1))
 
-            T_ice(:,:,1) = H_ice(:,:)
+            T_ice(:, :,1) = H_ice(:, :)
             
       case("test2")
 
@@ -339,7 +339,7 @@ program test_isostasy
              allocate(T_ice(nx,ny,1))
              allocate(time_ice(1))
             
-            T_ice(:,:,1) = H_ice(:,:)
+            T_ice(:, :,1) = H_ice(:, :)
             
          case("test4")
 
@@ -397,8 +397,8 @@ program test_isostasy
 
             ! Initialize H_ice
                     
-           H_ice = T_ice(:,:,1)
-           H_ice_ref = T_ice(:,:,1)
+           H_ice = T_ice(:, :,1)
+           H_ice_ref = T_ice(:, :,1)
            
            z_bed_ref = 0. ! recheck - Jan  - what do you put here? ie what are the initial conditions? LGM?
 
@@ -450,11 +450,11 @@ program test_isostasy
             call nc_read(filename,"yc",yc_ice,start=[1],count=[ncy])
             
 
-            H_ice = T_ice(:,:,1)
-            z_bed = z_bed_ice(:,:,1)
+            H_ice = T_ice(:, :,1)
+            z_bed = z_bed_ice(:, :,1)
             
-            H_ice_ref = T_ice(:,:,1)
-            z_bed_ref = z_bed_ice(:,:,1)
+            H_ice_ref = T_ice(:, :,1)
+            z_bed_ref = z_bed_ice(:, :,1)
 
         case DEFAULT
 
@@ -591,9 +591,9 @@ program test_isostasy
         type(isos_class), intent(IN) :: isos
         character(len=*), intent(IN) :: filename
         real(wp),         intent(IN) :: time
-        real(wp),         intent(IN) :: H_ice(:,:) 
-        real(wp),         intent(IN) :: z_sl(:,:) 
-        real(wp),         intent(IN), optional :: z_bed_bench(:,:)
+        real(wp),         intent(IN) :: H_ice(:, :) 
+        real(wp),         intent(IN) :: z_sl(:, :) 
+        real(wp),         intent(IN), optional :: z_bed_bench(:, :)
 
         ! Local variables
         integer  :: ncid, n
@@ -603,9 +603,9 @@ program test_isostasy
         call nc_open(filename,ncid,writable=.TRUE.)
 
         ! Determine current writing time step 
-        n = nc_size(filename,"time",ncid)
-        call nc_read(filename,"time",time_prev,start=[n],count=[1],ncid=ncid) 
-        if (abs(time-time_prev).gt.1e-5) n = n+1 
+        n = nc_size(filename, "time", ncid)
+        call nc_read(filename, "time", time_prev, start=[n], count=[1], ncid=ncid) 
+        if (abs(time-time_prev) .gt. 1e-5) n = n+1 
 
         ! Update the time step
         call nc_write(filename,"time",time,dim1="time",start=[n],count=[1],ncid=ncid)
@@ -664,30 +664,30 @@ program test_isostasy
         implicit none
 
         real(wp), dimension(:), intent(IN) :: x 
-        real(wp), dimension(:,:,:), intent(IN) :: y
+        real(wp), dimension(:, : ,:), intent(IN) :: y
         real(wp), intent(IN) :: xout
-        real(wp), dimension(:,:),intent(OUT) :: yout
+        real(wp), dimension(:, :),intent(OUT) :: yout
         integer  :: i, j, n, nout
         real(wp) :: alph
 
         n    = size(x)
 
         if (xout .lt. x(1)) then
-            yout = y(:,:,1)
+            yout = y(:, :,1)
         else if (xout .gt. x(n)) then
-            yout = y(:,:,n)
+            yout = y(:, :,n)
         else
             do j = 1, n
                 if (x(j) .ge. xout) exit
             end do
 
             if (j .eq. 1) then
-                yout = y(:,:,1)
+                yout = y(:, :,1)
             else if (j .eq. n+1) then
-                yout = y(:,:,n)
+                yout = y(:, :,n)
             else
                alph = (xout - x(j-1)) / (x(j) - x(j-1))
-                yout = y(:,:,j-1) + alph*(y(:,:,j) - y(:,:,j-1))
+                yout = y(:, :,j-1) + alph*(y(:, :,j) - y(:, :,j-1))
 !               print*,'hola', xout, alph, yout(90,90), y(90,90,j), y(90,90,j-1)
              end if
         end if

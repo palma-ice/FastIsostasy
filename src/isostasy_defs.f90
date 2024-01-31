@@ -68,31 +68,31 @@ module isostasy_defs
         real(wp)                :: dy
         real(wp)                :: mu
 
-        real(wp), allocatable   :: dx_matrix(:,:)   ! [m] K * dx
-        real(wp), allocatable   :: dy_matrix(:,:)   ! [m] K * dy
-        real(wp), allocatable   :: A(:,:)           ! [m^2] Cell area
-        real(wp), allocatable   :: K(:,:)           ! [1] Distortion matrix
-        real(wp), allocatable   :: kappa(:,:)       ! [1] Pseudodifferential operator
-        logical,  allocatable   :: maskactive(:,:)  ! [1] Active mask
+        real(wp), allocatable   :: dx_matrix(:, :)   ! [m] K * dx
+        real(wp), allocatable   :: dy_matrix(:, :)   ! [m] K * dy
+        real(wp), allocatable   :: A(:, :)           ! [m^2] Cell area
+        real(wp), allocatable   :: K(:, :)           ! [1] Distortion matrix
+        real(wp), allocatable   :: kappa(:, :)       ! [1] Pseudodifferential operator
+        logical,  allocatable   :: maskactive(:, :)  ! [1] Active mask
 
-        real(wp), allocatable   :: He_lith(:,:)       ! [m] Elastic thickness of the lithosphere
-        real(wp), allocatable   :: D_lith(:,:)        ! [N-m] Lithosphere flexural rigidity
-        real(wp), allocatable   :: eta(:,:,:)         ! [Pa-s] 3D mantle viscosity
-        real(wp), allocatable   :: eta_eff(:,:)       ! [Pa-s] Effective mantle viscosity
-        real(wp), allocatable   :: tau(:,:)           ! [yr] Asthenospheric relaxation timescale field
+        real(wp), allocatable   :: He_lith(:, :)       ! [m] Elastic thickness of the lithosphere
+        real(wp), allocatable   :: D_lith(:, :)        ! [N-m] Lithosphere flexural rigidity
+        real(wp), allocatable   :: eta(:, :,:)         ! [Pa-s] 3D mantle viscosity
+        real(wp), allocatable   :: eta_eff(:, :)       ! [Pa-s] Effective mantle viscosity
+        real(wp), allocatable   :: tau(:, :)           ! [yr] Asthenospheric relaxation timescale field
 
         type(c_ptr)             :: forward_fftplan_r2r
         type(c_ptr)             :: backward_fftplan_r2r
         type(c_ptr)             :: forward_dftplan_r2c
         type(c_ptr)             :: backward_dftplan_c2r
 
-        real(wp), allocatable   :: kei(:,:)   ! Kelvin function filter values
-        real(wp), allocatable   :: G0(:,:)    ! Green's function values
-        real(wp), allocatable   :: GE(:,:)    ! Green's function for elastic displacement (Farrell 1972)
-        real(wp), allocatable   :: GN(:,:)    ! Green's function for ssh_perturb
+        real(wp), allocatable   :: kei(:, :)   ! Kelvin function filter values
+        real(wp), allocatable   :: G0(:, :)    ! Green's function values
+        real(wp), allocatable   :: GE(:, :)    ! Green's function for elastic displacement (Farrell 1972)
+        real(wp), allocatable   :: GN(:, :)    ! Green's function for ssh_perturb
 
-        complex(wp), allocatable :: FGE(:,:)    ! FFT of GE
-        complex(wp), allocatable :: FGN(:,:)    ! FFT of GN
+        complex(wp), allocatable :: FGE(:, :)    ! FFT of GE
+        complex(wp), allocatable :: FGN(:, :)    ! FFT of GN
 
     end type isos_domain_class
 
@@ -100,28 +100,28 @@ module isostasy_defs
         real(wp)              :: t                  ! [yr] Time
         real(wp)              :: bsl                ! [m] Barystatic sea level
        
-        real(wp), allocatable       :: z_bed(:,:)         ! Bedrock elevation         [m]
-        real(wp), allocatable       :: dzbdt(:,:)         ! Rate of bedrock uplift    [m/a]
-        real(wp), allocatable       :: q(:,:)             ! [Pa] Load
-        real(wp), allocatable       :: w(:,:)             ! Current viscous displacement
-        real(wp), allocatable       :: w_equilibrium(:,:) ! Current viscous equilibrium displacement (XLRA)
-        real(wp), allocatable       :: we(:,:)            ! [m] Elastic displacement
-        complex(wp), allocatable    :: cplx_out_aux(:,:)
+        real(wp), allocatable       :: z_bed(:, :)         ! Bedrock elevation         [m]
+        real(wp), allocatable       :: dzbdt(:, :)         ! Rate of bedrock uplift    [m/a]
+        real(wp), allocatable       :: q(:, :)             ! [Pa] Load
+        real(wp), allocatable       :: w(:, :)             ! Current viscous displacement
+        real(wp), allocatable       :: w_equilibrium(:, :) ! Current viscous equilibrium displacement (XLRA)
+        real(wp), allocatable       :: we(:, :)            ! [m] Elastic displacement
+        complex(wp), allocatable    :: cplx_out_aux(:, :)
 
-        real(wp), allocatable :: Haf(:,:)           ! [m] Ice thickness above floatation
-        real(wp), allocatable :: Hice(:,:)          ! [m] Thickness of ice column
-        real(wp), allocatable :: Hseawater(:,:)     ! [m] Thickness of seawater column
-        ! real(wp), allocatable :: Hsediment(:,:)     ! [m] Thickness of sediment column
+        real(wp), allocatable :: Haf(:, :)           ! [m] Ice thickness above floatation
+        real(wp), allocatable :: Hice(:, :)          ! [m] Thickness of ice column
+        real(wp), allocatable :: Hseawater(:, :)     ! [m] Thickness of seawater column
+        ! real(wp), allocatable :: Hsediment(:, :)     ! [m] Thickness of sediment column
 
-        real(wp), allocatable :: ssh(:,:)           ! [m] sea-surface height
-        real(wp), allocatable :: ssh_perturb(:,:)   ! [m] sea-surface height perturbation
-        real(wp), allocatable :: canom_load(:,:)    ! [kg m^-2] Load column anomaly
-        real(wp), allocatable :: canom_full(:,:)    ! [kg m^-2] Full column anomaly
-        real(wp), allocatable :: mass_anom(:,:)     ! [kg] Mass anomaly
+        real(wp), allocatable :: ssh(:, :)           ! [m] sea-surface height
+        real(wp), allocatable :: ssh_perturb(:, :)   ! [m] sea-surface height perturbation
+        real(wp), allocatable :: canom_load(:, :)    ! [kg m^-2] Load column anomaly
+        real(wp), allocatable :: canom_full(:, :)    ! [kg m^-2] Full column anomaly
+        real(wp), allocatable :: mass_anom(:, :)     ! [kg] Mass anomaly
 
-        logical, allocatable :: maskocean(:,:)      ! [1] Ocean mask
-        logical, allocatable :: maskgrounded(:,:)   ! [1] Grounded mask
-        logical, allocatable :: maskcontinent(:,:)  ! [1] Continent mask
+        logical, allocatable :: maskocean(:, :)      ! [1] Ocean mask
+        logical, allocatable :: maskgrounded(:, :)   ! [1] Grounded mask
+        logical, allocatable :: maskcontinent(:, :)  ! [1] Continent mask
     end type isos_state_class
 
     type isos_class

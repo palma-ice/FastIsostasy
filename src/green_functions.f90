@@ -29,8 +29,8 @@ module green_functions
 
         implicit none
 
-        real(wp), intent(OUT) :: G0(:,:) 
-        real(wp), intent(IN)  :: kei2D(:,:) 
+        real(wp), intent(OUT) :: G0(:, :) 
+        real(wp), intent(IN)  :: kei2D(:, :) 
         real(wp), intent(IN)  :: L_w 
         real(wp), intent(IN)  :: D_lith 
         real(wp), intent(IN)  :: dx 
@@ -47,7 +47,7 @@ module green_functions
 
         implicit none 
 
-        real(wp), intent(OUT) :: filt(:,:) 
+        real(wp), intent(OUT) :: filt(:, :) 
         real(wp), intent(IN)  :: dx
         real(wp), intent(IN)  :: dy
 
@@ -164,7 +164,7 @@ module green_functions
 
         implicit none 
 
-        real(wp), intent(OUT) :: filt(:,:) 
+        real(wp), intent(OUT) :: filt(:, :) 
         real(wp), intent(IN)  :: m_earth
         real(wp), intent(IN)  :: r_earth
         real(wp), intent(IN)  :: dx 

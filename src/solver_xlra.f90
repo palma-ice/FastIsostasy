@@ -72,12 +72,12 @@ module solver_xlra
 
         implicit none
 
-        real(wp), intent(INOUT) :: w(:,:)      ! [m] Lithospheric displacement
-        real(wp), intent(INOUT) :: q1(:,:)      ! [Pa] Lithospheric load
-        real(wp), intent(IN)    :: z_bed(:,:)   ! [m] Bed elevation
-        real(wp), intent(IN)    :: H_ice(:,:)   ! [m] Ice thickness 
-        real(wp), intent(IN)    :: z_sl(:,:)    ! [m] Sea level 
-        real(wp), intent(IN)    :: GG(:,:)      ! Regional filter function
+        real(wp), intent(INOUT) :: w(:, :)      ! [m] Lithospheric displacement
+        real(wp), intent(INOUT) :: q1(:, :)      ! [Pa] Lithospheric load
+        real(wp), intent(IN)    :: z_bed(:, :)   ! [m] Bed elevation
+        real(wp), intent(IN)    :: H_ice(:, :)   ! [m] Ice thickness 
+        real(wp), intent(IN)    :: z_sl(:, :)    ! [m] Sea level 
+        real(wp), intent(IN)    :: GG(:, :)      ! Regional filter function
         real(wp), intent(IN)    :: rho_ice
         real(wp), intent(IN)    :: rho_seawater
         real(wp), intent(IN)    :: rho_uppermantle

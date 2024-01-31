@@ -44,7 +44,7 @@ module finite_differences
         implicit none
         real(wp), intent(OUT)   :: dudy(:, :)
         real(wp), intent(IN)    :: u(:, :)
-        real(wp), intent(IN)    :: dy(:,:)
+        real(wp), intent(IN)    :: dy(:, :)
         integer,  intent(IN)    :: nx, ny
 
         ! Local variables 

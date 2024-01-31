@@ -208,10 +208,10 @@ module solver_lv_elva
         real(wp), allocatable :: xc(:), yc(:)
 
         real(wp), allocatable ::  R(:, :)
-        real(wp), allocatable ::  eta(:,:,:)
+        real(wp), allocatable ::  eta(:, :,:)
         real(wp), allocatable ::  eta_ratio(:, :)
         real(wp), allocatable ::  eta_c(:, :)
-        real(wp), allocatable ::  dz(:,:,:)
+        real(wp), allocatable ::  dz(:, :,:)
         real(wp), allocatable ::  dz_c(:, :)
         real(wp), allocatable ::  eta_ratiom1(:, :)
         real(wp), allocatable ::  c(:, :)
@@ -269,22 +269,22 @@ module solver_lv_elva
 
             kappa = 2*pi/L 
                     
-            eta(:,:,1)  = 0.
-            eta(:,:,2)  = visc_c      
-            eta(:,:,3)  = eta_eff
+            eta(:, :,1)  = 0.
+            eta(:, :,2)  = visc_c      
+            eta(:, :,3)  = eta_eff
 
-            dz(:,:,1)  = He_lith*1.e3
-            dz(:,:,2)  = thck_c*1.e3     ![m]
-            dz(:,:,3)  = 2000.*1.e3      ![m]
+            dz(:, :,1)  = He_lith*1.e3
+            dz(:, :,2)  = thck_c*1.e3     ![m]
+            dz(:, :,3)  = 2000.*1.e3      ![m]
         
             ! Start with n-th layer: viscous half space
             
-            eta_eff(:, :) = eta(:,:,n_lev)
+            eta_eff(:, :) = eta(:, :,n_lev)
             
             do k = 1, n_lev-1
 
-            eta_c = eta(:,:,n_lev-1)
-            dz_c = dz(:,:,n_lev-k+1)
+            eta_c = eta(:, :,n_lev-1)
+            dz_c = dz(:, :,n_lev-k+1)
 
             eta_ratio = eta_c/eta_eff
             eta_ratiom1 = 1./eta_ratio
@@ -330,7 +330,7 @@ module solver_lv_elva
         implicit none
 
         real(wp), intent(INOUT)  :: eta_eff(:, :)
-        real(wp), intent(IN)     :: eta(:,:,:)
+        real(wp), intent(IN)     :: eta(:, :,:)
         real(wp), intent(IN)     :: dx, dy
         
         real(wp) :: Lx, Ly, L
@@ -340,7 +340,7 @@ module solver_lv_elva
         real(wp), allocatable ::  R(:, :)
         real(wp), allocatable ::  eta_ratio(:, :)
         real(wp), allocatable ::  eta_c(:, :)
-        real(wp), allocatable ::  dz(:,:,:)
+        real(wp), allocatable ::  dz(:, :,:)
         real(wp), allocatable ::  dz_c(:, :)
         real(wp), allocatable ::  eta_ratiom1(:, :)
         real(wp), allocatable ::  c(:, :)
@@ -407,12 +407,12 @@ module solver_lv_elva
         
             ! Start with n-th layer: viscous half space
             
-            eta_eff(:, :) = eta(:,:,n_lev)
+            eta_eff(:, :) = eta(:, :,n_lev)
             
             do k = 1, n_lev-1
 
-            eta_c = eta(:,:,n_lev-1)
-            dz_c = 100.*1.e3 !dz(:,:,n_lev-k+1)
+            eta_c = eta(:, :,n_lev-1)
+            dz_c = 100.*1.e3 !dz(:, :,n_lev-k+1)
             
             eta_ratio = eta_c/eta_eff
             eta_ratiom1 = 1./eta_ratio

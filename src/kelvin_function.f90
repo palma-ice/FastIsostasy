@@ -24,7 +24,7 @@ module kelvin_function
 
         implicit none 
 
-        real(wp), intent(OUT) :: filt(:,:) 
+        real(wp), intent(OUT) :: filt(:, :) 
         real(wp), intent(IN)  :: L_w 
         real(wp), intent(IN)  :: dx 
         real(wp), intent(IN)  :: dy   
