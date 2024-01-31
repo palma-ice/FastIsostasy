@@ -224,7 +224,7 @@ module isostasy
                 write(*,*) "GE: ", sum(isos%domain%GE), "FGE: ", sum(isos%domain%FGE)
 
 
-                write(*,*) "Initialising geoid Green kernel..."
+                write(*,*) "Initialising ssh Green kernel..."
                 if (isos%par%interactive_sealevel) then
                     call calc_GN_filter_2D(isos%domain%GN, isos%par%m_earth, &
                         isos%par%r_earth, dx=isos%domain%dx, dy=isos%domain%dx)
@@ -369,7 +369,7 @@ module isostasy
         ! Later this can be overwritten.
         !mmr moved above        isos%domain%eta_eff    = isos%par%visc         ! [Pa s]
 
-        ! TODO: the initialisation below should be more generic!
+        ! TODO: the initialisation below should be more generic and coherent with isos_init_state.
 
         ! Set time to very large value in the future 
         isos%par%time_diagnostics = 1e10 
@@ -401,8 +401,6 @@ module isostasy
         isos%now%maskgrounded   = .false.
         isos%now%maskcontinent  = .false.
 
-        call copy_state(isos%ref, isos%now)
-
         write(*,*) "isos_init:: complete." 
 
         return 
@@ -422,23 +420,16 @@ module isostasy
         real(wp), intent(IN) :: z_sl_ref(:,:)         ! [m] Reference sea level (associated with reference z_bed)
         real(wp), intent(IN) :: time                  ! [a] Initial time 
 
-        integer :: nx, ny
-
         ! Store initial bedrock field
         isos%now%z_bed = z_bed
-
-        ! Store reference bedrock field
-        isos%ref%z_bed = z_bed_ref
-        isos%now%dzbdt = 0.0
-
-        nx = size(H_ice,1)
-        ny = size(H_ice,2)
+        call copy_state(isos%ref, isos%now)
 
         ! Define initial time of isostasy model
         ! (set time_diagnostics earlier, so that it is definitely updated on the first timestep)
         isos%par%time_diagnostics = time - isos%par%dt_diagnostics
         isos%par%time_prognostics = time
 
+        write(*,*) "Calling first update..."
         ! Call isos_update to diagnose rate of change
         ! (no change to z_bed will be applied since isos%par%time==time)
         call isos_update(isos, H_ice, time, z_sl)
@@ -504,7 +495,7 @@ module isostasy
 
             if (update_diagnostics) then
                 call precomputed_fftconvolution(isos%now%we, isos%domain%FGE, &
-                    -isos%now%canom_load * isos%par%g * isos%domain%K ** 2.0, &
+                    isos%now%canom_load * isos%par%g * isos%domain%K ** 2.0, &
                     isos%domain%i1, isos%domain%i2, &
                     isos%domain%j1, isos%domain%j2, isos%domain%offset, &
                     isos%domain%nx, isos%domain%ny, &
@@ -514,7 +505,9 @@ module isostasy
 
             call calc_columnanoms_solidearth(isos)
 
+            ! write(*,*) "Updating the sea-level..."
             if (update_diagnostics .and. isos%par%interactive_sealevel) then
+                ! write(*,*) "Updating the ssh perturbation..."
                 call precomputed_fftconvolution(isos%now%ssh_perturb, isos%domain%FGN, &
                     isos%now%mass_anom, isos%domain%i1, isos%domain%i2, &
                     isos%domain%j1, isos%domain%j2, isos%domain%offset, &
@@ -522,7 +515,9 @@ module isostasy
                     isos%domain%forward_dftplan_r2c, isos%domain%backward_dftplan_c2r)
                 call apply_zerobc_at_corners(isos%now%ssh_perturb, &
                     isos%domain%nx, isos%domain%ny)
+                ! write(*,*) "Updating masks..."
                 call calc_masks(isos)
+                ! write(*,*) "Updating sea-level contributions..."
                 call calc_sl_contribution(isos)
             endif
 

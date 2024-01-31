@@ -159,7 +159,7 @@ module solver_lv_elva
         call calc_derivative_xx(Mx_xx, Mx, dx_matrix, nx, ny)
         call calc_derivative_yy(My_yy, My, dy_matrix, nx, ny)
 
-        call maskfield(p, g * canom_full, maskactive, nx, ny)
+        call maskfield(p, -g * canom_full, maskactive, nx, ny)
         f = (p + Mx_xx + 2.0_wp * Mxy_xy + My_yy) / (2.0_wp * eta)
         call calc_fft_forward_r2r(forward_plan, f, f_hat)
 

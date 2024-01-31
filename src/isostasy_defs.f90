@@ -89,7 +89,7 @@ module isostasy_defs
         real(wp), allocatable   :: kei(:,:)   ! Kelvin function filter values
         real(wp), allocatable   :: G0(:,:)    ! Green's function values
         real(wp), allocatable   :: GE(:,:)    ! Green's function for elastic displacement (Farrell 1972)
-        real(wp), allocatable   :: GN(:,:)    ! Green's function for geoid values
+        real(wp), allocatable   :: GN(:,:)    ! Green's function for ssh_perturb
 
         complex(wp), allocatable :: FGE(:,:)    ! FFT of GE
         complex(wp), allocatable :: FGN(:,:)    ! FFT of GN

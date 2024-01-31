@@ -17,7 +17,6 @@ Modularity:
  the information related to the computation domain (including the pseudo-differential
  operator in Fourier space as well as the FFT plans).
 
-
 Performance and accuracy:
 - FFT plans are precomputed
 - Convolution kernels are precomputed
@@ -30,7 +29,10 @@ Sea-level:
 General physics:
 - Allow rectangular domain (without the need of a square extension)
 - Distortion factor included in computations
-
+- Previously, some signs were inverted when writing the output, which is incovenient for
+ debugging. Most importantly, this can lead to serious problems when coupling. All signs
+ are now defined according to the surface of reference elipsoid z=0 and the center of the
+ Earth z = -r_earth.
 
 ## Minor changes
 
@@ -46,3 +48,9 @@ Misc:
 - Removed the option of static load, which is very specific to benchmark tests and
  makes the code longer / less intelegible. The performance advantage we were gaining
  from the static load option is minor now that the computation is accelerated.
+- Most parameter files were previously in `output/`, which did not make sense.
+ They are now gathered in `par/`.
+
+Output:
+- 2D fields are now output as 2D fields (and not 3D anymore).
+- Reduced output to minimum for debugging.

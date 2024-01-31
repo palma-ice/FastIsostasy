@@ -7,7 +7,7 @@ module sea_level
 
     public :: calc_columnanoms_load
     public :: calc_columnanoms_solidearth
-    ! public :: calc_seasurfaceheight
+    public :: calc_seasurfaceheight
     public :: calc_masks
     public :: calc_sl_contribution
 
@@ -47,8 +47,10 @@ module sea_level
 
         isos%now%canom_load(:, :) = 0
         call add_columnanom(isos%par%rho_ice, isos%now%Hice, isos%ref%Hice, isos%now%canom_load)
-        call add_columnanom(isos%par%rho_seawater, isos%now%Hseawater, isos%ref%Hseawater, &
-            isos%now%canom_load)
+        ! call add_columnanom(isos%par%rho_seawater, isos%now%Hseawater, isos%ref%Hseawater, &
+        !     isos%now%canom_load)
+        call maskfield(isos%now%canom_load, isos%now%canom_load, isos%domain%maskactive, &
+            isos%domain%nx, isos%domain%ny)
     end subroutine calc_columnanoms_load
 
     !
@@ -57,8 +59,10 @@ module sea_level
         type(isos_class), intent(INOUT)   :: isos
 
         isos%now%canom_full = isos%now%canom_load
-        call add_columnanom(-isos%par%rho_litho, isos%now%we, isos%ref%we, isos%now%canom_full)
-        call add_columnanom(-isos%par%rho_uppermantle, isos%now%w, isos%ref%w, isos%now%canom_full)
+        call add_columnanom(isos%par%rho_litho, isos%now%we, isos%ref%we, isos%now%canom_full)
+        call add_columnanom(isos%par%rho_uppermantle, isos%now%w, isos%ref%w, isos%now%canom_full)
+        call maskfield(isos%now%canom_full, isos%now%canom_full, isos%domain%maskactive, &
+            isos%domain%nx, isos%domain%ny)
         return
     end subroutine calc_columnanoms_solidearth
 
@@ -145,9 +149,9 @@ module sea_level
         real(wp), allocatable           :: Heq_masked(:, :)
 
         allocate(Heq(isos%domain%nx, isos%domain%ny))
-        Heq = isos%now%z_bed - isos%now%ssh
+        allocate(Heq_masked(isos%domain%nx, isos%domain%ny))
 
-        ! TODO: check if min function appropriate for arrays
+        Heq = isos%now%z_bed - isos%now%ssh
         call maskfield(Heq_masked, Heq, Heq > 0, isos%domain%nx, isos%domain%ny)
 
         isos%now%Haf = isos%now%Hice + Heq_masked * (isos%par%rho_seawater / isos%par%rho_ice)
