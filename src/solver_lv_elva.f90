@@ -82,13 +82,13 @@ module solver_lv_elva
 
 
     ! Calculate vertical displacement rate (viscous part) on rectangular domain.
-    subroutine calc_lvelva(dzbdt, u, canom_full, maskactive, g, nu, mu, D_lith, eta, &
+    subroutine calc_lvelva(dzbdt, w, canom_full, maskactive, g, nu, mu, D_lith, eta, &
         kappa, nx, ny, dx_matrix, dy_matrix, sec_per_year, forward_plan, backward_plan)
 
         implicit none
         
         real(wp), intent(INOUT) :: dzbdt(:, :)
-        real(wp), intent(IN)    :: u(:, :)
+        real(wp), intent(IN)    :: w(:, :)
         real(wp), intent(IN)    :: canom_full(:, :)
         logical,  intent(IN)    :: maskactive(:, :)
         real(wp), intent(IN)    :: g
@@ -109,10 +109,10 @@ module solver_lv_elva
         real(wp), allocatable :: f_hat(:, :)
         real(wp), allocatable :: dwdt_hat(:, :)
 
-        real(wp), allocatable :: u_x(:, :)
-        real(wp), allocatable :: u_xy(:, :)
-        real(wp), allocatable :: u_xx(:, :)
-        real(wp), allocatable :: u_yy(:, :)
+        real(wp), allocatable :: w_x(:, :)
+        real(wp), allocatable :: w_xy(:, :)
+        real(wp), allocatable :: w_xx(:, :)
+        real(wp), allocatable :: w_yy(:, :)
 
         real(wp), allocatable :: Mxy(:, :)
         real(wp), allocatable :: Mxy_x(:, :)
@@ -128,10 +128,10 @@ module solver_lv_elva
         allocate(f_hat(nx, ny))
         allocate(dwdt_hat(nx, ny))
 
-        allocate(u_x(nx, ny))
-        allocate(u_xy(nx, ny))
-        allocate(u_xx(nx, ny))
-        allocate(u_yy(nx, ny))
+        allocate(w_x(nx, ny))
+        allocate(w_xy(nx, ny))
+        allocate(w_xx(nx, ny))
+        allocate(w_yy(nx, ny))
 
         allocate(Mx(nx, ny))
         allocate(My(nx, ny))
@@ -142,16 +142,16 @@ module solver_lv_elva
         allocate(Mxy_xy(nx, ny))
 
         ! Finite differences
-        call calc_derivative_x(u_x, u, dx_matrix, nx, ny)
-        call calc_derivative_y(u_xy, u_x, dy_matrix, nx, ny)
-        call calc_derivative_xx(u_xx, u, dx_matrix, nx, ny)
-        call calc_derivative_yy(u_yy, u, dy_matrix, nx, ny)
+        call calc_derivative_x(w_x, w, dx_matrix, nx, ny)
+        call calc_derivative_y(w_xy, w_x, dy_matrix, nx, ny)
+        call calc_derivative_xx(w_xx, w, dx_matrix, nx, ny)
+        call calc_derivative_yy(w_yy, w, dy_matrix, nx, ny)
 
         ! Ventsel and Krauthammer (2001): Thin Plates and Shells.
         ! Theory, Analysis, and Applications. Eq (2.13, 2.23)
-        Mx = -D_lith*(u_xx + nu*u_yy)
-        My = -D_lith*(u_yy + nu*u_xx)
-        Mxy = -D_lith*(1.0-nu)*u_xy
+        Mx = -D_lith*(w_xx + nu*w_yy)
+        My = -D_lith*(w_yy + nu*w_xx)
+        Mxy = -D_lith * (1.0-nu) * w_xy
 
         ! Finite differences
         call calc_derivative_x(Mxy_x, Mxy, dx_matrix, nx, ny)
@@ -162,9 +162,8 @@ module solver_lv_elva
         call maskfield(p, g * canom_full, maskactive, nx, ny)
         f = (p + Mx_xx + 2.0_wp * Mxy_xy + My_yy) / (2.0_wp * eta)
         call calc_fft_forward_r2r(forward_plan, f, f_hat)
-        ! write(*,*) "sum(p) = ", sum(p), "sum(f) = ", sum(f), "sum(f_hat) = ", sum(f_hat)
 
-        dwdt_hat = f_hat / (kappa / mu)
+        dwdt_hat = f_hat / kappa / mu
         call calc_fft_backward_r2r(backward_plan, dwdt_hat, dzbdt)
         call apply_zerobc_at_corners(dzbdt, nx, ny)
 
@@ -176,10 +175,10 @@ module solver_lv_elva
         deallocate(f_hat)
         deallocate(dwdt_hat)
         
-        deallocate(u_x)
-        deallocate(u_xy)
-        deallocate(u_xx)
-        deallocate(u_yy)
+        deallocate(w_x)
+        deallocate(w_xy)
+        deallocate(w_xx)
+        deallocate(w_yy)
 
         deallocate(Mxy)
         deallocate(Mxy_x)

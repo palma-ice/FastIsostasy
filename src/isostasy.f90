@@ -157,7 +157,7 @@ module isostasy
 
         ! Init parameters
         write(*,*) "Complementing params informations..."
-        isos%par%sec_per_year = 3600.0*24.0*365.0               ! [s]
+        isos%par%sec_per_year = 3600.0 * 24.0 * 365.25           ! [s/a]
         isos%par%compressibility_correction = 1.5 / (1 + isos%par%nu)
         call calc_density_correction_factor(isos%par)
         call calc_homogeneous_rigidity(D_lith_const, isos%par%E, &
@@ -418,11 +418,9 @@ module isostasy
 
         integer :: nx, ny
 
-!        character*256 filename
-        
         ! Store initial bedrock field
         isos%now%z_bed = z_bed
-        
+
         ! Store reference bedrock field
         isos%ref%z_bed = z_bed_ref
         isos%now%dzbdt = 0.0
@@ -504,7 +502,7 @@ module isostasy
                 call apply_zerobc_at_corners(isos%now%we, &
                     isos%domain%nx, isos%domain%ny)
             endif
-            
+
             call calc_columnanoms_solidearth(isos)
 
             if (update_diagnostics .and. isos%par%interactive_sealevel) then

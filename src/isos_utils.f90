@@ -66,7 +66,7 @@ module isos_utils
         real(wp), intent(IN)  :: He_lith
         real(wp), intent(IN)  :: nu
 
-        D_lith = (E*1e9) * (He_lith*1e3)**3 / (12.0*(1.0-nu**2))
+        D_lith = (E*1e9) * (He_lith*1e3)**3 / (12.0 * (1.0-nu**2))
         return
     end subroutine calc_homogeneous_rigidity
 
