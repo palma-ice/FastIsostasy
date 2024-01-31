@@ -10,7 +10,6 @@ module isostasy_defs
 
     ! Choose the precision of the library (sp,dp)
     integer,  parameter :: wp = dp
-
     real(wp), parameter :: pi = 3.14159265359
 
     type isos_param_class
@@ -87,7 +86,7 @@ module isostasy_defs
         type(c_ptr)             :: backward_dftplan_c2r
 
         real(wp), allocatable   :: kei(:, :)   ! Kelvin function filter values
-        real(wp), allocatable   :: G0(:, :)    ! Green's function values
+        real(wp), allocatable   :: GV(:, :)    ! Green's function values
         real(wp), allocatable   :: GE(:, :)    ! Green's function for elastic displacement (Farrell 1972)
         real(wp), allocatable   :: GN(:, :)    ! Green's function for ssh_perturb
 

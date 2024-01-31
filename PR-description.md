@@ -4,6 +4,14 @@ This PR contains a substantial refactoring of the isostasy module. It does not c
 with the guideline of atomic PRs (one PR = one task) because of the time constraints.
 However, all tests are passed by the refactor and a detailed description follows.
 
+## Before PR...
+
+- allow rectangular domains
+- fix ELRA
+- allow LV-ELRA
+- Fix analytic solution of test1
+- possibility to update bsl based on piecewise constant approximation?
+
 ## Major changes
 
 Modularity:
@@ -19,16 +27,21 @@ Modularity:
 
 Performance and accuracy:
 - FFT plans are precomputed
-- Convolution kernels are precomputed
+- Green's kernels (FFTs of Green's functions) are precomputed (elastic, viscous and ssh)
 - Allocations inside the time loop are reduced
 - The normalisation of the FFT is only applied on the backtransform, as it should be!
 
 Sea-level:
-- Column anomalies are now used as forcing
+- Column anomalies of ice, seawater, lithosphere and mantle are now used as forcing.
+- "Geoid" (somewhat obsolete word) replaced by sea-surface height and its perturbation.
+- Introduction of coherent masks ()
 
 General physics:
-- Allow rectangular domain (without the need of a square extension)
-- Distortion factor included in computations
+- Allow rectangular domain (without the need of a square extension). The function that
+ treats the problem by extending the fields on a square domain is however still here
+ for legacy purposes.
+- Distortion matrix included in computations. However, the matrix itself is expected to be
+ an external input.
 - Previously, some signs were inverted when writing the output, which is incovenient for
  debugging. Most importantly, this can lead to serious problems when coupling. All signs
  are now defined according to the surface of reference elipsoid z=0 and the center of the
@@ -38,8 +51,10 @@ General physics:
 
 Formatting:
 - indent = 4 spaces now much more consistent
-- commas are followed by spaces for legibility
+- commas are usually followed by spaces for legibility
 - max column length is 94 characters for better rendering in github... etc.
+- including fftw was done repeatedly across many subroutines. It is now included at
+ the beginning of each module using it.
 
 Misc:
 - Any future task is tagged with "TODO" as comment. This combines well with the TODOS
@@ -50,6 +65,7 @@ Misc:
  from the static load option is minor now that the computation is accelerated.
 - Most parameter files were previously in `output/`, which did not make sense.
  They are now gathered in `par/`.
+- `README.md` slightly modified to include last functionalities.
 
 Output:
 - 2D fields are now output as 2D fields (and not 3D anymore).

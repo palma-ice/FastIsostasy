@@ -39,8 +39,7 @@ module isostasy
     subroutine isos_init(isos, filename, group, nx, ny, dx, dy, E, nu, &
         rho_water, rho_ice, rho_seawater, rho_uppermantle, rho_litho, g, r_earth, m_earth, &
         A_ocean_pd, visc_method, visc_c, thck_c, n_lev, rigidity_method, &
-        interactive_sealevel, correct_distortion, method, &
-        dt_prognostics, dt_diagnostics)
+        interactive_sealevel, correct_distortion, method, dt_prognostics, dt_diagnostics, K)
 
         implicit none
 
@@ -69,6 +68,7 @@ module isostasy
         logical, intent(IN), optional   :: interactive_sealevel
         logical, intent(IN), optional   :: correct_distortion
         integer, intent(IN), optional   :: method
+        real(wp), intent(IN), optional  :: K(:, :)
 
         ! Viscous asthenosphere-related parameters
         character(len=*), intent(IN), optional  :: visc_method
@@ -139,16 +139,20 @@ module isostasy
             isos%domain%GE, isos%domain%FGE, 1)
         isos%domain%backward_dftplan_c2r = fftw_plan_dft_c2r_2d(2*nx-1, 2*ny-1, &
             isos%domain%FGE, isos%domain%GE, 1)
-        ! TODO: recheck - shouldnt this be -1 (forward)
 
         ! Init domain
         write(*,*) "Complementing domain informations..."
         if (isos%par%correct_distortion) then
-            ! TODO: implement correct expression for K
-            isos%domain%K(:, :) = 1
+            if (present(K)) then
+                isos%domain%K(:, :) = 1
+            else
+                print*, 'Provide distortion matrix for it to be accounted for.'
+                stop
+            endif
         else
             isos%domain%K(:, :) = 1
         endif
+
         isos%domain%dx_matrix = isos%domain%dx * isos%domain%K
         isos%domain%dy_matrix = isos%domain%dy * isos%domain%K
         isos%domain%A = isos%domain%dx_matrix * isos%domain%dy_matrix
@@ -205,7 +209,7 @@ module isostasy
                 isos%domain%kei = filter_scaling*isos%domain%kei
 
                 ! Calculate the reference Green's function values
-                call calc_greens_function_scaling(isos%domain%G0, isos%domain%kei, &
+                call calc_viscous_green(isos%domain%GV, isos%domain%kei, &
                     isos%par%L_w, D_lith_const, dx=isos%domain%dx, dy=isos%domain%dx)
 
                 ! Populate 2D D_lith field to have it available
@@ -218,7 +222,7 @@ module isostasy
                 write(*,*) "Using LV-ELVA..."
 
                 write(*,*) "Initialising elastic Green kernel..."
-                call calc_GE_filter_2D(isos%domain%GE, dx=isos%domain%dx, dy=isos%domain%dx)
+                call calc_elastic_green(isos%domain%GE, dx=isos%domain%dx, dy=isos%domain%dx)
                 call precompute_kernel(isos%domain%forward_dftplan_r2c, isos%domain%GE, &
                     isos%domain%FGE, isos%domain%nx, isos%domain%ny)
                 write(*,*) "GE: ", sum(isos%domain%GE), "FGE: ", sum(isos%domain%FGE)
@@ -226,7 +230,7 @@ module isostasy
 
                 write(*,*) "Initialising ssh Green kernel..."
                 if (isos%par%interactive_sealevel) then
-                    call calc_GN_filter_2D(isos%domain%GN, isos%par%m_earth, &
+                    call calc_ssh_green(isos%domain%GN, isos%par%m_earth, &
                         isos%par%r_earth, dx=isos%domain%dx, dy=isos%domain%dx)
                     call precompute_kernel(isos%domain%forward_dftplan_r2c, isos%domain%GN, &
                         isos%domain%FGN, isos%domain%nx, isos%domain%ny)
@@ -336,7 +340,7 @@ module isostasy
                 write(*,*) "    dy (m):       ", isos%domain%dy
 
                 write(*,*) "    range(kei): ", minval(isos%domain%kei),     maxval(isos%domain%kei)
-                write(*,*) "    range(G0):  ", minval(isos%domain%G0),      maxval(isos%domain%G0)
+                write(*,*) "    range(GV):  ", minval(isos%domain%GV),      maxval(isos%domain%GV)
                 write(*,*) "    range(GE):  ", minval(isos%domain%GE),      maxval(isos%domain%GE)
                 write(*,*) "    range(GN):  ", minval(isos%domain%GN),      maxval(isos%domain%GN)
 
@@ -351,7 +355,7 @@ module isostasy
                 
                 ! Set regional filter fields to zero (not used)
                 isos%domain%kei = 0.0 
-                isos%domain%G0  = 0.0
+                isos%domain%GV  = 0.0
                 isos%domain%GE  = 0.0
                 isos%domain%GN  = 0.0
                 
@@ -524,63 +528,38 @@ module isostasy
             ! Step 1: diagnose equilibrium displacement and rate of bedrock uplift
             select case(isos%par%method)
 
-                case(0)
-                    ! Steady-state lithosphere
+                case(0)     ! Steady-state lithosphere
+                    call calc_llra_equilibrium(isos%now%w_equilibrium, &
+                        isos%now%canom_load, isos%par%rho_uppermantle)
                     isos%now%w    = isos%now%w_equilibrium
                     isos%now%dzbdt = 0.0
 
-                case(1)
-                    ! Local lithosphere, relaxing asthenosphere (LLRA)
+                case(1)     ! LLRA
+                    call calc_llra_equilibrium(isos%now%w_equilibrium, &
+                        isos%now%canom_load, isos%par%rho_uppermantle)
+                    call calc_asthenosphere_relax(isos%now%dzbdt, isos%now%w, &
+                        isos%now%w_equilibrium, isos%domain%tau)
 
-                    ! Local lithosphere (LL)
-                    ! (update every time because it is cheap)
-
-                    ! TODO: replace with new load
-                    ! call calc_litho_local(isos%now%w, isos%now%q, isos%now%z_bed, H_ice, &
-                    !     isos%now%bsl, isos%par%rho_ice, isos%par%rho_seawater, &
-                    !     isos%par%rho_uppermantle, isos%par%g)
-
-                    ! Relaxing asthenosphere (RA)
-                    call calc_asthenosphere_relax(isos%now%dzbdt, isos%now%z_bed, &
-                        isos%ref%z_bed, isos%now%w - isos%now%w_equilibrium, isos%domain%tau)
-
-                 case(2)    ! ELRA
+                ! LV-ELRA (Coulon et al. 2021).
+                ! Gives ELRA (LeMeur and Huybrechts 1996) if tau = const.
+                case(2)
                     
-                    ! Elastic lithosphere (EL)
                     if (update_diagnostics) then
-                        ! TODO: update with new load
-                        ! call calc_litho_regional(isos%now%w, isos%now%q, isos%now%z_bed, &
-                        !     H_ice, isos%now%bsl, isos%domain%G0, isos%par%rho_ice, &
-                        !     isos%par%rho_seawater, isos%par%rho_uppermantle, &
-                        !     isos%par%rho_litho, isos%par%g)
+                        call calc_elra_equilibrium(isos%now%w_equilibrium, &
+                            isos%now%canom_full, isos%domain%GV, isos%par%g)
                     end if
+                    call calc_asthenosphere_relax(isos%now%dzbdt, isos%now%w, &
+                        isos%now%w_equilibrium, isos%domain%tau)
 
-                    ! Relaxing asthenosphere (RA)
-                    call calc_asthenosphere_relax(isos%now%dzbdt, isos%now%z_bed, &
-                        isos%ref%z_bed, isos%now%w - isos%ref%w_equilibrium, isos%domain%tau)
-
-                ! LV-ELRA
-                case(3)
-
-                    if (update_diagnostics) then
-                       !call calc_litho_regional(isos%now%w,isos%now%q,isos%now%z_bed,H_ice,z_sl,isos%domain%G0)
-                        write(*,*) "isos_update:: Error: method=3 not implemented yet."
-                        stop 
-                    end if
-
-                    ! Relaxing asthenosphere (RA)
-                    ! call calc_asthenosphere_relax(isos%now%dzbdt, isos%now%z_bed, &
-                    !     isos%ref%z_bed, isos%now%w - isos%ref%w_equilibrium, isos%domain%tau)
-
-                 case(4) 
-                    ! ELVA - Elastic Lithosphere (overlaying) Viscous Asthenosphere
-                    ! or  LV-ELVA - laterally-variable ELVA
+                ! LV-ELVA (Swierczek-jereczek et al. 2024).
+                ! Gives ELVA (Bueler et al. 2007) if eta = const.
+                case(4)
                     call calc_lvelva(isos%now%dzbdt, isos%now%w, isos%now%canom_full, &
                         isos%domain%maskactive, isos%par%g, isos%par%nu, isos%domain%mu, isos%domain%D_lith, &
                         isos%domain%eta_eff, isos%domain%kappa, isos%domain%nx, isos%domain%ny, &
                         isos%domain%dx_matrix, isos%domain%dy_matrix, isos%par%sec_per_year, &
                         isos%domain%forward_fftplan_r2r, isos%domain%backward_fftplan_r2r)
-                 end select
+                end select
 
             if (update_diagnostics) then 
                 ! Update current time_diagnostics value 
@@ -705,7 +684,7 @@ module isostasy
         if (allocated(domain%tau))               deallocate(domain%tau)
 
         if (allocated(domain%kei))       deallocate(domain%kei)
-        if (allocated(domain%G0))        deallocate(domain%G0)
+        if (allocated(domain%GV))        deallocate(domain%GV)
         if (allocated(domain%GE))        deallocate(domain%GE)
         if (allocated(domain%GN))        deallocate(domain%GN)
 
@@ -766,7 +745,7 @@ module isostasy
         allocate(domain%eta(nx, ny, nz))
 
         allocate(domain%kei(nx, ny))
-        allocate(domain%G0(nx, ny))
+        allocate(domain%GV(nx, ny))
         allocate(domain%GE(nx, ny))
         allocate(domain%GN(nx, ny))
 

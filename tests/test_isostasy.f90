@@ -546,24 +546,21 @@ program test_isostasy
         call nc_write_dim(filename,"time",x=time_init,dx=1.0_wp,nx=1,units="year",unlimited=.TRUE.)
 
         ! Write dimensions for regional filter too
-        call nc_write_dim(filename, "xf", x=0, dx=1, nx=size(isos%domain%G0,1), units="pt")
-        call nc_write_dim(filename, "yf", x=0, dx=1, nx=size(isos%domain%G0,2), units="pt")
+        call nc_write_dim(filename, "xf", x=0, dx=1, nx=size(isos%domain%GV,1), units="pt")
+        call nc_write_dim(filename, "yf", x=0, dx=1, nx=size(isos%domain%GV,2), units="pt")
 
         ! Write constant fields
         call nc_write(filename, "eta_eff", isos%domain%eta_eff, units="Pa s", &
             long_name="Asthenosphere effective viscosity", &
-            dim1="xc", dim2="yc", dim3="time", start=[1,1], ncid=ncid)
+            dim1="xc", dim2="yc", dim3="time", start=[1,1])
 
         call nc_write(filename, "He_lith", isos%domain%He_lith, units="km", &
             long_name="Lithosphere thickness", &
-            dim1="xc",dim2="yc",dim3="time",start=[1,1], ncid=ncid)
+            dim1="xc",dim2="yc",dim3="time",start=[1,1])
 
         call nc_write(filename, "D_lith", isos%domain%D_lith, units="N m", &
             long_name="Lithosphere rigidity", &
-            dim1="xc", dim2="yc", dim3="time", start=[1,1], ncid=ncid)
-
-        ! call nc_write(filename, "z_bed_ref", isos%ref%z_bed, units="m", &
-        !     long_name="Bedrock elevation reference", dim1="xc", dim2="yc",start=[1,1])
+            dim1="xc", dim2="yc", dim3="time", start=[1,1])
 
         ! call nc_write(filename, "tau", isos%domain%tau, units="yr", &
         !     long_name="Asthenosphere relaxation timescale", &
@@ -572,7 +569,7 @@ program test_isostasy
         ! call nc_write(filename, "kei", isos%domain%kei, units="", &
         !     long_name="Kelvin function filter", dim1="xf",dim2="yf", start=[1,1])
 
-        ! call nc_write(filename,"G0",isos%domain%G0, units="", &
+        ! call nc_write(filename,"GV",isos%domain%GV, units="", &
         !     long_name="Regional elastic plate filter", dim1="xf", dim2="yf", start=[1,1])
 
         ! ! TODO recheck convol
