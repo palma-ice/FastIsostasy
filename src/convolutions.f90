@@ -15,6 +15,7 @@ module convolutions
     public :: convenient_samesize_fftconvolution
     public :: samesize_fftconvolution
     public :: precomputed_fftconvolution
+    public :: precompute_kernel
 
     contains
 
@@ -166,5 +167,22 @@ module convolutions
         ! write(*,*) "out: ", sum(out)
         return
     end subroutine precomputed_fftconvolution
+
+    subroutine precompute_kernel(plan, kernel, fftkernel, nx, ny)
+        implicit none
+
+        type(c_ptr), intent(IN)     :: plan
+        real(wp),    intent(IN)     :: kernel(:, :)
+        complex(wp), intent(INOUT)  :: fftkernel(:, :)
+        real(wp), allocatable       :: extended_kernel(:, :)
+        integer, intent(INOUT)      :: nx, ny
+
+        allocate(extended_kernel(2*nx-1, 2*ny-1))
+        extended_kernel = 0.0_wp
+        extended_kernel(1:nx, 1:ny) = kernel
+        call calc_fft_forward_r2c(plan, extended_kernel, fftkernel)
+
+        return
+    end subroutine precompute_kernel
 
 end module convolutions

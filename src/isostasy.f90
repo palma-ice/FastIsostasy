@@ -218,16 +218,18 @@ module isostasy
                 write(*,*) "Using LV-ELVA..."
 
                 write(*,*) "Initialising elastic Green kernel..."
-                call calc_GE_filter_2D(isos%domain%GE, dx=isos%domain%dx, dy=isos%domain%dx) 
-                call calc_fft_forward_r2c(isos%domain%forward_dftplan_r2c, isos%domain%GE, &
-                    isos%domain%FGE)
+                call calc_GE_filter_2D(isos%domain%GE, dx=isos%domain%dx, dy=isos%domain%dx)
+                call precompute_kernel(isos%domain%forward_dftplan_r2c, isos%domain%GE, &
+                    isos%domain%FGE, isos%domain%nx, isos%domain%ny)
+                write(*,*) "GE: ", sum(isos%domain%GE), "FGE: ", sum(isos%domain%FGE)
+
 
                 write(*,*) "Initialising geoid Green kernel..."
                 if (isos%par%interactive_sealevel) then
                     call calc_GN_filter_2D(isos%domain%GN, isos%par%m_earth, &
                         isos%par%r_earth, dx=isos%domain%dx, dy=isos%domain%dx)
-                    call calc_fft_backward_c2r(isos%domain%backward_dftplan_c2r, &
-                        isos%domain%FGE, isos%domain%GE)
+                    call precompute_kernel(isos%domain%forward_dftplan_r2c, isos%domain%GN, &
+                        isos%domain%FGN, isos%domain%nx, isos%domain%ny)
                 endif
               
                 write(*,*) "Choosing rigidity method..."
@@ -502,7 +504,8 @@ module isostasy
 
             if (update_diagnostics) then
                 call precomputed_fftconvolution(isos%now%we, isos%domain%FGE, &
-                    isos%now%canom_load * isos%domain%K, isos%domain%i1, isos%domain%i2, &
+                    -isos%now%canom_load * isos%par%g * isos%domain%K ** 2.0, &
+                    isos%domain%i1, isos%domain%i2, &
                     isos%domain%j1, isos%domain%j2, isos%domain%offset, &
                     isos%domain%nx, isos%domain%ny, &
                     isos%domain%forward_dftplan_r2c, isos%domain%backward_dftplan_c2r)
