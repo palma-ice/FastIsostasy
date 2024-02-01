@@ -24,12 +24,12 @@ module isostasy_benchmarks
         real(wp) :: eta    = 0.e+21                  ! [Pa s]
 
         real(wp) :: rho_ice 
-        real(wp) :: rho_a 
+        real(wp) :: rho_uppermantle 
         real(wp) :: g 
 
         real(wp), allocatable :: kappa_mod(:)
         real(wp), allocatable :: rad(:) 
-        integer,  allocatable :: lrad(:,:)
+        integer,  allocatable :: lrad(:, :)
         
     contains
 
@@ -71,19 +71,19 @@ module isostasy_benchmarks
 
 contains
 
-    subroutine isosbench_elva_disk(z_bed,r0,h0,eta,dx,D_lith,rho_ice,rho_a,g,time)
+    subroutine isosbench_elva_disk(z_bed,r0,h0,eta,dx,D_lith,rho_ice,rho_uppermantle,g,time)
         ! This will calculate the analytical solution 'elva_disk' for a specific time
 
         implicit none
 
-        real(wp), intent(INOUT) :: z_bed(:,:)   ! [m]
+        real(wp), intent(INOUT) :: z_bed(:, :)   ! [m]
         real(wp), intent(IN)    :: r0           ! Radius, r0=1000e3 m (1000 km) by default
         real(wp), intent(IN)    :: h0           ! Ice thickness, h0=1000 m by default
         real(wp), intent(IN)    :: eta          ! Viscosity, eta=1e21 Pa s by default
         real(wp), intent(IN)    :: dx 
         real(wp), intent(IN)    :: D_lith
         real(wp), intent(IN)    :: rho_ice
-        real(wp), intent(IN)    :: rho_a
+        real(wp), intent(IN)    :: rho_uppermantle
         real(wp), intent(IN)    :: g
         real(wp), intent(IN)    :: time 
 
@@ -109,7 +109,7 @@ contains
         ana%eta        = eta
         
         ana%rho_ice    = rho_ice
-        ana%rho_a      = rho_a
+        ana%rho_uppermantle      = rho_uppermantle
         ana%g          = g
         
         ! Calculate some arrays that are also needed 
@@ -137,7 +137,7 @@ contains
        
         real(wp), allocatable, intent(OUT)  :: kappa_mod(:)
         real(wp), allocatable, intent(OUT)  :: r(:) 
-        integer,  allocatable, intent(OUT)  :: lr(:,:)
+        integer,  allocatable, intent(OUT)  :: lr(:, :)
 
         real(wp), intent(IN)                :: kappa_min
         real(wp), intent(IN)                :: kappa_max
@@ -147,10 +147,10 @@ contains
         real(wp), intent(IN)                :: dx
         
         ! Local variables
-        integer, allocatable                :: n(:,:)
+        integer, allocatable                :: n(:, :)
         real(wp)                            :: xd, yd
         integer                             :: i, j, ip, iq, ic, jc, k, nk, l, nl
-        real(wp), allocatable               :: dist2c(:,:)
+        real(wp), allocatable               :: dist2c(:, :)
         
         nk = int((kappa_max-kappa_min)/dk)
         nl = int(max(nx,ny)*sqrt(2.)/2) + 2
@@ -215,13 +215,13 @@ contains
         implicit none
 
         class(isos_analytical_elva_disk_load_class), intent(INOUT) :: me
-        real(wp), intent(OUT)         :: w(:,:)
+        real(wp), intent(OUT)         :: w(:, :)
         real(wp), intent(IN)          :: dx
         real(wp), intent(IN)          :: t
         
         ! Local variables
         real(wp), allocatable         :: wr(:)
-        integer(kind=4), allocatable  :: n(:,:)
+        integer(kind=4), allocatable  :: n(:, :)
         
         real(wp)                      :: ans
         real(wp)                      :: err
@@ -230,7 +230,7 @@ contains
         
         integer(kind=4)               :: i, j, k, l, nx, ny, nk, nl
 
-        real(wp), parameter :: tol = 1.e-3  ! error tolerance
+        real(wp), parameter :: tol = 1.e-6 !  error tolerance
         
         nx = size(w,1)
         ny = size(w,2)
@@ -318,12 +318,12 @@ contains
     
     end subroutine initialize_integration_class
 
-    subroutine initialize_analytical_integrand(me,r0,h0,D_lith,eta,rho_ice,rho_a,g) 
+    subroutine initialize_analytical_integrand(me,r0,h0,D_lith,eta,rho_ice,rho_uppermantle,g) 
 
         implicit none
 
         class(isos_analytical_elva_disk_load_class),intent(out)  :: me
-        real(wp), intent(in)   ::  h0, r0, D_lith, eta, rho_ice, rho_a, g 
+        real(wp), intent(in)   ::  h0, r0, D_lith, eta, rho_ice, rho_uppermantle, g 
 
         me%r0         = r0
         me%h0         = h0
@@ -331,7 +331,7 @@ contains
         me%eta        = eta
         
         me%rho_ice    = rho_ice
-        me%rho_a      = rho_a
+        me%rho_uppermantle      = rho_uppermantle
         me%g          = g
         
         return
@@ -346,7 +346,7 @@ contains
         real(wp), intent(in)  :: x ! (kappa)
         real(wp)              :: f
         real(wp) :: beta, h0, r0, eta, D_lith, t_sec, r_eq_zero
-        real(wp) :: rho_ice, rho_a, g 
+        real(wp) :: rho_ice, rho_uppermantle, g 
 
         r0     = me%r0
         h0     = me%h0
@@ -355,10 +355,10 @@ contains
         t_sec  = me%time*365*24*3600
 
         rho_ice = me%rho_ice 
-        rho_a   = me%rho_a 
+        rho_uppermantle   = me%rho_uppermantle 
         g       = me%g 
 
-        beta = rho_a*g + D_lith*(x**4)
+        beta = rho_uppermantle*g + D_lith*(x**4)
 
         r_eq_zero = 0.
 

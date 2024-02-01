@@ -1,90 +1,140 @@
 module isostasy_defs
 
+    use, intrinsic :: iso_c_binding
     implicit none
+    include 'fftw3.f03'
 
     ! Internal constants
     integer,  parameter :: dp  = kind(1.d0)
     integer,  parameter :: sp  = kind(1.0)
 
     ! Choose the precision of the library (sp,dp)
-    integer,  parameter :: wp = sp
-
+    integer,  parameter :: wp = dp
     real(wp), parameter :: pi = 3.14159265359
 
-    
-    type isos_param_class 
-        integer            :: method            ! Type of isostasy to use
-        real(wp)           :: dt_lith           ! [yr] Timestep to recalculate equilibrium lithospheric displacement
-        real(wp)           :: dt_step           ! [yr] Timestep to recalculate bedrock uplift and rate
-        real(wp)           :: He_lith           ! [km] Effective elastic thickness of lithosphere
-        real(wp)           :: visc              ! [Pa s] Asthenosphere viscosity (constant)
-        real(wp)           :: tau               ! [yr] Asthenospheric relaxation constant
+    type isos_param_class
+        logical            :: interactive_sealevel
+        logical            :: correct_distortion
+        integer            :: method                ! Computation method for viscous displacement
+        real(wp)           :: dt_prognostics        ! [yr] Timestep to recalculate equilibrium lithospheric displacement
+        real(wp)           :: dt_diagnostics        ! [yr] Timestep to recalculate bedrock uplift and rate
+        
+        real(wp)           :: He_lith               ! [km] Effective elastic thickness of lithosphere
+        real(wp)           :: visc                  ! [Pa s] Asthenosphere viscosity (constant)
+        real(wp)           :: tau                   ! [yr] Asthenospheric relaxation constant
 
         ! Physical constants
-        real(wp) :: E 
-        real(wp) :: nu 
+        real(wp) :: rho_water
         real(wp) :: rho_ice 
-        real(wp) :: rho_sw 
-        real(wp) :: rho_w
-        real(wp) :: rho_a 
-        real(wp) :: g 
-        real(wp) :: r_earth 
+        real(wp) :: rho_seawater 
+        real(wp) :: rho_uppermantle
+        real(wp) :: rho_litho 
+        real(wp) :: Vden_factor
+        
+        real(wp) :: E 
+        real(wp) :: nu
+        real(wp) :: compressibility_correction
+
+        real(wp) :: sec_per_year
+        real(wp) :: g
+        real(wp) :: r_earth
         real(wp) :: m_earth
-        !mmr2
+        real(wp) :: A_ocean_pd
+
         character(len=56)  :: visc_method       ! [-] Method use to prescribe asthenosphere's viscosity field
-        real(wp)           :: eta_c             ! [Pa s]  Viscosity in channel between elastic lithosphere and viscous asthenosphere (for LV-ELVA only)
-        real(wp)           :: T_c               ! [km]    Thickness of channel between elastic lithosphere and viscous asthenosphere (for LV-ELVA only)
-        integer            :: n_lev             ! [-]     Number of layers within viscous asthenosphere (for LV-ELVA only)
-        
+        real(wp)           :: visc_c            ! [Pa s] Channel viscosity (for LV-ELVA only)
+        real(wp)           :: thck_c            ! [km] Channel thickness (for LV-ELVA only)
+        integer            :: n_lev             ! [-] Number of layers for LV-ELVA
         character(len=56)  :: rigidity_method   ! [-] Method use to prescribe lithosphere's rigidity field
- 
-        !mmr2
-        ! Internal parameters 
-        integer  :: nx
-        integer  :: ny
-        real(wp) :: dx                        ! [m] Horizontal resolution                           
-        real(wp) :: L_w                       ! [m] Lithosphere flexural length scale (for method=2)
-        integer  :: nr                        ! [-] Radius of neighborhood for convolution, in number of grid points        
-        real(wp) :: mu                        ! [1/m] 2pi/L
         
-        real(wp) :: time_lith                 ! [yr] Current model time of last update of equilibrium lithospheric displacement
-        real(wp) :: time_step                 ! [yr] Current model time of last update of bedrock uplift
-        
-    end type 
+        real(wp) :: L_w                         ! [m] Lithosphere flexural length scale (for method=2)
+        real(wp) :: time_diagnostics            ! [yr] Current model time of last diagnostic update
+        real(wp) :: time_prognostics            ! [yr] Current model time of last prognostic update
+
+    end type
+
+    type isos_domain_class
+        integer                 :: i1
+        integer                 :: i2
+        integer                 :: j1
+        integer                 :: j2
+        integer                 :: offset
+        integer                 :: nx
+        integer                 :: ny
+        integer                 :: nsq
+        real(wp)                :: dx
+        real(wp)                :: dy
+        real(wp)                :: mu
+
+        real(wp), allocatable   :: dx_matrix(:, :)   ! [m] K * dx
+        real(wp), allocatable   :: dy_matrix(:, :)   ! [m] K * dy
+        real(wp), allocatable   :: A(:, :)           ! [m^2] Cell area
+        real(wp), allocatable   :: K(:, :)           ! [1] Distortion matrix
+        real(wp), allocatable   :: kappa(:, :)       ! [1] Pseudodifferential operator
+        logical,  allocatable   :: maskactive(:, :)  ! [1] Active mask
+
+        real(wp), allocatable   :: He_lith(:, :)       ! [m] Elastic thickness of the lithosphere
+        real(wp), allocatable   :: D_lith(:, :)        ! [N-m] Lithosphere flexural rigidity
+        real(wp), allocatable   :: eta(:, :,:)         ! [Pa-s] 3D mantle viscosity
+        real(wp), allocatable   :: eta_eff(:, :)       ! [Pa-s] Effective mantle viscosity
+        real(wp), allocatable   :: tau(:, :)           ! [yr] Asthenospheric relaxation timescale field
+
+        type(c_ptr)             :: forward_fftplan_r2r
+        type(c_ptr)             :: backward_fftplan_r2r
+        type(c_ptr)             :: forward_dftplan_r2c
+        type(c_ptr)             :: backward_dftplan_c2r
+
+        real(wp), allocatable   :: kei(:, :)   ! Kelvin function filter values
+        real(wp), allocatable   :: GV(:, :)    ! Green's function values
+        real(wp), allocatable   :: GE(:, :)    ! Green's function for elastic displacement (Farrell 1972)
+        real(wp), allocatable   :: GN(:, :)    ! Green's function for ssh_perturb
+
+        complex(wp), allocatable :: FGV(:, :)    ! FFT of GV
+        complex(wp), allocatable :: FGE(:, :)    ! FFT of GE
+        complex(wp), allocatable :: FGN(:, :)    ! FFT of GN
+
+    end type isos_domain_class
 
     type isos_state_class 
-        
-        real(wp), allocatable :: He_lith(:,:)       ! [m]  Effective elastic thickness of the lithosphere
-        real(wp), allocatable :: D_lith(:,:)        ! [N-m] Lithosphere flexural rigidity
-        real(wp), allocatable :: eta_eff(:,:)       ! [Pa-s] Effective asthenosphere viscosity
-        real(wp), allocatable :: tau(:,:)           ! [yr] Asthenospheric relaxation timescale field
-
-  !mmr2      real(wp), allocatable :: visc_field(:,:)    ! [yr] Asthenospheric  viscosity
-        
-        real(wp), allocatable :: kei(:,:)           ! Kelvin function filter values 
-        real(wp), allocatable :: G0(:,:)            ! Green's function values
+        real(wp)              :: t                  ! [yr] Time
+        real(wp)              :: bsl                ! [m] Barystatic sea level
        
-        real(wp), allocatable :: z_bed(:,:)         ! Bedrock elevation         [m]
-        real(wp), allocatable :: dzbdt(:,:)         ! Rate of bedrock uplift    [m/a]
-        real(wp), allocatable :: z_bed_ref(:,:)     ! Reference (unweighted) bedrock 
-        real(wp), allocatable :: q0(:,:)            ! Reference load
-        real(wp), allocatable :: w0(:,:)            ! Reference equilibrium displacement
-        real(wp), allocatable :: q1(:,:)            ! Current load          
-        real(wp), allocatable :: w1(:,:)            ! Current equilibrium displacement
-        real(wp), allocatable :: w2(:,:)            ! Current viscous equilibrium displacement (ELVA)
-        
+        real(wp), allocatable       :: z_bed(:, :)         ! Bedrock elevation         [m]
+        real(wp), allocatable       :: dzbdt(:, :)         ! Rate of bedrock uplift    [m/a]
+        real(wp), allocatable       :: q(:, :)             ! [Pa] Load
+        real(wp), allocatable       :: w(:, :)             ! Current viscous displacement
+        real(wp), allocatable       :: w_equilibrium(:, :) ! Current viscous equilibrium displacement (XLRA)
+        real(wp), allocatable       :: we(:, :)            ! [m] Elastic displacement
+        complex(wp), allocatable    :: cplx_out_aux(:, :)
+
+        real(wp), allocatable :: Haf(:, :)           ! [m] Ice thickness above floatation
+        real(wp), allocatable :: Hice(:, :)          ! [m] Thickness of ice column
+        real(wp), allocatable :: Hseawater(:, :)     ! [m] Thickness of seawater column
+        ! real(wp), allocatable :: Hsediment(:, :)     ! [m] Thickness of sediment column
+
+        real(wp), allocatable :: ssh(:, :)           ! [m] sea-surface height
+        real(wp), allocatable :: ssh_perturb(:, :)   ! [m] sea-surface height perturbation
+        real(wp), allocatable :: canom_load(:, :)    ! [kg m^-2] Load column anomaly
+        real(wp), allocatable :: canom_full(:, :)    ! [kg m^-2] Full column anomaly
+        real(wp), allocatable :: mass_anom(:, :)     ! [kg] Mass anomaly
+
+        logical, allocatable :: maskocean(:, :)      ! [1] Ocean mask
+        logical, allocatable :: maskgrounded(:, :)   ! [1] Grounded mask
+        logical, allocatable :: maskcontinent(:, :)  ! [1] Continent mask
     end type isos_state_class
 
     type isos_class
-        type(isos_param_class) :: par
-        type(isos_state_class) :: now      
+        type(isos_param_class)  :: par
+        type(isos_domain_class) :: domain
+        type(isos_state_class)  :: now
+        type(isos_state_class)  :: ref
     end type
 
     public :: isos_param_class
+    public :: isos_domain_class
     public :: isos_state_class
-    public :: isos_class 
+    public :: isos_class
 
-contains
-
+    contains ! nothing but definition of derived types
 
 end module isostasy_defs

@@ -1,0 +1,27 @@
+&isostasy
+    ! Options
+    interactive_sealevel = .false.  ! Sea level interacts with solid Earth deformation?
+    correct_distortion = .false.    ! Account for distortion of projection?
+    method          = 3             ! 0: constant displacement; 1: LLRA; 2: LV-ELRA, 3: LV-ELVA
+    dt_prognostics  = 1.0           ! [yr] Max. timestep to recalculate bedrock uplift and rate of change
+    dt_diagnostics  = 10.0          ! [yr] Min. timestep to recalculate equilibrium lithospheric displacement
+
+    ! 1D reference model
+    He_lith         = 88.0          ! [km] Effective elastic thickness lithosphere
+    visc            = 1.e21         ! [Pa s] Asthenosphere viscosity, visc=1e21 for Bueler et al (2007)  
+    tau             = 2000.0         ! [yr] Relaxation time 
+
+    ! Physical constants
+    E               = 66.0          ! [GPa] Young modulus of sublithospheric mantle | 100 for Coulon et al. (2021) | 66 for Bueler et al. (2007)
+    nu              = 0.28          ! [-] Poisson ratio of sublithospheric mantle | 0.5 = incompressible | 0.28 = realistically compressible
+    rho_ice         = 910.0         ! [kg/m^3]
+    rho_seawater    = 1028.0        ! [kg/m^3] 
+    rho_water       = 1000.0        ! [kg/m^3]
+    rho_uppermantle = 3400.0        ! [kg/m^3] 3370 used by Coulon et al (2021). If 0: decouple the elastic displacement from the viscous one
+    rho_litho       = 3200.0        ! [kg/m^3] Setting 0 here effectively decouples elastic from viscous response
+    g               = 9.81          ! [m/s^2]
+    r_earth         = 6.378e6       ! [m]  Earth radius, Coulon et al. (2021)
+    m_earth         = 5.972e24      ! [kg] Earth mass,   Coulon et al. (2021)
+    A_ocean_pd      = 3.625e14      ! [m^2] Ocean surface as in Goelzer et al. (2020)
+
+/
