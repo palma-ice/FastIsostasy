@@ -2,7 +2,7 @@
     ! Options
     interactive_sealevel = .false.   ! Sea level interacts with solid Earth deformation?
     correct_distortion = .false.    ! Account for distortion of projection?
-    method          = 4             ! 0: constant lithospheric displacement; 1: LLRA; 2: ELRA, 3: EGIA, 4: ELVA
+    method          = 3             ! 0: constant displacement; 1: LLRA; 2: LV-ELRA, 3: LV-ELVA
     dt_prognostics  = 1.            ! [yr] Max. timestep to recalculate prognostics
     dt_diagnostics  = 10.           ! [yr] Min. timestep to recalculate diagnostics
     visc_method     = uniform       ! Type of viscosity field for sub-lithospheric mantle
@@ -12,7 +12,7 @@
     He_lith         = 88.0       ! [km] Effective elastic thickness lithosphere
     visc_c          = 1.e21     ! [Pa s] Channel viscosity 
     visc            = 2.e21     ! [Pa s] Half-space viscosity
-    tau             = 200.0     ! [yr] Relaxation time 
+    tau             = 2000.0     ! [yr] Relaxation time 
     thck_c          = 600.      ! [km]   Channel thickness
     n_lev           = 3         ! [-]    Number of layers (including lithosphere)
 

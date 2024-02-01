@@ -15,10 +15,10 @@ module isostasy
     use green_functions
     use kelvin_function
     use isos_utils
-    use solver_xlra
+    use lv_xlra
     use convolutions
-    use solver_lv_elva
-    use sea_level
+    use lv_elva
+    use sealevel
     use ncio
 
     implicit none
@@ -120,8 +120,9 @@ module isostasy
         write(*,*) "Allocating fields..."
         call allocate_isos(isos, nx, ny)
 
+        ! TODO: allow rectangular domains and rectangular extensions.
         ! Init scalar fields of domain
-        ! nsq = max(nx, ny) 
+        ! nsq = max(nx, ny)
         ! isos%domain%nsq = nsq
         isos%domain%nx = nx
         isos%domain%ny = ny
@@ -172,36 +173,29 @@ module isostasy
         ! Populate 2D D_lith field to have it available
         isos%domain%D_lith = D_lith_const
 
-        write(*,*) "Selecting case..."
+        write(*,*) "Initialising ssh Green kernel..."
+        if (isos%par%interactive_sealevel) then
+            call calc_ssh_green(isos%domain%GN, isos%par%m_earth, &
+                isos%par%r_earth, dx=isos%domain%dx, dy=isos%domain%dx)
+            call precompute_kernel(isos%domain%forward_dftplan_r2c, isos%domain%GN, &
+                isos%domain%FGN, isos%domain%nx, isos%domain%ny)
+        endif
+
         select case(isos%par%method)
 
-            ! use ELRA, which requires a homogeneous L_w, D_Lith and thus He_lith
             case(2)
-                write(*,*) "Using ELRA..."
-
-                ! Modify the relative radius to use for the regional filter
-                ! depending on whether we want to include the forbulge at
-                ! large radii. Large radius makes the code run slower though too.
-                ! Set filter_scaling to < 1.0 to adjust for values of
-                ! radius_fac <~ 5.0
-
-                ! Larger radius, no filter scaling needed
-                ! radius_fac      = 6.0
-                ! filter_scaling  = 1.0
-
-                ! Smaller radius, filter scaling to improve accuracy
-                radius_fac      = 4.0 
-                filter_scaling  = 0.91 
-
+                write(*,*) "Using (laterally-variable) ELRA..."
                 ! Calculate radius of grid points to use for regional elastic plate filter
                 ! See Greve and Blatter (2009), Chpt 8, page 192 for methodology 
                 ! and Le Muer and Huybrechts (1996). It seems that this value
                 ! should be 5-6x radius of relative stiffness to capture the forebuldge
                 ! further out from the depression near the center. 
                 ! Note: previous implementation stopped at 400km, hard coded. 
-                isos%par%nr = int(radius_fac*isos%par%L_w/isos%domain%dx) + 1
 
-                ! Calculate the Kelvin function filter 
+                radius_fac      = 6.0
+                filter_scaling  = 1.0
+
+                ! Calculate the Kelvin function filter
                 call calc_kei_filter_2D(isos%domain%kei, L_w=isos%par%L_w, &
                     dx=isos%domain%dx, dy=isos%domain%dx)
 
@@ -212,33 +206,29 @@ module isostasy
                 call calc_viscous_green(isos%domain%GV, isos%domain%kei, &
                     isos%par%L_w, D_lith_const, dx=isos%domain%dx, dy=isos%domain%dx)
 
+                write(*,*) "Initialising viscous Green kernel..."
+                call precompute_kernel(isos%domain%forward_dftplan_r2c, isos%domain%GV, &
+                    isos%domain%FGV, isos%domain%nx, isos%domain%ny)
+                write(*,*) "GV: ", sum(isos%domain%GV), "FGV: ", sum(isos%domain%FGV)
+
                 ! Populate 2D D_lith field to have it available
                 isos%domain%eta_eff = isos%par%visc
                 
             ! LV-ELVA method is being used, which allows for a non-constant value of L_w,
             ! D_Lith and thus He_lith. ELVA is a particular case of LV-ELVA with constant
             ! values value of L_w, D_Lith and thus He_lith everywhere.
-            case(4)
-                write(*,*) "Using LV-ELVA..."
+            case(3)
+                write(*,*) "Using (laterally-variable) ELVA..."
 
                 write(*,*) "Initialising elastic Green kernel..."
                 call calc_elastic_green(isos%domain%GE, dx=isos%domain%dx, dy=isos%domain%dx)
                 call precompute_kernel(isos%domain%forward_dftplan_r2c, isos%domain%GE, &
                     isos%domain%FGE, isos%domain%nx, isos%domain%ny)
                 write(*,*) "GE: ", sum(isos%domain%GE), "FGE: ", sum(isos%domain%FGE)
-
-
-                write(*,*) "Initialising ssh Green kernel..."
-                if (isos%par%interactive_sealevel) then
-                    call calc_ssh_green(isos%domain%GN, isos%par%m_earth, &
-                        isos%par%r_earth, dx=isos%domain%dx, dy=isos%domain%dx)
-                    call precompute_kernel(isos%domain%forward_dftplan_r2c, isos%domain%GN, &
-                        isos%domain%FGN, isos%domain%nx, isos%domain%ny)
-                endif
               
-                write(*,*) "Choosing rigidity method..."
+                write(*,*) "Choosing rigidity field..."
                 select case(trim(isos%par%rigidity_method))
-                    ! TODO: use calc rigidity functions
+                    ! TODO: this part of the code should be in test_isostasy.f90
                     case("uniform")
                         isos%domain%D_lith   = D_lith_const         ! [Pa s]
                         isos%domain%He_lith  = isos%par%He_lith     ! [km]
@@ -277,9 +267,9 @@ module isostasy
 
                 end select
 
-
-                ! Select asthenosphere viscosity method
+                write(*,*) "Choosing viscosity field..."
                 select case(trim(isos%par%visc_method))
+                ! TODO: this part of the code should be in test_isostasy.f90
 
                     case("uniform")
                         isos%domain%eta_eff = isos%par%visc
@@ -333,7 +323,6 @@ module isostasy
                 write(*,*) "    range(He_lith):  ", minval(isos%domain%He_lith),    maxval(isos%domain%He_lith)
                 
                 write(*,*) "    L_w (m):      ", isos%par%L_w 
-                ! write(*,*) "    nr:           ", isos%par%nr
                 write(*,*) "    nx:           ", isos%domain%nx
                 write(*,*) "    ny:           ", isos%domain%ny
                 write(*,*) "    dx (m):       ", isos%domain%dx
@@ -347,11 +336,7 @@ module isostasy
             case DEFAULT 
 
                 ! Set elastic length scale to zero (not used)
-                isos%par%L_w = 0.0 
-
-                ! Set a small number of points for radius to avoid allocating
-                ! any large, unused arrays
-                isos%par%nr = 1 
+                isos%par%L_w = 0.0
                 
                 ! Set regional filter fields to zero (not used)
                 isos%domain%kei = 0.0 
@@ -361,27 +346,17 @@ module isostasy
                 
             end select
 
-        ! Set He_lith and tau to constant fields initially.
-        ! If these will be spatially varying fields, they should
-        ! be defined after calling `isos_init` and before calling
-        ! `isos_init_state`.
-        !mmr moved above        isos%domain%He_lith    = isos%par%He_lith      ! [m]
-             
+        ! TODO: allow heterogeneous init of tau
         isos%domain%tau        = isos%par%tau          ! [yr]
 
-        ! Set effective viscosity to a constant field too
-        ! Later this can be overwritten.
-        !mmr moved above        isos%domain%eta_eff    = isos%par%visc         ! [Pa s]
 
         ! TODO: the initialisation below should be more generic and coherent with isos_init_state.
+        isos%domain%maskactive = .true.
+        isos%now%bsl            = -1e10
 
         ! Set time to very large value in the future 
         isos%par%time_diagnostics = 1e10 
         isos%par%time_prognostics = 1e10
-
-        isos%domain%maskactive = .true.
-
-        isos%now%bsl            = -1e10
 
         isos%now%z_bed          = 0.0
         isos%now%dzbdt          = 0.0
@@ -464,12 +439,11 @@ module isostasy
         implicit none
 
         type(isos_class), intent(INOUT) :: isos 
-        real(wp), intent(IN) :: H_ice(:, :)                  ! [m] Current ice thickness 
-        real(wp), intent(IN) :: time                        ! [a] Current time  
-        real(wp), intent(IN), optional :: dzbdt_corr(:, :)   ! [m/yr] Basal topography adjustment rate (ie, to relax from low resolution to high resolution) 
+        real(wp), intent(IN) :: H_ice(:, :)                 ! [m] Current ice thickness
+        real(wp), intent(IN) :: time                        ! [a] Current time
+        real(wp), intent(IN), optional :: dzbdt_corr(:, :)  ! [m/yr] Basal topography displacement rate (ie, to relax from low resolution to high resolution) 
 
         ! Local variables
-        
         real(wp) :: dt, dt_now
         integer  :: n, nstep
         logical  :: update_diagnostics
@@ -528,13 +502,15 @@ module isostasy
             ! Step 1: diagnose equilibrium displacement and rate of bedrock uplift
             select case(isos%par%method)
 
-                case(0)     ! Steady-state lithosphere
+                ! Steady-state lithosphere
+                case(0)
                     call calc_llra_equilibrium(isos%now%w_equilibrium, &
                         isos%now%canom_load, isos%par%rho_uppermantle)
                     isos%now%w    = isos%now%w_equilibrium
                     isos%now%dzbdt = 0.0
 
-                case(1)     ! LLRA
+                ! LLRA
+                case(1)
                     call calc_llra_equilibrium(isos%now%w_equilibrium, &
                         isos%now%canom_load, isos%par%rho_uppermantle)
                     call calc_asthenosphere_relax(isos%now%dzbdt, isos%now%w, &
@@ -545,15 +521,24 @@ module isostasy
                 case(2)
                     
                     if (update_diagnostics) then
-                        call calc_elra_equilibrium(isos%now%w_equilibrium, &
-                            isos%now%canom_full, isos%domain%GV, isos%par%g)
+                        ! call calc_elra_equilibrium(isos%now%w_equilibrium, &
+                        !     isos%now%canom_full, isos%domain%GV, isos%par%g)
+                        call precomputed_fftconvolution(isos%now%w_equilibrium, isos%domain%FGV, &
+                            isos%now%canom_load * isos%par%g * isos%domain%K ** 2.0, &
+                            isos%domain%i1, isos%domain%i2, &
+                            isos%domain%j1, isos%domain%j2, isos%domain%offset, &
+                            isos%domain%nx, isos%domain%ny, &
+                            isos%domain%forward_dftplan_r2c, isos%domain%backward_dftplan_c2r)
+                        call apply_zerobc_at_corners(isos%now%w_equilibrium, isos%domain%nx, &
+                            isos%domain%ny)
                     end if
+                    ! write(*,*) "weq = ", sum(isos%now%w_equilibrium)
                     call calc_asthenosphere_relax(isos%now%dzbdt, isos%now%w, &
                         isos%now%w_equilibrium, isos%domain%tau)
 
                 ! LV-ELVA (Swierczek-jereczek et al. 2024).
                 ! Gives ELVA (Bueler et al. 2007) if eta = const.
-                case(4)
+                case(3)
                     call calc_lvelva(isos%now%dzbdt, isos%now%w, isos%now%canom_full, &
                         isos%domain%maskactive, isos%par%g, isos%par%nu, isos%domain%mu, isos%domain%D_lith, &
                         isos%domain%eta_eff, isos%domain%kappa, isos%domain%nx, isos%domain%ny, &
@@ -688,8 +673,9 @@ module isostasy
         if (allocated(domain%GE))        deallocate(domain%GE)
         if (allocated(domain%GN))        deallocate(domain%GN)
 
-        if (allocated(domain%GE))        deallocate(domain%FGE)
-        if (allocated(domain%GN))        deallocate(domain%FGN)
+        if (allocated(domain%FGV))        deallocate(domain%FGV)
+        if (allocated(domain%FGE))        deallocate(domain%FGE)
+        if (allocated(domain%FGN))        deallocate(domain%FGN)
         return
     end subroutine deallocate_isos_domain
 
@@ -708,7 +694,7 @@ module isostasy
         if (allocated(state%ssh_perturb))       deallocate(state%ssh_perturb)
         if (allocated(state%Haf))               deallocate(state%Haf)
         if (allocated(state%Hice))              deallocate(state%Hice)
-        if (allocated(state%Hseawater))               deallocate(state%Hseawater)
+        if (allocated(state%Hseawater))         deallocate(state%Hseawater)
 
         if (allocated(state%ssh))               deallocate(state%ssh)
         if (allocated(state%canom_load))        deallocate(state%canom_load)
@@ -749,6 +735,7 @@ module isostasy
         allocate(domain%GE(nx, ny))
         allocate(domain%GN(nx, ny))
 
+        allocate(domain%FGV(2*nx-1, 2*ny-1))
         allocate(domain%FGE(2*nx-1, 2*ny-1))
         allocate(domain%FGN(2*nx-1, 2*ny-1))
 

@@ -1,4 +1,4 @@
-module sea_level
+module sealevel
 
     use isostasy_defs, only : wp, isos_class
     use isos_utils
@@ -12,6 +12,8 @@ module sea_level
     public :: calc_sl_contribution
 
     contains
+
+    ! TODO: implement bsl update
 
     ! calc_sealevel()
     ! Update the sea level based on the new ice thickness field
@@ -171,4 +173,4 @@ module sea_level
         return
     end subroutine calc_sl_contribution
 
-end module sea_level
+end module sealevel

@@ -1,5 +1,5 @@
 
-module solver_lv_elva
+module lv_elva
 
     use, intrinsic :: iso_c_binding
     use isostasy_defs, only : wp, pi, isos_domain_class, isos_param_class
@@ -529,4 +529,4 @@ module solver_lv_elva
         return
     end subroutine calc_kappa
 
-end module solver_lv_elva
+end module lv_elva

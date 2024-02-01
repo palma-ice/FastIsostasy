@@ -9,10 +9,9 @@ Goelzer et al. (2020) and extended in Swierczek-Jereczek et al. (2024).
 So far, the implementations of the deformational response include:
 
 1. Local lithosphere, relaxing asthenosphere (LLRA).
-2. Elastic lithosphere, relaxing asthenosphere (ELRA).
-3. Laterally-Variable ELRA (LV-ELRA), as described in Coulon et al. (2021) and renamed
-   in Swierczek-Jerecze et al. (2024). This is work in progress!
-4. Laterally-Variable Elastic Lithosphere/Viscous Asthenosphere (LV-ELVA), as described
+2. Elastic lithosphere, relaxing asthenosphere (ELRA). By providing a heterogeneous field
+ of the relaxation time, the laterally-variable formulation of Coulon et al. (2021) is used.
+3. Laterally-Variable Elastic Lithosphere/Viscous Asthenosphere (LV-ELVA), as described
    in Swierczek-Jereczek et al. (2024). Note that this is a generalisation of ELVA, as
    described in Bueler et al. (2007).
 

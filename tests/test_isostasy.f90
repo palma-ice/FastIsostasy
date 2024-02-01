@@ -80,6 +80,7 @@ program test_isostasy
     
     !   experiment = "test1" ! 1000 m radius ice disk of 1000 m heights, solved with ELVA Benchmark: analytical (Bueler et al. 2007); dtt = 1; dtout = 1000. ; time_end = 50.e3
 
+    !TODO Fix analytic solution of test1
     experiment = "test2"   ! Benchmark: Spada et al. (2011) disc
 
     !  experiment = "test3a"  ! Gaussian reduction of lithospheric thickness at centre
@@ -566,11 +567,11 @@ program test_isostasy
         !     long_name="Asthenosphere relaxation timescale", &
         !     dim1="xc",dim2="yc",start=[1,1]) 
 
-        ! call nc_write(filename, "kei", isos%domain%kei, units="", &
-        !     long_name="Kelvin function filter", dim1="xf",dim2="yf", start=[1,1])
+        call nc_write(filename, "kei", isos%domain%kei, units="", &
+            long_name="Kelvin function filter", dim1="xf",dim2="yf", start=[1,1])
 
-        ! call nc_write(filename,"GV",isos%domain%GV, units="", &
-        !     long_name="Regional elastic plate filter", dim1="xf", dim2="yf", start=[1,1])
+        call nc_write(filename,"GV",isos%domain%GV, units="", &
+            long_name="Regional elastic plate filter", dim1="xf", dim2="yf", start=[1,1])
 
         ! ! TODO recheck convol
         ! call nc_write(filename, "GN", isos%domain%GN, units="", &

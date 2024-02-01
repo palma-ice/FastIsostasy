@@ -15,7 +15,7 @@ module isostasy_defs
     type isos_param_class
         logical            :: interactive_sealevel
         logical            :: correct_distortion
-        integer            :: method                ! Type of isostasy to use
+        integer            :: method                ! Computation method for viscous displacement
         real(wp)           :: dt_prognostics        ! [yr] Timestep to recalculate equilibrium lithospheric displacement
         real(wp)           :: dt_diagnostics        ! [yr] Timestep to recalculate bedrock uplift and rate
         
@@ -36,8 +36,8 @@ module isostasy_defs
         real(wp) :: compressibility_correction
 
         real(wp) :: sec_per_year
-        real(wp) :: g 
-        real(wp) :: r_earth 
+        real(wp) :: g
+        real(wp) :: r_earth
         real(wp) :: m_earth
         real(wp) :: A_ocean_pd
 
@@ -48,7 +48,6 @@ module isostasy_defs
         character(len=56)  :: rigidity_method   ! [-] Method use to prescribe lithosphere's rigidity field
         
         real(wp) :: L_w                         ! [m] Lithosphere flexural length scale (for method=2)
-        integer  :: nr                          ! [-] Radius of convolution neighborhood, in number of grid points        
         real(wp) :: time_diagnostics            ! [yr] Current model time of last diagnostic update
         real(wp) :: time_prognostics            ! [yr] Current model time of last prognostic update
 
@@ -90,6 +89,7 @@ module isostasy_defs
         real(wp), allocatable   :: GE(:, :)    ! Green's function for elastic displacement (Farrell 1972)
         real(wp), allocatable   :: GN(:, :)    ! Green's function for ssh_perturb
 
+        complex(wp), allocatable :: FGV(:, :)    ! FFT of GV
         complex(wp), allocatable :: FGE(:, :)    ! FFT of GE
         complex(wp), allocatable :: FGN(:, :)    ! FFT of GN
 

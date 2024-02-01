@@ -2,14 +2,14 @@
     ! Options
     interactive_sealevel = .false.  ! Sea level interacts with solid Earth deformation?
     correct_distortion = .false.    ! Account for distortion of projection?
-    method          = 4             ! 0: constant lithospheric displacement; 1: LLRA; 2: ELRA, 3: EGIA, 4: ELVA
+    method          = 3             ! 0: constant displacement; 1: LLRA; 2: LV-ELRA, 3: LV-ELVA
     dt_prognostics  = 1.0           ! [yr] Max. timestep to recalculate bedrock uplift and rate of change
     dt_diagnostics  = 10.0          ! [yr] Min. timestep to recalculate equilibrium lithospheric displacement
 
     ! 1D reference model
     He_lith         = 88.0          ! [km] Effective elastic thickness lithosphere
     visc            = 1.e21         ! [Pa s] Asthenosphere viscosity, visc=1e21 for Bueler et al (2007)  
-    tau             = 200.0         ! [yr] Relaxation time 
+    tau             = 2000.0         ! [yr] Relaxation time 
 
     ! Physical constants
     E               = 66.0          ! [GPa] Young modulus of sublithospheric mantle | 100 for Coulon et al. (2021) | 66 for Bueler et al. (2007)
