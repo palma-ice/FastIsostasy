@@ -51,41 +51,14 @@ program test_isostasy
     type(isos_class)    :: isos1
     ! type(ice_class)     :: ice
 
-    ! mmr recheck
-    
-    ! ! === Define runtime information =========
-    ! ! executable is defined in libisostasy/bin/test_isostasy.x 
-    ! ! output directory should be predefined: output/test-isostasy
 
-    ! outfldr = "output/test-isostasy"
-    ! path_par = trim(outfldr)//"/"//"test_isostasy.nml" 
-    ! file_out = trim(outfldr)//"/"//"bedtest.nc"
-
-    ! write(*,*) "outfldr: ",  trim(outfldr)
-    ! write(*,*) "path_par: ", trim(path_par)
-    ! write(*,*) "file_out: ", trim(file_out)
-
-    
     ! === Define experiment to be run ====
 
-    !experiment = "constant_thickness"
-    !experiment = "variable_tau"
-    !experiment = "point_load"
-    !  experiment = "test0" ! 1000 m radius ice disk of 1000 m heights, solved with ELRA (case=2)
-    
-! tests in Swierczek-Jereczek et al. (2023), GMD.
-    
-    !   experiment = "test1" ! 1000 m radius ice disk of 1000 m heights, solved with ELVA Benchmark: analytical (Bueler et al. 2007); dtt = 1; dtout = 1000. ; time_end = 50.e3
+    ! FIXME: analytic solution of test1
+    experiment = "test2"   ! Spada et al. (2011) disc
 
-    !TODO Fix analytic solution of test1
-    experiment = "test2"   ! Benchmark: Spada et al. (2011) disc
-
-    !  experiment = "test3a"  ! Gaussian reduction of lithospheric thickness at centre
-    !  experiment = "test3b"  ! Gaussian increase of lithospheric thickness at centre
-    !  experiment = "test3c"  ! Gaussian reduction of viscosity at centre
-    !  experiment = "test3d"  ! Gaussian increase of viscosity at centre
-    !  experiment = "test4"  ! ais ice6g_d 
-    !  experiment = "test5"  ! Lucía's Greenland ice-sheet load (since 15 ka)
+    ! Tests are defined in Swierczek-Jereczek et al. (2024), GMD.
+    ! Additional: "test5" = Lucía's Greenland ice-sheet load (since 15 ka)
     
     write(*,*) "experiment = ", trim(experiment)
 
@@ -104,61 +77,61 @@ program test_isostasy
                 ymax = abs(ymin)
             
             case("test1")
-                time_init = 0. 
-                time_end  = 50.e3 
-                dtt       = 1.0 
+                time_init = 0.
+                time_end  = 50.e3
+                dtt       = 1.0
                 dt_out    = 1.e3
-                dx        = 50.e3 
+                dx        = 50.e3
                 dy = dx
-                xmin      = -3000.e3 
+                xmin      = -3000.e3
                 xmax = abs(xmin)
                 ymin = xmin
                 ymax = abs(ymin)
 
             case("test2")
-                time_init = 0. 
-                time_end  = 50.e3 
-                dtt       = 10.0 
+                time_init = 0.
+                time_end  = 50.e3
+                dtt       = 10.0
                 dt_out    = 1.e3
-                dx        = 50.e3 
+                dx        = 50.e3
                 dy = dx
-                xmin      = -3000.e3 
+                xmin      = -3000.e3
                 xmax = abs(xmin)
                 ymin = xmin
                 ymax = abs(ymin)
 
             case("test3a","test3b","test3c","test3d")
-                time_init = 0. 
-                time_end  = 50.e3 
-                dtt       = 1.0 
+                time_init = 0.
+                time_end  = 50.e3
+                dtt       = 1.0
                 dt_out    = 1.e3
-                dx        = 50.e3 
+                dx        = 50.e3
                 dy = dx
-                xmin      = -3000.e3 
+                xmin      = -3000.e3
                 xmax = abs(xmin)
                 ymin = xmin
                 ymax = abs(ymin)
 
             case("test4")
-                time_init =  -122.5e3 
+                time_init =  -122.5e3
                 time_end  =     2.5e3
-                dtt       = 1.0  
-                dt_out    = 1.e3 
+                dtt       = 1.0
+                dt_out    = 1.e3
                 dx = 32.e3 
                 dy = dx
-                xmin = -3040.e3 
+                xmin = -3040.e3
                 xmax = abs(xmin)
                 ymin = xmin
                 ymax = abs(ymin)
 
             case("test5")
-                time_init = 0. 
-                time_end  = 15.e3 
-                dtt       = 1.0   
-                dt_out    = 1.e3 
+                time_init = 0.
+                time_end  = 15.e3
+                dtt       = 1.0
+                dt_out    = 1.e3
                 dy = dx
-                dx = 16.e3 
-                xmin = -840.e3 
+                dx = 16.e3
+                xmin = -840.e3
                 ymin = -1440.e3
                 xmax = abs(xmin)
                 ymax = abs(ymin)
@@ -176,7 +149,7 @@ program test_isostasy
 
     parfldr = "par/"
     outfldr = "output/test-isostasy"
-    path_par = trim(parfldr)//"/"//"test_isostasy_"//trim(experiment)//".nml" 
+    path_par = trim(parfldr)//"/"//"test_isostasy_"//trim(experiment)//".nml"
     file_out = trim(outfldr)//"/"//"bedtest_"//trim(experiment)// ".nc"
     write(*,*) "outfldr: ",  trim(outfldr)
     write(*,*) "path_par: ", trim(path_par)
@@ -188,9 +161,9 @@ program test_isostasy
     rigidity_method = "uniform"
     write(*,*) "rigidity method = ", trim(rigidity_method)
 
-    write(*,*) "time_init = ", time_init 
-    write(*,*) "time_end  = ", time_end 
-    write(*,*) "dtt       = ", dtt 
+    write(*,*) "time_init = ", time_init
+    write(*,*) "time_end  = ", time_end
+    write(*,*) "dtt       = ", dtt
     write(*,*) "dt_out    = ", dt_out
 
     write(*,*) "Defining grid..."
@@ -217,12 +190,12 @@ program test_isostasy
        yc(j) = ymin + (j-1)*dy
     end do
 
-    write(*,*) "Grid info: " 
+    write(*,*) "Grid info: "
     write(*,*) "dx = ", dx
     write(*,*) "dy = ", dy
     write(*,*) "nx, ny = ", nx, ny 
-    write(*,*) "range(xc): ", minval(xc), maxval(xc) 
-    write(*,*) "range(yc): ", minval(yc), maxval(yc) 
+    write(*,*) "range(xc): ", minval(xc), maxval(xc)
+    write(*,*) "range(yc): ", minval(yc), maxval(yc)
     
     ! === Define topography fields =========
     write(*,*) "Initialising topographic fields..."
@@ -231,17 +204,13 @@ program test_isostasy
     allocate(H_ice(nx, ny))
     allocate(ssh(nx, ny))
     allocate(rsl(nx, ny))
-    
     allocate(z_bed_bench(nx, ny))
-
     allocate(mask(nx, ny))
     
     z_bed       = 0.0
     H_ice       = 0.0
     ssh        = -1e3
-    
-    z_bed_bench = z_bed 
-
+    z_bed_bench = z_bed
 
     ! Initialize bedrock model (allocate fields)
     call isos_init(isos1, path_par, "isostasy", nx, ny, dx, dy)
@@ -392,7 +361,7 @@ program test_isostasy
                 print*,'ncx not equal to nx'
                 stop
             endif
-            
+
             if (ncy.ne.ny) then
                print*,'ncx not equal to nx'
                stop
