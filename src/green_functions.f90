@@ -132,14 +132,14 @@ module green_functions
         
         ! Safety check
         if (size(filt,1) .ne. size(filt,2)) then 
-            write(*,*) "calc_ge_filt:: error: array 'filt' must be square [n,n]."
+            write(*,*) "calc_ssh_green:: error: array 'filt' must be square [n,n]."
             write(*,*) "size(filt): ", size(filt,1), size(filt,2)
             stop
         end if 
 
         ! Safety check
         if (mod(n,2) .ne. 1) then 
-            write(*,*) "calc_ge_filt:: error: n can only be odd."
+            write(*,*) "calc_ssh_green:: error: n can only be odd."
             write(*,*) "n = ", n
             stop  
         end if 
@@ -161,7 +161,7 @@ module green_functions
             j1 = j+1+n2 
 
             ! Get correct GE value for this point (given by colatitude, theta)
-            filt(i1,j1) = calc_gn_value(max(dy,r),r_earth,m_earth)* (dx*dy)
+            filt(i1, j1) = calc_gn_value(max(dy,r), r_earth, m_earth)
         end do
         end do
 
@@ -209,10 +209,8 @@ module green_functions
       end function get_GE_value
 
 
-    function calc_gn_value(r,r_earth,m_earth) result(gn)
-        !Info
+    function calc_gn_value(r, r_earth, m_earth) result(gn)
         implicit none
-
         real(wp), intent(IN) :: r
         real(wp), intent(IN)  :: r_earth 
         real(wp), intent(IN)  :: m_earth 

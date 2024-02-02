@@ -116,9 +116,9 @@ module lv_elva
         real(wp), allocatable :: Mxy_x(:, :)
         real(wp), allocatable :: Mxy_xy(:, :)
 
-        real(wp), allocatable :: Mx(:, :) 
+        real(wp), allocatable :: Mxx(:, :) 
         real(wp), allocatable :: Mx_xx(:, :)
-        real(wp), allocatable :: My(:, :)
+        real(wp), allocatable :: Myy(:, :)
         real(wp), allocatable :: My_yy(:, :)
 
         allocate(p(nx, ny))
@@ -131,8 +131,8 @@ module lv_elva
         allocate(w_xx(nx, ny))
         allocate(w_yy(nx, ny))
 
-        allocate(Mx(nx, ny))
-        allocate(My(nx, ny))
+        allocate(Mxx(nx, ny))
+        allocate(Myy(nx, ny))
 
         allocate(Mx_xx(nx, ny))
         allocate(My_yy(nx, ny))
@@ -147,21 +147,21 @@ module lv_elva
 
         ! Ventsel and Krauthammer (2001): Thin Plates and Shells.
         ! Theory, Analysis, and Applications. Eq (2.13, 2.23)
-        Mx = -D_lith*(w_xx + nu*w_yy)
-        My = -D_lith*(w_yy + nu*w_xx)
+        Mxx = -D_lith*(w_xx + nu*w_yy)
+        Myy = -D_lith*(w_yy + nu*w_xx)
         Mxy = -D_lith * (1.0-nu) * w_xy
 
         ! Finite differences
         call calc_derivative_x(Mxy_x, Mxy, dx_matrix, nx, ny)
         call calc_derivative_y(Mxy_xy, Mxy_x, dy_matrix, nx, ny)
-        call calc_derivative_xx(Mx_xx, Mx, dx_matrix, nx, ny)
-        call calc_derivative_yy(My_yy, My, dy_matrix, nx, ny)
+        call calc_derivative_xx(Mx_xx, Mxx, dx_matrix, nx, ny)
+        call calc_derivative_yy(My_yy, Myy, dy_matrix, nx, ny)
 
         call maskfield(p, -g * canom_full, maskactive, nx, ny)
         f = (p + Mx_xx + 2.0_wp * Mxy_xy + My_yy) / (2.0_wp * eta)
         call calc_fft_forward_r2r(forward_plan, f, f_hat)
+        dwdt_hat = f_hat / kappa
 
-        dwdt_hat = f_hat / kappa / mu
         call calc_fft_backward_r2r(backward_plan, dwdt_hat, dzbdt)
         call apply_zerobc_at_corners(dzbdt, nx, ny)
 
@@ -171,6 +171,7 @@ module lv_elva
         return
     end subroutine calc_lvelva
 
+    ! TODO: this subroutine should be removed
     subroutine calc_effective_viscosity_3layer_channel(eta_eff, visc_c, thck_c, He_lith, &
         n_lev, dx, dy)
 
@@ -291,7 +292,7 @@ module lv_elva
         return
     end subroutine calc_effective_viscosity_3layer_channel
 
-    subroutine calc_effective_viscosity_3d(eta_eff,eta,dx,dy)
+    subroutine calc_effective_viscosity_3d(eta_eff, eta, dx, dy)
 
         implicit none
 
@@ -317,11 +318,10 @@ module lv_elva
 
         nx = size(eta_eff,1)
         ny = size(eta_eff,2)
-
         n_lev = size(eta,3)
         
         allocate(xc(nx))
-        allocate(yc(ny))        
+        allocate(yc(ny))
         allocate(R(nx, ny))
         allocate(eta_ratio(nx, ny))
         allocate(eta_ratiom1(nx, ny))
@@ -332,10 +332,7 @@ module lv_elva
         allocate(dz(nx,ny,n_lev))
         allocate(kappa(nx, ny))
 
-! mmr recheck this 
-
         dz = 100.0*1.e3
-
 
         if (n_lev.lt.2) then
 
@@ -349,13 +346,13 @@ module lv_elva
         else if (n_lev.ge.3) then
 
             do i = 1, nx
-            xc(i) = dx*(i-1)
+                xc(i) = dx*(i-1)
             end do
             xmin = xc(1)
             xmax = xc(nx)
 
             do j = 1, ny
-            yc(j) = dy*(j-1)
+                yc(j) = dy*(j-1)
             enddo
             ymin = yc(1)
             ymax = yc(ny)
@@ -372,24 +369,24 @@ module lv_elva
                     
         
             ! Start with n-th layer: viscous half space
-            
             eta_eff(:, :) = eta(:, :,n_lev)
             
             do k = 1, n_lev-1
 
-            eta_c = eta(:, :,n_lev-1)
-            dz_c = 100.*1.e3 !dz(:, :,n_lev-k+1)
-            
-            eta_ratio = eta_c/eta_eff
-            eta_ratiom1 = 1./eta_ratio
+                eta_c = eta(:, :,n_lev-1)
+                dz_c = 100.*1.e3 !dz(:, :,n_lev-k+1)
+                
+                eta_ratio = eta_c/eta_eff
+                eta_ratiom1 = 1./eta_ratio
 
-            c = cosh(dz_c*kappa)
-            s = sinh(dz_c*kappa)
+                c = cosh(dz_c*kappa)
+                s = sinh(dz_c*kappa)
 
-            R = (2.0 * eta_ratio * c * s + (1-eta_ratio**2) * (dz_c*kappa)**2 + (eta_ratio*s)**2 + c**2 )/&
-                    ((eta_ratio + eta_ratiom1)* c * s + (eta_ratio - eta_ratiom1)*dz_c*kappa + s**2 + c**2)
-            
-            eta_eff = R*eta_c
+                R = (2.0 * eta_ratio * c * s + (1-eta_ratio**2) * (dz_c*kappa)**2 + &
+                    (eta_ratio*s)**2 + c**2 ) / ((eta_ratio + eta_ratiom1)* c * s + &
+                    (eta_ratio - eta_ratiom1)*dz_c*kappa + s**2 + c**2)
+                
+                eta_eff = R*eta_c
             
             end do
 
@@ -443,7 +440,7 @@ module lv_elva
         implicit none
         type(isos_domain_class), intent(INOUT)  :: domain
 
-        call calc_kappa(domain%kappa, domain%nx, domain%ny)
+        call calc_kappa(domain%kappa, domain%nx, domain%ny, domain%dx, domain%dy)
         return
     end subroutine convenient_calc_kappa
 
@@ -453,8 +450,9 @@ module lv_elva
         real(wp), intent(IN)    :: dx, dy
         real(wp), intent(OUT)   :: kappa(:, :)
 
-        integer :: i, j, ic, jc, ip, iq
+        integer :: i, j, ic, jc
         real(wp):: mu_x, mu_y
+        real(wp):: p, q
 
         mu_x = 2._wp * pi / ((nx-1) * dx)    ! 2 * pi / Lx
         mu_y = 2._wp * pi / ((ny-1) * dy)    ! 2 * pi / Ly
@@ -463,19 +461,24 @@ module lv_elva
 
         kappa = 0.0
         do i = 1, nx
-           if (i .le. ic) then 
-                ip = mu_x * (i-1)
-           else
-                ip = mu_x * (nx-i+1)
-           end if
-           do j = 1, ny
-              if (j .le. jc) then
-                    iq = mu_y * (j-1)
-              else
-                    iq = mu_y * (ny-j+1)
-              end if
-              kappa(i, j)  = (ip*ip + iq*iq)**0.5
-           end do
+            
+            if (i .le. ic) then 
+                p = mu_x * (i-1)
+            else
+                p = mu_x * (nx-i+1)
+            end if
+
+            do j = 1, ny
+
+                if (j .le. jc) then
+                    q = mu_y * (j-1)
+                else
+                    q = mu_y * (ny-j+1)
+                end if
+
+                kappa(i, j)  = (p*p + q*q)**0.5
+
+            end do
         end do
         kappa(1,1) = (kappa(1,2) + kappa(2,1)) / 2.0
 

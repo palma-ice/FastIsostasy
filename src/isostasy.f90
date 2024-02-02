@@ -155,7 +155,6 @@ module isostasy
         isos%domain%dy_matrix = isos%domain%dy * isos%domain%K
         isos%domain%A = isos%domain%dx_matrix * isos%domain%dy_matrix
         call convenient_calc_convolution_indices(isos%domain)
-        call convenient_calc_kappa(isos%domain)
 
         ! Init parameters
         write(*,*) "Complementing params informations..."
@@ -216,6 +215,7 @@ module isostasy
             ! values value of L_w, D_Lith and thus He_lith everywhere.
             case(3)
                 write(*,*) "Using (laterally-variable) ELVA..."
+                call convenient_calc_kappa(isos%domain)
 
                 write(*,*) "Initialising elastic Green kernel..."
                 call calc_elastic_green(isos%domain%GE, dx=isos%domain%dx, dy=isos%domain%dx)
@@ -400,6 +400,9 @@ module isostasy
         isos%now%ssh = ssh
         call copy_state(isos%ref, isos%now)
 
+        ! TODO: this should be made more generic!
+        isos%ref%Hice = 0.0_wp
+
         ! Define initial time of isostasy model
         ! (set time_diagnostics earlier, so that it is definitely updated on the first timestep)
         isos%par%time_diagnostics = time - isos%par%dt_diagnostics
@@ -447,7 +450,7 @@ module isostasy
         logical  :: update_diagnostics
  
         ! Step 0: determine current timestep and number of iterations
-        dt = time - isos%par%time_prognostics 
+        dt = time - isos%par%time_prognostics
 
         ! Get maximum number of iterations needed to reach desired time
         nstep = ceiling( (time - isos%par%time_prognostics) / isos%par%dt_prognostics )
@@ -463,12 +466,13 @@ module isostasy
             if ( (isos%par%time_prognostics+dt_now) - isos%par%time_diagnostics .ge. &
                 isos%par%dt_diagnostics) then
                 update_diagnostics = .TRUE.
-            else 
+            else
                 update_diagnostics = .FALSE.
-            end if 
+            end if
 
             call calc_columnanoms_load(H_ice, isos)
 
+            ! update elastic resposne
             if (update_diagnostics) then
                 call precomputed_fftconvolution(isos%now%we, isos%domain%FGE, &
                     isos%now%canom_load * isos%par%g * isos%domain%K ** 2.0, &
@@ -484,6 +488,7 @@ module isostasy
             ! write(*,*) "Updating the sea-level..."
             if (update_diagnostics .and. isos%par%interactive_sealevel) then
                 ! write(*,*) "Updating the ssh perturbation..."
+                call calc_mass_anom(isos)
                 call precomputed_fftconvolution(isos%now%ssh_perturb, isos%domain%FGN, &
                     isos%now%mass_anom, isos%domain%i1, isos%domain%i2, &
                     isos%domain%j1, isos%domain%j2, isos%domain%offset, &
@@ -491,6 +496,7 @@ module isostasy
                     isos%domain%forward_dftplan_r2c, isos%domain%backward_dftplan_c2r)
                 call apply_zerobc_at_corners(isos%now%ssh_perturb, &
                     isos%domain%nx, isos%domain%ny)
+                isos%now%ssh = isos%now%bsl + isos%ref%ssh + isos%now%ssh_perturb
                 ! write(*,*) "Updating masks..."
                 call calc_masks(isos)
                 ! write(*,*) "Updating sea-level contributions..."
@@ -553,8 +559,7 @@ module isostasy
             if (dt_now .gt. 0.0) then
 
                isos%now%w = isos%now%w + isos%now%dzbdt*dt_now
-               isos%now%z_bed = isos%now%z_bed + isos%now%dzbdt*dt_now
-            !    write(*,*) "sum(w) = ", sum(isos%now%w), "sum(dzbdt) = ", sum(isos%now%dzbdt), " dt_now = ", dt_now
+               isos%now%z_bed = isos%ref%z_bed + isos%now%w + isos%now%we
 
                 ! Additionally apply bedrock adjustment field
                 if (present(dzbdt_corr)) then 
@@ -573,8 +578,7 @@ module isostasy
                 isos%par%time_prognostics = time 
                 exit
             end if
-
-         end do
+        end do
 
         return
     end subroutine isos_update

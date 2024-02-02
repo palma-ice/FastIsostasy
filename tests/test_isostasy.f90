@@ -389,6 +389,8 @@ program test_isostasy
          end select
          
     ! Inititalize state
+    z_bed = 0.0_wp
+    ssh = -1000.0_wp
     call isos_init_state(isos1, z_bed, H_ice, ssh, rsl, time=time_init) 
 
     ! Initialize writing output
@@ -416,11 +418,11 @@ program test_isostasy
                         isos1%domain%D_lith(1,1), isos1%par%rho_ice, isos1%par%rho_uppermantle, &
                         isos1%par%g,time)
 
-                    call isos_write_step(isos1, file_out, time, H_ice, ssh, z_bed_bench)
+                    call isos_write_step(isos1, file_out, time, H_ice, z_bed_bench)
 
                 case DEFAULT
                     z_bed_bench = 0.0
-                    call isos_write_step(isos1, file_out, time, H_ice, ssh)
+                    call isos_write_step(isos1, file_out, time, H_ice)
 
             end select
 
@@ -461,10 +463,6 @@ program test_isostasy
         call nc_write_dim(filename, "yf", x=0, dx=1, nx=size(isos%domain%GV,2), units="pt")
 
         ! Write constant fields
-        call nc_write(filename, "eta_eff", isos%domain%eta_eff, units="Pa s", &
-            long_name="Asthenosphere effective viscosity", &
-            dim1="xc", dim2="yc", dim3="time", start=[1,1])
-
         call nc_write(filename, "He_lith", isos%domain%He_lith, units="km", &
             long_name="Lithosphere thickness", &
             dim1="xc",dim2="yc",dim3="time",start=[1,1])
@@ -473,28 +471,36 @@ program test_isostasy
             long_name="Lithosphere rigidity", &
             dim1="xc", dim2="yc", dim3="time", start=[1,1])
 
-        ! call nc_write(filename, "tau", isos%domain%tau, units="yr", &
-        !     long_name="Asthenosphere relaxation timescale", &
-        !     dim1="xc",dim2="yc",start=[1,1]) 
-
-        call nc_write(filename, "kei", isos%domain%kei, units="", &
-            long_name="Kelvin function filter", dim1="xf",dim2="yf", start=[1,1])
-
-        call nc_write(filename,"GV",isos%domain%GV, units="", &
-            long_name="Viscous Green function", dim1="xf", dim2="yf", start=[1,1])
-        
         call nc_write(filename,"GE",isos%domain%GE, units="", &
             long_name="Elastic Green function", dim1="xf", dim2="yf", start=[1,1])
 
         call nc_write(filename, "GN", isos%domain%GN, units="", &
                 long_name="SSH Green function", dim1="xc", dim2="yc", start=[1,1])
 
+        if (isos%par%method .eq. 2) then
+            call nc_write(filename, "kei", isos%domain%kei, units="", &
+                long_name="Kelvin function filter", dim1="xf",dim2="yf", start=[1,1])
+
+            call nc_write(filename,"GV",isos%domain%GV, units="", &
+                long_name="Viscous Green function", dim1="xf", dim2="yf", start=[1,1])
+
+            call nc_write(filename, "tau", isos%domain%tau, units="yr", &
+                long_name="Asthenosphere relaxation timescale", &
+                dim1="xc",dim2="yc",start=[1,1]) 
+        end if
+
+        if (isos%par%method .eq. 3) then
+            call nc_write(filename, "eta_eff", isos%domain%eta_eff, units="Pa s", &
+                long_name="Asthenosphere effective viscosity", &
+                dim1="xc", dim2="yc", dim3="time", start=[1,1])
+        end if
+
         return
 
     end subroutine isos_write_init
 
     ! Write results to file
-    subroutine isos_write_step(isos, filename, time, H_ice, ssh, z_bed_bench)
+    subroutine isos_write_step(isos, filename, time, H_ice, z_bed_bench)
 
         implicit none 
         
@@ -502,7 +508,6 @@ program test_isostasy
         character(len=*), intent(IN) :: filename
         real(wp),         intent(IN) :: time
         real(wp),         intent(IN) :: H_ice(:, :) 
-        real(wp),         intent(IN) :: ssh(:, :) 
         real(wp),         intent(IN), optional :: z_bed_bench(:, :)
 
         ! Local variables
@@ -524,7 +529,7 @@ program test_isostasy
         call nc_write(filename, "H_ice", H_ice, units="m", long_name="Ice thickness", &
               dim1="xc", dim2="yc", dim3="time", start=[1,1,n], ncid=ncid)
 
-        call nc_write(filename, "ssh", ssh, units="m", long_name="Sea-surface height", &
+        call nc_write(filename, "ssh", isos%now%ssh, units="m", long_name="Sea-surface height", &
               dim1="xc", dim2="yc", dim3="time", start=[1,1,n], ncid=ncid)
 
         call nc_write(filename,"z_bed", isos%now%z_bed, units="m", &
@@ -568,7 +573,7 @@ program test_isostasy
 
 
     ! Simple linear interpolation of a point
-    subroutine interp_linear(x,y,xout,yout)
+    subroutine interp_linear(x, y, xout, yout)
 
         implicit none
 
