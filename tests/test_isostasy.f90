@@ -36,15 +36,12 @@ program test_isostasy
     real(wp) :: xcntr, ycntr
     real(wp), allocatable :: xc(:)
     real(wp), allocatable :: yc(:)
-
-    real(wp), allocatable :: z_bed_ref(:, :) 
-    real(wp), allocatable :: H_ice_ref(:, :) 
-    real(wp), allocatable :: z_sl_ref(:, :) 
     
     real(wp), allocatable :: z_bed(:, :) 
     real(wp), allocatable :: H_ice(:, :), T_ice(:, : ,:), z_bed_ice(:, : ,:)
     real(wp), allocatable :: time_ice(:), xc_ice(:), yc_ice(:)
-    real(wp), allocatable :: z_sl(:, :) 
+    real(wp), allocatable :: ssh(:, :) 
+    real(wp), allocatable :: rsl(:, :)      ! Relative sea level
     
     real(wp), allocatable :: mask(:, :)
     real(wp), allocatable :: z_bed_bench(:, :)
@@ -90,75 +87,85 @@ program test_isostasy
     !  experiment = "test4"  ! ais ice6g_d 
     !  experiment = "test5"  ! Lucía's Greenland ice-sheet load (since 15 ka)
     
-     
     write(*,*) "experiment = ", trim(experiment)
 
         select case(trim(experiment))
 
-        case("test0")
-            
+            case("test0")
                 time_init = 0. 
                 time_end  = 2000 
                 dtt       = 10. 
                 dt_out    = 100. 
-                dx = 50.e3 
-                xmin = -3000.e3 
-                ymin = xmin !* 2
+                dx = 50.e3
+                dy = dx
+                xmin = -3000.e3
+                xmax = abs(xmin)
+                ymin = xmin
+                ymax = abs(ymin)
             
-        case("test1")
+            case("test1")
+                time_init = 0. 
+                time_end  = 50.e3 
+                dtt       = 1.0 
+                dt_out    = 1.e3
+                dx        = 50.e3 
+                dy = dx
+                xmin      = -3000.e3 
+                xmax = abs(xmin)
+                ymin = xmin
+                ymax = abs(ymin)
 
-            time_init = 0. 
-            time_end  = 50.e3 
-            dtt       = 1.0 
-            dt_out    = 1.e3
-            dx        = 50.e3 
-            xmin      = -3000.e3 
-            ymin      = xmin
+            case("test2")
+                time_init = 0. 
+                time_end  = 50.e3 
+                dtt       = 10.0 
+                dt_out    = 1.e3
+                dx        = 50.e3 
+                dy = dx
+                xmin      = -3000.e3 
+                xmax = abs(xmin)
+                ymin = xmin
+                ymax = abs(ymin)
 
-        case("test2")
+            case("test3a","test3b","test3c","test3d")
+                time_init = 0. 
+                time_end  = 50.e3 
+                dtt       = 1.0 
+                dt_out    = 1.e3
+                dx        = 50.e3 
+                dy = dx
+                xmin      = -3000.e3 
+                xmax = abs(xmin)
+                ymin = xmin
+                ymax = abs(ymin)
 
-            time_init = 0. 
-            time_end  = 50.e3 
-            dtt       = 10.0 
-            dt_out    = 1.e3
-            dx        = 50.e3 
-            xmin      = -3000.e3 
-            ymin      = xmin
+            case("test4")
+                time_init =  -122.5e3 
+                time_end  =     2.5e3
+                dtt       = 1.0  
+                dt_out    = 1.e3 
+                dx = 32.e3 
+                dy = dx
+                xmin = -3040.e3 
+                xmax = abs(xmin)
+                ymin = xmin
+                ymax = abs(ymin)
 
-        case("test3a","test3b","test3c","test3d")
-            
-            time_init = 0. 
-            time_end  = 50.e3 
-            dtt       = 1.0 
-            dt_out    = 1.e3
-            dx        = 50.e3 
-            xmin      = -3000.e3 
-            ymin      = xmin
+            case("test5")
+                time_init = 0. 
+                time_end  = 15.e3 
+                dtt       = 1.0   
+                dt_out    = 1.e3 
+                dy = dx
+                dx = 16.e3 
+                xmin = -840.e3 
+                ymin = -1440.e3
+                xmax = abs(xmin)
+                ymax = abs(ymin)
 
-        case("test4")
-            
-            time_init =  -122.5e3 
-            time_end  =     2.5e3
-            dtt       = 1.0  
-            dt_out    = 1.e3 
-            dx = 32.e3 
-            xmin = -3040.e3 
-            ymin = xmin
-    
-        case("test5")
-            
-            time_init = 0. 
-            time_end  = 15.e3 
-            dtt       = 1.0   
-            dt_out    = 1.e3 
-            dx = 16.e3 
-            xmin = -840.e3 
-            ymin = -1440.e3
-
-        case("DEFAULT")
-
-            write(*,*) 'Default values needed, stopping'
-            stop
+            case("DEFAULT")
+                write(*,*) 'Default values needed, stopping'
+                stop
 
         end select
 
@@ -171,49 +178,33 @@ program test_isostasy
     outfldr = "output/test-isostasy"
     path_par = trim(parfldr)//"/"//"test_isostasy_"//trim(experiment)//".nml" 
     file_out = trim(outfldr)//"/"//"bedtest_"//trim(experiment)// ".nc"
-
     write(*,*) "outfldr: ",  trim(outfldr)
     write(*,*) "path_par: ", trim(path_par)
     write(*,*) "file_out: ", trim(file_out)
     
- ! === Define viscosity field to be used ====
-
+    write(*,*) "Initialising viscosity and rigidity fields..."
     visc_method = "uniform"
-    
     write(*,*) "viscosity field method = ", trim(visc_method)
-
-! === Define rigidity field to be used ====
-
     rigidity_method = "uniform"
-    
     write(*,*) "rigidity method = ", trim(rigidity_method)
-
-    
-    ! === Define simulation time ========
 
     write(*,*) "time_init = ", time_init 
     write(*,*) "time_end  = ", time_end 
     write(*,*) "dtt       = ", dtt 
     write(*,*) "dt_out    = ", dt_out
 
-    ! === Define grid information ============
-    ! TODO: make this more general
-    xmax = abs(xmin)
-    if (mod((xmax-xmin),dx).ne.0.) then
+    write(*,*) "Defining grid..."
+    if (mod((xmax-xmin), dx) .ne. 0.) then
         print*,'you must have an integer number of points in x-domain'
         stop
     endif
-    
-    ! TODO: dy optionally different from dx
-    nx      = int( (xmax-xmin) / dx ) + 1
-    dy      = dx
-    ymax    = abs(ymin)
-    ny      = int( (ymax-ymin) / dy ) + 1
-    
-    if (mod((ymax-ymin),dy).ne.0.) then
+    if (mod((ymax-ymin), dy) .ne. 0.) then
         print*,'you must have an integer number of points in y-domain'
         stop
     endif
+    
+    nx = int( (xmax-xmin) / dx ) + 1
+    ny = int( (ymax-ymin) / dy ) + 1
 
     allocate(xc(nx))
     allocate(yc(ny))
@@ -234,30 +225,23 @@ program test_isostasy
     write(*,*) "range(yc): ", minval(yc), maxval(yc) 
     
     ! === Define topography fields =========
+    write(*,*) "Initialising topographic fields..."
 
-    allocate(z_bed_ref(nx,ny))
-    allocate(H_ice_ref(nx,ny))
-    allocate(z_sl_ref(nx,ny))
-    allocate(z_bed(nx,ny))
-    allocate(H_ice(nx,ny))
-    allocate(z_sl(nx,ny))
+    allocate(z_bed(nx, ny))
+    allocate(H_ice(nx, ny))
+    allocate(ssh(nx, ny))
+    allocate(rsl(nx, ny))
     
-    allocate(z_bed_bench(nx,ny))
+    allocate(z_bed_bench(nx, ny))
 
-    allocate(mask(nx,ny))
-
-
-    z_bed_ref   = 0.0 
-    H_ice_ref   = 0.0 
-    z_sl_ref    = -1e3 !mmr test3a
+    allocate(mask(nx, ny))
     
-    z_bed       = 0.0 
-    H_ice       = 0.0  
-    z_sl        = -1e3 !mmr test3a
+    z_bed       = 0.0
+    H_ice       = 0.0
+    ssh        = -1e3
     
     z_bed_bench = z_bed 
 
-    write(*,*) "Initial fields defined."
 
     ! Initialize bedrock model (allocate fields)
     call isos_init(isos1, path_par, "isostasy", nx, ny, dx, dy)
@@ -265,15 +249,10 @@ program test_isostasy
     ! Define ice thickness field based on experiment being run...
     select case(trim(experiment))
 
-        case("constant_thickness")
-            ! Set ice thickness to a constant value everywhere
-
+        case("constant_thickness")  ! Set ice thickness to a constant value everywhere
             H_ice = 1000.0
 
-        case("variable_tau")
-            ! Set ice thickness to a constant value everywhere,
-           ! with a spatially variable field of tau
-
+        case("variable_tau") ! Constant ice thickness everywhere, with a spatially variable tau
             H_ice = 1000.0
 
             ! Define a mask with three different regions, which will
@@ -281,22 +260,14 @@ program test_isostasy
             mask(1:int(nx/3.0),:) = 0.0 
             mask(int(nx/3.0)+1:2*int(nx/3.0),:) = 1.0 
             mask(2*int(nx/3.0)+1:nx,:) = 2.0 
-
-            ! Define tau field using the mask
-!mmr           call isos_set_field(isos1%domain%tau,[1e2,1e3,3e3],[0.0_wp,1.0_wp,2.0_wp],mask,dx,sigma=150e3)
-
             call isos_set_smoothed_field(isos1%domain%tau, [1.e2_wp,1.e3_wp,3.e3_wp], &
                 [0.0_wp,1.0_wp,2.0_wp], mask, dx, 150.e3_wp)
 
-        case("point_load")
-            ! Define ice thickness only in one grid point 
-
+        case("point_load")  ! Define ice thickness only in central grid point 
             H_ice = 0.0 
             H_ice(int((nx-1)/2),int((ny-1)/2)) = 1000.0 
 
-         case("test0", "test1","test3a","test3b","test3c","test3d")
-
-            ! Bueler et al. (2007): ice disk in a circle of radius 1000 km and thickness 1000 m
+        case("test0", "test1","test3a","test3b","test3c","test3d") ! ice disk of R=1000 km and H=1000 m
 
             r0  = 1000.0e3 ! [m] 
             h0  = 1000.0   ! [m] 
@@ -313,14 +284,12 @@ program test_isostasy
                end do
             end do
 
-            allocate(T_ice(nx,ny,1))
+            allocate(T_ice(nx, ny,1))
             allocate(time_ice(1))
 
             T_ice(:, :,1) = H_ice(:, :)
             
-      case("test2")
-
-         ! Spada et al. (2011)
+        case("test2")   ! Spada et al. (2011)
          
             r0 = 6.378e6*10.*3.1416/180. ! * 0.1 ! recheck
 
@@ -337,17 +306,15 @@ program test_isostasy
                 end do
              end do
 
-             allocate(T_ice(nx,ny,1))
+             allocate(T_ice(nx, ny,1))
              allocate(time_ice(1))
             
             T_ice(:, :,1) = H_ice(:, :)
             
-         case("test4")
-
-! ICE6G_D
-! Comment on “An Assessment of the ICE-6G_C (VM5a) Glacial Isostatic Adjustment Model” by Purcell et al.
-! W. Richard Peltier, Donald F. Argus, Rosemarie Drummond
-! https://agupubs.onlinelibrary.wiley.com/doi/full/10.1002/2016JB013844
+        case("test4")  ! ICE6G_D
+        ! Comment on “An Assessment of the ICE-6G_C (VM5a) Glacial Isostatic Adjustment Model” by Purcell et al.
+        ! W. Richard Peltier, Donald F. Argus, Rosemarie Drummond
+        ! https://agupubs.onlinelibrary.wiley.com/doi/full/10.1002/2016JB013844
 
             
             R0 = 6.378e6*10.*3.1416/180. 
@@ -397,12 +364,7 @@ program test_isostasy
             T_ice = max(T_ice, 0.)
 
             ! Initialize H_ice
-                    
-           H_ice = T_ice(:, :,1)
-           H_ice_ref = T_ice(:, :,1)
-           
-           z_bed_ref = 0. ! recheck - Jan  - what do you put here? ie what are the initial conditions? LGM?
-
+            H_ice = T_ice(:, :,1)
 
         case("test5")
 
@@ -421,18 +383,17 @@ program test_isostasy
             ncx = nc_size(filename,"xc")
             ncy = nc_size(filename,"yc")
 
-
             if (time_end.lt.nt) then
-               print*,'Need to increase time_end to read full data length'
-               stop               
+                print*,'Need to increase time_end to read full data length'
+                stop
             endif
 
-            if (ncx.ne.nx) then                        
-              print*,'ncx not equal to nx'
-               stop
+            if (ncx.ne.nx) then
+                print*,'ncx not equal to nx'
+                stop
             endif
-
-            if (ncy.ne.ny) then                          
+            
+            if (ncy.ne.ny) then
                print*,'ncx not equal to nx'
                stop
             endif
@@ -450,12 +411,8 @@ program test_isostasy
             call nc_read(filename,"time",time_ice,start=[1],count=[nct])
             call nc_read(filename,"yc",yc_ice,start=[1],count=[ncy])
             
-
             H_ice = T_ice(:, :,1)
             z_bed = z_bed_ice(:, :,1)
-            
-            H_ice_ref = T_ice(:, :,1)
-            z_bed_ref = z_bed_ice(:, :,1)
 
         case DEFAULT
 
@@ -466,55 +423,43 @@ program test_isostasy
          end select
          
     ! Inititalize state
-    call isos_init_state(isos1,z_bed,H_ice,z_sl,z_bed_ref,H_ice_ref,z_sl_ref,time=time_init) 
+    call isos_init_state(isos1, z_bed, H_ice, ssh, time=time_init) 
 
-    
     ! Initialize writing output
     call isos_write_init(isos1, xc, yc, file_out, time_init)
 
     ! Determine total number of iterations to run
     nt = ceiling((time_end-time_init)/dtt) + 1 
 
-    
     ! Advance isostasy model
     do n = 1, nt 
 
         time = time_init + (n-1)*dtt
         call interp_linear(time_ice, T_ice, time, H_ice)
 
-        ! TODO: check if following lines can be deleted. It looks like an obvious "yes", but
-        ! maybe I am missing something?)
-        ! H_ice = H_ice
-        ! z_bed = z_bed
-
         ! Update bedrock
-        call isos_update(isos1, H_ice, time, z_sl)
+        call isos_update(isos1, H_ice, time, rsl, dzbdt_corr)
 
         
-        if (mod(time-time_init,dt_out) .eq. 0.0) then
-!           if (mod(time,dt_out) .eq. 0.0) then
-           
-            ! Write output for this timestep
+        if (mod(time-time_init, dt_out) .eq. 0.0) then  ! Write output for this timestep
 
             ! Calculate benchmark solutions when available and write to file
             select case(trim(experiment))
 
-            case("test1")
+                case("test1")   ! Calculate analytical solution to elva_disk
 
-               ! Calculate analytical solution to elva_disk
+                    call isosbench_elva_disk(z_bed_bench, r0, h0, eta, isos1%domain%dx, &
+                        isos1%domain%D_lith(1,1), isos1%par%rho_ice, isos1%par%rho_uppermantle, &
+                        isos1%par%g,time)
 
-               ! mmr: comment this to spare time; enable for test1 only
-                call isosbench_elva_disk(z_bed_bench, r0, h0, eta, isos1%domain%dx, &
-                    isos1%domain%D_lith(1,1), isos1%par%rho_ice, isos1%par%rho_uppermantle, &
-                    isos1%par%g,time)
-
-                call isos_write_step(isos1, file_out, time, H_ice, z_sl, z_bed_bench)
+                    call isos_write_step(isos1, file_out, time, H_ice, ssh, z_bed_bench)
 
                 case DEFAULT
                     z_bed_bench = 0.0
-                    call isos_write_step(isos1, file_out, time, H_ice, z_sl)
+                    call isos_write_step(isos1, file_out, time, H_ice, ssh)
 
             end select
+
         end if
 
         if (mod(n, 100) .eq. 1) then
@@ -542,9 +487,10 @@ program test_isostasy
         call nc_create(filename)
 
         ! Add grid axis variables to netcdf file
-        call nc_write_dim(filename,"xc",x=xc*1e-3,units="km")
-        call nc_write_dim(filename,"yc",x=yc*1e-3,units="km")
-        call nc_write_dim(filename,"time",x=time_init,dx=1.0_wp,nx=1,units="year",unlimited=.TRUE.)
+        call nc_write_dim(filename, "xc", x=xc*1e-3, units="km")
+        call nc_write_dim(filename, "yc", x=yc*1e-3, units="km")
+        call nc_write_dim(filename, "time", x=time_init, dx=1.0_wp, nx=1, &
+            units="year", unlimited=.TRUE.)
 
         ! Write dimensions for regional filter too
         call nc_write_dim(filename, "xf", x=0, dx=1, nx=size(isos%domain%GV,1), units="pt")
@@ -571,18 +517,20 @@ program test_isostasy
             long_name="Kelvin function filter", dim1="xf",dim2="yf", start=[1,1])
 
         call nc_write(filename,"GV",isos%domain%GV, units="", &
-            long_name="Regional elastic plate filter", dim1="xf", dim2="yf", start=[1,1])
+            long_name="Viscous Green function", dim1="xf", dim2="yf", start=[1,1])
+        
+        call nc_write(filename,"GE",isos%domain%GE, units="", &
+            long_name="Elastic Green function", dim1="xf", dim2="yf", start=[1,1])
 
-        ! ! TODO recheck convol
-        ! call nc_write(filename, "GN", isos%domain%GN, units="", &
-        !         long_name="Geoid's elastic plate filter", dim1="xc", dim2="yc", start=[1,1])
+        call nc_write(filename, "GN", isos%domain%GN, units="", &
+                long_name="SSH Green function", dim1="xc", dim2="yc", start=[1,1])
 
         return
 
     end subroutine isos_write_init
 
     ! Write results to file
-    subroutine isos_write_step(isos,filename,time,H_ice,z_sl,z_bed_bench)
+    subroutine isos_write_step(isos, filename, time, H_ice, ssh, z_bed_bench)
 
         implicit none 
         
@@ -590,7 +538,7 @@ program test_isostasy
         character(len=*), intent(IN) :: filename
         real(wp),         intent(IN) :: time
         real(wp),         intent(IN) :: H_ice(:, :) 
-        real(wp),         intent(IN) :: z_sl(:, :) 
+        real(wp),         intent(IN) :: ssh(:, :) 
         real(wp),         intent(IN), optional :: z_bed_bench(:, :)
 
         ! Local variables
@@ -598,7 +546,7 @@ program test_isostasy
         real(wp) :: time_prev 
 
         ! Open the file for writing
-        call nc_open(filename,ncid,writable=.TRUE.)
+        call nc_open(filename, ncid, writable=.TRUE.)
 
         ! Determine current writing time step 
         n = nc_size(filename, "time", ncid)
@@ -606,13 +554,13 @@ program test_isostasy
         if (abs(time-time_prev) .gt. 1e-5) n = n+1 
 
         ! Update the time step
-        call nc_write(filename,"time",time,dim1="time",start=[n],count=[1],ncid=ncid)
+        call nc_write(filename,"time", time, dim1="time", start=[n], count=[1], ncid=ncid)
         
         ! Write variables
         call nc_write(filename, "H_ice", H_ice, units="m", long_name="Ice thickness", &
               dim1="xc", dim2="yc", dim3="time", start=[1,1,n], ncid=ncid)
 
-        call nc_write(filename, "z_sl", z_sl, units="m", long_name="Sea level elevation", &
+        call nc_write(filename, "ssh", ssh, units="m", long_name="Sea-surface height", &
               dim1="xc", dim2="yc", dim3="time", start=[1,1,n], ncid=ncid)
 
         call nc_write(filename,"z_bed", isos%now%z_bed, units="m", &
@@ -639,6 +587,8 @@ program test_isostasy
             long_name = "Anomaly in column pressure", &
             dim1="xc", dim2="yc", dim3="time", start=[1,1,n], ncid=ncid)
 
+        ! TODO: We could remove the analytical solutions alltogether and make the comparison
+        ! as post-processing.
         if (present(z_bed_bench)) then 
             ! Compare with benchmark solution 
             call nc_write(filename,"z_bed_bench",z_bed_bench,units="m",long_name="Benchmark bedrock elevation", &        
@@ -647,17 +597,14 @@ program test_isostasy
                 dim1="xc",dim2="yc",dim3="time",start=[1,1,n],ncid=ncid)  
         end if 
 
-     
-        ! Close the netcdf file
-        call nc_close(ncid)
+        call nc_close(ncid)     ! Close the netcdf file
 
         return 
-
     end subroutine isos_write_step
 
 
+    ! Simple linear interpolation of a point
     subroutine interp_linear(x,y,xout,yout)
-        ! Simple linear interpolation of a point
 
         implicit none
 
@@ -686,7 +633,6 @@ program test_isostasy
             else
                alph = (xout - x(j-1)) / (x(j) - x(j-1))
                 yout = y(:, :,j-1) + alph*(y(:, :,j) - y(:, :,j-1))
-!               print*,'hola', xout, alph, yout(90,90), y(90,90,j), y(90,90,j-1)
              end if
         end if
 

@@ -386,21 +386,20 @@ module isostasy
 
     end subroutine isos_init
 
-    subroutine isos_init_state(isos, z_bed, H_ice, z_sl, z_bed_ref, H_ice_ref, z_sl_ref, time)
+    subroutine isos_init_state(isos, z_bed, H_ice, ssh, time)
 
         implicit none
 
         type(isos_class), intent(INOUT) :: isos 
-        real(wp), intent(IN) :: z_bed(:, :)            ! [m] Current bedrock elevation 
-        real(wp), intent(IN) :: H_ice(:, :)            ! [m] Current ice thickness  
-        real(wp), intent(IN) :: z_sl(:, :)             ! [m] Current sea level 
-        real(wp), intent(IN) :: z_bed_ref(:, :)        ! [m] Reference bedrock elevation (with known load)
-        real(wp), intent(IN) :: H_ice_ref(:, :)        ! [m] Reference ice thickness (associated with reference z_bed)
-        real(wp), intent(IN) :: z_sl_ref(:, :)         ! [m] Reference sea level (associated with reference z_bed)
-        real(wp), intent(IN) :: time                  ! [a] Initial time 
+        real(wp), intent(IN) :: z_bed(:, :)         ! [m] Current bedrock elevation 
+        real(wp), intent(IN) :: H_ice(:, :)         ! [m] Current ice thickness  
+        real(wp), intent(IN) :: ssh(:, :)           ! [m] Current sea level 
+        real(wp), intent(IN) :: time                ! [a] Initial time 
 
         ! Store initial bedrock field
         isos%now%z_bed = z_bed
+        isos%now%H_ice = H_ice
+        isos%now%ssh = ssh
         call copy_state(isos%ref, isos%now)
 
         ! Define initial time of isostasy model
@@ -411,7 +410,7 @@ module isostasy
         write(*,*) "Calling first update..."
         ! Call isos_update to diagnose rate of change
         ! (no change to z_bed will be applied since isos%par%time==time)
-        call isos_update(isos, H_ice, time, z_sl)
+        call isos_update(isos, H_ice, time)
 
         write(*,*) "isos_init_state:: "
         write(*,*) "  Initial time:   ", isos%par%time_prognostics 
@@ -434,14 +433,15 @@ module isostasy
 
     end subroutine isos_init_state
 
-    subroutine isos_update(isos, H_ice, time, dzbdt_corr) 
+    subroutine isos_update(isos, H_ice, time, rsl, dzbdt_corr) 
 
         implicit none
 
         type(isos_class), intent(INOUT) :: isos 
-        real(wp), intent(IN) :: H_ice(:, :)                 ! [m] Current ice thickness
-        real(wp), intent(IN) :: time                        ! [a] Current time
-        real(wp), intent(IN), optional :: dzbdt_corr(:, :)  ! [m/yr] Basal topography displacement rate (ie, to relax from low resolution to high resolution) 
+        real(wp), intent(INOUT)         :: rsl(:, :)        ! [m] Relative sea level = ssh - zb
+        real(wp), intent(IN)            :: H_ice(:, :)      ! [m] Current ice thickness
+        real(wp), intent(IN)            :: time             ! [a] Current time
+        real(wp), intent(IN), optional  :: dzbdt_corr(:, :) ! [m/yr] Basal topography displacement rate (ie, to relax from low resolution to high resolution) 
 
         ! Local variables
         real(wp) :: dt, dt_now
@@ -566,6 +566,8 @@ module isostasy
                 isos%par%time_prognostics = isos%par%time_prognostics + dt_now
                
             end if
+
+            rsl = isos%now%ssh - isos%now%z_bed
 
             ! TODO: here we should have a better check on the final time
             if ( abs(time-isos%par%time_prognostics) .lt. 1e-5) then 
