@@ -64,7 +64,6 @@ module isostasy_defs
         integer                 :: nsq
         real(wp)                :: dx
         real(wp)                :: dy
-        real(wp)                :: mu
 
         real(wp), allocatable   :: dx_matrix(:, :)   ! [m] K * dx
         real(wp), allocatable   :: dy_matrix(:, :)   ! [m] K * dy

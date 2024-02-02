@@ -26,7 +26,7 @@ module lv_elva
     contains
 
     ! TODO: either adapt this method or delete it!
-    subroutine calc_lvelva_square(dzbdt, w, canom_full, nu, mu, D_lith, eta, &
+    subroutine calc_lvelva_square(dzbdt, w, canom_full, nu, D_lith, eta, &
         kappa, nsq, par, domain)
     
         ! Extend a given domain [nx,ny] so that it is square based on the largest dimension
@@ -39,7 +39,6 @@ module lv_elva
         real(wp), intent(INOUT) :: w(:, :)
         real(wp), intent(IN)    :: canom_full(:, :)
         real(wp), intent(IN)    :: nu
-        real(wp), intent(IN)    :: mu
         real(wp), intent(IN)    :: D_lith(:, :)
         real(wp), intent(IN)    :: eta(:, :)
         real(wp), intent(INOUT) :: kappa(:, :)
@@ -82,7 +81,7 @@ module lv_elva
 
 
     ! Calculate vertical displacement rate (viscous part) on rectangular domain.
-    subroutine calc_lvelva(dzbdt, w, canom_full, maskactive, g, nu, mu, D_lith, eta, &
+    subroutine calc_lvelva(dzbdt, w, canom_full, maskactive, g, nu, D_lith, eta,&
         kappa, nx, ny, dx_matrix, dy_matrix, sec_per_year, forward_plan, backward_plan)
 
         implicit none
@@ -93,7 +92,6 @@ module lv_elva
         logical,  intent(IN)    :: maskactive(:, :)
         real(wp), intent(IN)    :: g
         real(wp), intent(IN)    :: nu
-        real(wp), intent(IN)    :: mu
         real(wp), intent(IN)    :: D_lith(:, :) 
         real(wp), intent(IN)    :: eta(:, :)   ! [Pa s] Viscosity, eta=1e21 by default. 
         real(wp), intent(IN)    :: kappa(:, :)
@@ -396,21 +394,17 @@ module lv_elva
             end do
 
         else
-
             print*,'n_lev = ', n_lev
-        
             stop
-
         endif
 
         return
     end subroutine calc_effective_viscosity_3d
 
-    subroutine calc_beta(beta, kappa, mu, D_lith, rho_uppermantle, g) 
+    subroutine calc_beta(beta, kappa, D_lith, rho_uppermantle, g) 
         ! Calculate analytical solution as in Bueler et al 2007 (eq 11)
                     
         real(wp), intent(OUT)  :: beta(:, :) 
-        real(wp), intent(OUT)  :: mu      
         real(wp), intent(IN)   :: kappa(:, :)
         real(wp), intent(IN)   :: D_lith(:, :)
         real(wp), intent(IN)   :: rho_uppermantle
@@ -438,7 +432,7 @@ module lv_elva
                 else
                     iq = ny-j+1
                 end if
-                beta(i,j)   = rho_uppermantle*g + D_lith(i,j)*(mu**4)*kappa(i,j)**4
+                beta(i,j)   = rho_uppermantle*g + D_lith(i,j)*kappa(i,j)**4
             end do
         end do
 
@@ -453,31 +447,34 @@ module lv_elva
         return
     end subroutine convenient_calc_kappa
 
-    subroutine calc_kappa(kappa, nx, ny)
-
+    subroutine calc_kappa(kappa, nx, ny, dx, dy)
+        implicit none
         integer, intent(IN)     :: nx, ny
+        real(wp), intent(IN)    :: dx, dy
         real(wp), intent(OUT)   :: kappa(:, :)
 
         integer :: i, j, ic, jc, ip, iq
+        real(wp):: mu_x, mu_y
 
-        kappa = 0.0
-
+        mu_x = 2._wp * pi / ((nx-1) * dx)    ! 2 * pi / Lx
+        mu_y = 2._wp * pi / ((ny-1) * dy)    ! 2 * pi / Ly
         ic = (nx-1)/2 + 1
         jc = (ny-1)/2 + 1
 
+        kappa = 0.0
         do i = 1, nx
-           if (i.le.ic) then 
-              ip = i-1
+           if (i .le. ic) then 
+                ip = mu_x * (i-1)
            else
-              ip = nx-i+1
+                ip = mu_x * (nx-i+1)
            end if
            do j = 1, ny
-              if (j.le.jc) then
-                 iq = j-1  
+              if (j .le. jc) then
+                    iq = mu_y * (j-1)
               else
-                 iq = ny-j+1
+                    iq = mu_y * (ny-j+1)
               end if
-              kappa(i,j)  = (ip*ip + iq*iq)**0.5
+              kappa(i, j)  = (ip*ip + iq*iq)**0.5
            end do
         end do
         kappa(1,1) = (kappa(1,2) + kappa(2,1)) / 2.0

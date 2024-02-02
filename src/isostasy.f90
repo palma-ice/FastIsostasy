@@ -122,13 +122,10 @@ module isostasy
 
         ! TODO: allow rectangular domains and rectangular extensions.
         ! Init scalar fields of domain
-        ! nsq = max(nx, ny)
-        ! isos%domain%nsq = nsq
         isos%domain%nx = nx
         isos%domain%ny = ny
         isos%domain%dx = dx
         isos%domain%dy = dy
-        isos%domain%mu = 2._wp * pi / ((nx-1) * dx)    ! 2 * pi / L
 
         ! Init plans
         write(*,*) "Computing FFT plans..."
@@ -386,19 +383,20 @@ module isostasy
 
     end subroutine isos_init
 
-    subroutine isos_init_state(isos, z_bed, H_ice, ssh, time)
+    subroutine isos_init_state(isos, z_bed, H_ice, ssh, rsl, time)
 
         implicit none
 
         type(isos_class), intent(INOUT) :: isos 
-        real(wp), intent(IN) :: z_bed(:, :)         ! [m] Current bedrock elevation 
-        real(wp), intent(IN) :: H_ice(:, :)         ! [m] Current ice thickness  
-        real(wp), intent(IN) :: ssh(:, :)           ! [m] Current sea level 
+        real(wp), intent(IN) :: z_bed(:, :)         ! [m] Current bedrock elevation
+        real(wp), intent(IN) :: H_ice(:, :)         ! [m] Current ice thickness
+        real(wp), intent(IN) :: ssh(:, :)           ! [m] Current sea-surface height
+        real(wp), intent(INOUT) :: rsl(:, :)        ! [m] Current relative sea level
         real(wp), intent(IN) :: time                ! [a] Initial time 
 
         ! Store initial bedrock field
         isos%now%z_bed = z_bed
-        isos%now%H_ice = H_ice
+        isos%now%Hice = H_ice
         isos%now%ssh = ssh
         call copy_state(isos%ref, isos%now)
 
@@ -410,7 +408,7 @@ module isostasy
         write(*,*) "Calling first update..."
         ! Call isos_update to diagnose rate of change
         ! (no change to z_bed will be applied since isos%par%time==time)
-        call isos_update(isos, H_ice, time)
+        call isos_update(isos, H_ice, time, rsl) 
 
         write(*,*) "isos_init_state:: "
         write(*,*) "  Initial time:   ", isos%par%time_prognostics 
@@ -540,7 +538,7 @@ module isostasy
                 ! Gives ELVA (Bueler et al. 2007) if eta = const.
                 case(3)
                     call calc_lvelva(isos%now%dzbdt, isos%now%w, isos%now%canom_full, &
-                        isos%domain%maskactive, isos%par%g, isos%par%nu, isos%domain%mu, isos%domain%D_lith, &
+                        isos%domain%maskactive, isos%par%g, isos%par%nu, isos%domain%D_lith, &
                         isos%domain%eta_eff, isos%domain%kappa, isos%domain%nx, isos%domain%ny, &
                         isos%domain%dx_matrix, isos%domain%dy_matrix, isos%par%sec_per_year, &
                         isos%domain%forward_fftplan_r2r, isos%domain%backward_fftplan_r2r)

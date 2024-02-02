@@ -19,15 +19,12 @@ program test_isostasy
     character(len=56)  :: visc_method
     character(len=56)  :: rigidity_method
 
-    real(wp) :: time, time_bp 
-    real(wp) :: time_init 
-    real(wp) :: time_end 
-    real(wp) :: dtt
-    real(wp) :: dt_out 
+    real(wp) :: time, time_bp, time_init, time_end 
+    real(wp) :: dtt, dt_out
     integer  :: n, nt
     integer  :: ncx, ncy, nct
 
-    real(wp) :: r0, h0, eta 
+    real(wp) :: r0, h0, eta
 
     integer  :: i, j, nx, ny, nz, slice_time
     real(wp) :: time_now
@@ -65,10 +62,10 @@ program test_isostasy
         select case(trim(experiment))
 
             case("test0")
-                time_init = 0. 
-                time_end  = 2000 
-                dtt       = 10. 
-                dt_out    = 100. 
+                time_init = 0.
+                time_end  = 2000
+                dtt       = 10.
+                dt_out    = 100.
                 dx = 50.e3
                 dy = dx
                 xmin = -3000.e3
@@ -117,7 +114,7 @@ program test_isostasy
                 time_end  =     2.5e3
                 dtt       = 1.0
                 dt_out    = 1.e3
-                dx = 32.e3 
+                dx = 32.e3
                 dy = dx
                 xmin = -3040.e3
                 xmax = abs(xmin)
@@ -209,7 +206,8 @@ program test_isostasy
     
     z_bed       = 0.0
     H_ice       = 0.0
-    ssh        = -1e3
+    ssh         = -1e3
+    rsl         = ssh - z_bed
     z_bed_bench = z_bed
 
     ! Initialize bedrock model (allocate fields)
@@ -322,7 +320,6 @@ program test_isostasy
                
             endif
 
-
             allocate(T_ice(ncx,ncy,nct))
             allocate(time_ice(nct))
             
@@ -392,7 +389,7 @@ program test_isostasy
          end select
          
     ! Inititalize state
-    call isos_init_state(isos1, z_bed, H_ice, ssh, time=time_init) 
+    call isos_init_state(isos1, z_bed, H_ice, ssh, rsl, time=time_init) 
 
     ! Initialize writing output
     call isos_write_init(isos1, xc, yc, file_out, time_init)
@@ -403,13 +400,11 @@ program test_isostasy
     ! Advance isostasy model
     do n = 1, nt 
 
+        ! Update bedrock
         time = time_init + (n-1)*dtt
         call interp_linear(time_ice, T_ice, time, H_ice)
+        call isos_update(isos1, H_ice, time, rsl)
 
-        ! Update bedrock
-        call isos_update(isos1, H_ice, time, rsl, dzbdt_corr)
-
-        
         if (mod(time-time_init, dt_out) .eq. 0.0) then  ! Write output for this timestep
 
             ! Calculate benchmark solutions when available and write to file
