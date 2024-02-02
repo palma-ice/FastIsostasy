@@ -170,24 +170,6 @@ module lv_elva
         ! Rate of viscous asthenosphere uplift per unit time (seconds)
         dzbdt = dzbdt * sec_per_year  !  [m/s] x [s/a] = [m/a]
 
-        deallocate(p)
-        deallocate(f)
-        deallocate(f_hat)
-        deallocate(dwdt_hat)
-        
-        deallocate(w_x)
-        deallocate(w_xy)
-        deallocate(w_xx)
-        deallocate(w_yy)
-
-        deallocate(Mxy)
-        deallocate(Mxy_x)
-        deallocate(Mxy_xy)
-        deallocate(Mx)
-        deallocate(Mx_xx)
-        deallocate(My)
-        deallocate(My_yy)
-
         return
     end subroutine calc_lvelva
 
@@ -307,20 +289,6 @@ module lv_elva
 
         endif
         ! move this out for symmetry     eta_eff    = eta_eff  * (1.5/(1. + nu))         ! [Pa s]
-
-        
-        deallocate(xc)
-        deallocate(yc)        
-        deallocate(R)
-        deallocate(eta_ratio)
-        deallocate(eta_ratiom1)
-        deallocate(c)
-        deallocate(s)
-        deallocate(eta)
-        deallocate(eta_c)
-        deallocate(dz_c)
-        deallocate(dz)
-        deallocate(kappa)
      
         return
     end subroutine calc_effective_viscosity_3layer_channel
@@ -434,19 +402,7 @@ module lv_elva
             stop
 
         endif
-     
-        deallocate(xc)
-        deallocate(yc)
-        deallocate(R)
-        deallocate(eta_ratio)
-        deallocate(eta_ratiom1)
-        deallocate(c)
-        deallocate(s)
-        deallocate(eta_c)
-        deallocate(dz_c)
-        deallocate(dz)
-        deallocate(kappa)
-     
+
         return
     end subroutine calc_effective_viscosity_3d
 
