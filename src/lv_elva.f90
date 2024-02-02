@@ -11,7 +11,7 @@ module lv_elva
 
     private
     
-    ! public :: calc_lvelva_square
+    public :: calc_lvelva_extended
     public :: calc_lvelva
     public :: calc_effective_viscosity_3layer_channel
     public :: calc_effective_viscosity_3d
@@ -52,31 +52,26 @@ module lv_elva
         nnx = nx + 2 * pad
         nny = ny + 2 * pad
 
-        ! Step 0: determine size of square array and allocate variables
-        allocate(sq_dzbdt(nnx, nny))
-        allocate(sq_w(nnx, nny))
-        allocate(sq_canom_full(nnx, nny))
-        allocate(sq_D_lith(nnx, nny))
-        allocate(sq_eta(nnx, nny))
 
-        ! Step 1: populate variables on a square grid
-        sq_dzbdt = 0.0 
-        call extend_array(sq_dzbdt, dzbdt, fill_with="mirror", val=0.0_wp)
-        call extend_array(sq_w, w, fill_with="mirror", val=0.0_wp)
-        call extend_array(sq_canom_full, canom_full, fill_with="mirror", val=0.0_wp)
-        call extend_array(sq_D_lith, D_lith, fill_with="mirror", val=0.0_wp)
-        call extend_array(sq_eta, eta, fill_with="mirror", val=0.0_wp)
 
-        ! Step 2: solve
-        ! call calc_lvelva(sq_dzbdt, sq_w, sq_canom_full, nu, mu, sq_D_lith, &
-        !     sq_eta, kappa, nsq, nsq, par, domain)
+    !     ! Step 1: populate variables on a square grid
+    !     sq_dzbdt = 0.0 
+    !     call extend_array(sq_dzbdt, dzbdt, fill_with="mirror", val=0.0_wp)
+    !     call extend_array(sq_w, w, fill_with="mirror", val=0.0_wp)
+    !     call extend_array(sq_canom_full, canom_full, fill_with="mirror", val=0.0_wp)
+    !     call extend_array(sq_D_lith, D_lith, fill_with="mirror", val=0.0_wp)
+    !     call extend_array(sq_eta, eta, fill_with="mirror", val=0.0_wp)
 
-        ! Step 3: get solution on original grid
-        call reduce_array(dzbdt, sq_dzbdt)
-        call reduce_array(w, sq_w)
+    !     ! Step 2: solve
+    !     ! call calc_lvelva(sq_dzbdt, sq_w, sq_canom_full, nu, mu, sq_D_lith, &
+    !     !     sq_eta, kappa, nsq, nsq, par, domain)
+
+    !     ! Step 3: get solution on original grid
+    !     call reduce_array(dzbdt, sq_dzbdt)
+    !     call reduce_array(w, sq_w)
         
-        return
-    end subroutine calc_lvelva_square
+    !     return
+    end subroutine calc_lvelva_extended
 
 
     ! Calculate vertical displacement rate (viscous part) on rectangular domain.

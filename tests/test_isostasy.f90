@@ -126,10 +126,12 @@ program test_isostasy
                 time_end  = 15.e3
                 dtt       = 1.0
                 dt_out    = 1.e3
-                dx = 16.e3
+                dx = 16.e3 * 1.5
                 dy = dx
-                xmin = -840.e3
-                ymin = -1440.e3
+                ! xmin = -840.e3
+                ! ymin = -1440.e3
+                xmin = -840.e3 * 1.5
+                ymin = -1440.e3 * 1.5
                 xmax = abs(xmin)
                 ymax = abs(ymin)
 
@@ -280,19 +282,15 @@ program test_isostasy
         ! W. Richard Peltier, Donald F. Argus, Rosemarie Drummond
         ! https://agupubs.onlinelibrary.wiley.com/doi/full/10.1002/2016JB013844
 
-            
             R0 = 6.378e6*10.*3.1416/180. 
-
             h0  = 1000.0   ! [m] 
             eta = 1.e+21   ! [Pa s]
-        
             H_ice = 0.
 
             ! Read in H_ice
-
             filename = "/Users/montoya/work/ice_data/Antarctica/ANT-32KM/ANT-32KM_ICE-6G_D.nc"
             
-            Nct = nc_size(filename,"time")
+            nct = nc_size(filename,"time")
             ncx = nc_size(filename,"xc")
             ncy = nc_size(filename,"yc")
 
@@ -317,13 +315,13 @@ program test_isostasy
                
             endif
 
-            allocate(T_ice(ncx,ncy,nct))
+            allocate(T_ice(ncx, ncy, nct))
             allocate(time_ice(nct))
             
             call nc_read(filename,"time",time_ice,start=[1],count=[nct])
             time_ice = -1.e3 * time_ice
             
-            call nc_read(filename,"IceT",T_ice,start=[1,1,1],count=[ncx,ncy,nct])
+            call nc_read(filename,"IceT",T_ice,start=[1, 1, 1],count=[ncx, ncy, nct])
             T_ice = max(T_ice, 0.)
 
             ! Initialize H_ice
@@ -332,51 +330,45 @@ program test_isostasy
         case("test5")
 
            ! Lucías Greenland run
-           
-            r0 = 6.378e6*10.*3.1416/180. 
-
+            r0 = 6.378e6*10.*3.1416/180.
             h0  = 1000.0   ! [m] 
             eta = 1.e+21   ! [Pa s]
         
             ! Read in H_ice
+            ! filename = "/home/jan/.julia/dev/FastIsostasy/test/greenland-deglaciation/LGM_equilibrium_15kyr.nc"
+            filename = "/home/jan/greenland-lucia-alpha=1.5.nc"
 
-            filename = "/home/jan/.julia/dev/FastIsostasy/test/greenland-deglaciation/LGM_equilibrium_15kyr.nc"
-            
-            Nct = nc_size(filename,"time")
-            ncx = nc_size(filename,"xc")
-            ncy = nc_size(filename,"yc")
+            ! nct = nc_size(filename,"time")
+            ! ncx = nc_size(filename,"xc")
+            ! ncy = nc_size(filename,"yc")
 
-            if (time_end.lt.nt) then
-                print*,'Need to increase time_end to read full data length'
-                stop
-            endif
+            write(*, *) "Reading dims..."
+            nct = nc_size(filename, "t")
+            ncx = nc_size(filename, "x")
+            ncy = nc_size(filename, "y")
 
-            write(*, *) nx, ny, ncx, ncy
-            if (ncx .ne. nx) then
-                print*,'ncx not equal to nx'
-                stop
-            endif
-
-            if (ncy .ne. ny) then
-                print*,'ncx not equal to nx'
-                stop
-            endif
-            
-            allocate(z_bed_ice(ncx,ncy,nct))
-            allocate(T_ice(ncx,ncy,nct))
+            allocate(z_bed_ice(ncx, ncy, nct))
+            allocate(T_ice(ncx, ncy, nct))
 
             allocate(xc_ice(ncx))
             allocate(yc_ice(ncy))
             allocate(time_ice(nct))
 
-            call nc_read(filename,"z_bed",z_bed_ice,start=[1,1,1],count=[ncx,ncy,nct])
-            call nc_read(filename,"H_ice",T_ice,start=[1,1,1],count=[ncx,ncy,nct])
-            call nc_read(filename,"xc",xc_ice,start=[1],count=[ncx])
-            call nc_read(filename,"time",time_ice,start=[1],count=[nct])
-            call nc_read(filename,"yc",yc_ice,start=[1],count=[ncy])
+            ! call nc_read(filename, "z_bed", z_bed_ice, start=[1, 1, 1], count=[ncx, ncy, nct])
+            ! call nc_read(filename, "H_ice", T_ice, start=[1, 1, 1], count=[ncx, ncy, nct])
+            ! call nc_read(filename, "xc", xc_ice, start=[1], count=[ncx])
+            ! call nc_read(filename, "time", time_ice, start=[1], count=[nct])
+            ! call nc_read(filename, "yc", yc_ice, start=[1], count=[ncy])
             
-            H_ice = T_ice(:, :,1)
-            z_bed = z_bed_ice(:, :,1)
+            write(*, *) "Reading fields..."
+            call nc_read(filename, "b", z_bed_ice, start=[1, 1, 1], count=[ncx, ncy, nct])
+            call nc_read(filename, "Hice", T_ice, start=[1, 1, 1], count=[ncx, ncy, nct])
+            call nc_read(filename, "x", xc_ice, start=[1], count=[ncx])
+            call nc_read(filename, "t", time_ice, start=[1], count=[nct])
+            call nc_read(filename, "y", yc_ice, start=[1], count=[ncy])
+
+            H_ice = T_ice(:, :, 1)
+            z_bed = z_bed_ice(:, :, 1)
 
         case DEFAULT
 
@@ -384,7 +376,7 @@ program test_isostasy
             write(*,*) "experiment = ", trim(experiment)
             stop 
 
-         end select
+        end select
          
     ! Inititalize state
     z_bed = 0.0_wp

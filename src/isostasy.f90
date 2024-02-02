@@ -554,7 +554,7 @@ module isostasy
             ! Step 2: update bedrock elevation and current model time
             if (dt_now .gt. 0.0) then
 
-               isos%now%w = 0.0 ! isos%now%w + isos%now%dzbdt*dt_now
+               isos%now%w = isos%now%w + isos%now%dzbdt*dt_now
                isos%now%z_bed = isos%ref%z_bed + isos%now%w + isos%now%we
 
                 ! Additionally apply bedrock adjustment field
