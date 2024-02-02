@@ -8,6 +8,8 @@ module isos_utils
 
     private
     
+    public :: midindex
+
     public :: calc_density_correction_factor
     public :: calc_flexural_lengthscale
     public :: calc_homogeneous_rigidity
@@ -136,13 +138,12 @@ module isos_utils
         real(wp), intent(INOUT)     :: in(:, :)
         real(wp), intent(INOUT)     :: out(:, :)
 
-        integer(kind=4)             :: m, n
-
-        m = size(in, 1)
-        n = size(in, 2)
+        integer(kind=4)            :: nx, ny
+        nx = size(in,1)
+        ny = size(in,2)
 
         call fftw_execute_r2r(plan, in, out)
-        out = out / (m*n*1.)
+        out = out / (nx * ny * 1.)
 
         return
     end subroutine calc_fft_backward_r2r
@@ -178,12 +179,12 @@ module isos_utils
         complex(wp), intent(INOUT) :: in(:, :)
         real(wp), intent(INOUT)    :: out(:, :)
 
-        integer(kind=4)            :: m,n
+        integer(kind=4)            :: nx, ny
+        nx = size(in,1)
+        ny = size(in,2)
 
-        m = size(in,1)
-        n = size(in,2)
         call fftw_execute_dft_c2r(plan, in, out)
-        out = out / (m*n*1.)
+        out = out / (nx * ny * 1._wp)
 
         return
     end subroutine calc_fft_backward_c2r
@@ -731,6 +732,19 @@ module isos_utils
         
         return
     end subroutine calc_gaussian_rigidity
+
+    function midindex(n) result(n2)
+        implicit none
+        integer, intent(IN) :: n
+        integer             :: n2
+
+        if (mod(n,2) .eq. 0) then
+            n2 = n/2
+        else
+            n2 = (n-1) / 2
+        end if
+
+    end function midindex
 
 
 end module isos_utils

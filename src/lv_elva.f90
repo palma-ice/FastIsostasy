@@ -25,40 +25,39 @@ module lv_elva
 
     contains
 
-    ! TODO: either adapt this method or delete it!
-    subroutine calc_lvelva_square(dzbdt, w, canom_full, nu, D_lith, eta, &
-        kappa, nsq, par, domain)
-    
-        ! Extend a given domain [nx,ny] so that it is square based on the largest dimension
-        ! of original data. Solve calc_asthenosphere_viscous on the square arrays, then 
-        ! extract solution onto original domain [nx,ny].
-      
+    ! TODO: finish adapting this
+    subroutine calc_lvelva_extended(dzbdt, w, canom_full, maskactive, g, nu, D_lith, eta, &
+        kappa, nx, ny, dx_matrix, dy_matrix, sec_per_year, forward_plan, backward_plan, pad)
+
         implicit none
 
-        real(wp), intent(OUT)   :: dzbdt(:, :)
-        real(wp), intent(INOUT) :: w(:, :)
+        real(wp), intent(INOUT) :: dzbdt(:, :)
+        real(wp), intent(IN)    :: w(:, :)
         real(wp), intent(IN)    :: canom_full(:, :)
+        logical,  intent(IN)    :: maskactive(:, :)
+        real(wp), intent(IN)    :: g
         real(wp), intent(IN)    :: nu
-        real(wp), intent(IN)    :: D_lith(:, :)
-        real(wp), intent(IN)    :: eta(:, :)
-        real(wp), intent(INOUT) :: kappa(:, :)
-        integer, intent(IN)     :: nsq
-        type(isos_param_class)  :: par
-        type(isos_domain_class) :: domain
+        real(wp), intent(IN)    :: D_lith(:, :) 
+        real(wp), intent(IN)    :: eta(:, :)   ! [Pa s] Viscosity, eta=1e21 by default. 
+        real(wp), intent(IN)    :: kappa(:, :)
+        integer, intent(IN)     :: nx, ny
+        real(wp), intent(IN)    :: sec_per_year
+        real(wp), intent(IN)    :: dx_matrix(:, :)
+        real(wp), intent(IN)    :: dy_matrix(:, :)
+        type(c_ptr), intent(IN) :: forward_plan
+        type(c_ptr), intent(IN) :: backward_plan
+        integer, intent(IN)     :: pad
 
-        ! Local variables
-        real(wp), allocatable :: sq_dzbdt(:, :)
-        real(wp), allocatable :: sq_w(:, :)
-        real(wp), allocatable :: sq_canom_full(:, :)
-        real(wp), allocatable :: sq_D_lith(:, :)
-        real(wp), allocatable :: sq_eta(:, :)    
+        integer                 :: nnx, nny
+        nnx = nx + 2 * pad
+        nny = ny + 2 * pad
 
         ! Step 0: determine size of square array and allocate variables
-        allocate(sq_dzbdt(nsq,nsq))
-        allocate(sq_w(nsq,nsq))
-        allocate(sq_canom_full(nsq,nsq))
-        allocate(sq_D_lith(nsq,nsq))
-        allocate(sq_eta(nsq,nsq))
+        allocate(sq_dzbdt(nnx, nny))
+        allocate(sq_w(nnx, nny))
+        allocate(sq_canom_full(nnx, nny))
+        allocate(sq_D_lith(nnx, nny))
+        allocate(sq_eta(nnx, nny))
 
         ! Step 1: populate variables on a square grid
         sq_dzbdt = 0.0 
@@ -162,6 +161,7 @@ module lv_elva
         call calc_fft_forward_r2r(forward_plan, f, f_hat)
         dwdt_hat = f_hat / kappa
 
+        ! write(*,*) sum(dwdt_hat), sum(f_hat)
         call calc_fft_backward_r2r(backward_plan, dwdt_hat, dzbdt)
         call apply_zerobc_at_corners(dzbdt, nx, ny)
 
@@ -273,8 +273,9 @@ module lv_elva
             c = cosh(dz_c*kappa)
             s = sinh(dz_c*kappa)
 
-            R = (2.0 * eta_ratio * c * s + (1-eta_ratio**2) * (dz_c*kappa)**2 + (eta_ratio*s)**2 + c**2 )/&
-                    ((eta_ratio + eta_ratiom1)* c * s + (eta_ratio - eta_ratiom1)*dz_c*kappa + s**2 + c**2)
+            R = (2.0 * eta_ratio * c * s + (1-eta_ratio**2) * (dz_c*kappa)**2 + &
+                (eta_ratio*s)**2 + c**2 ) / ((eta_ratio + eta_ratiom1)* c * s + &
+                (eta_ratio - eta_ratiom1)*dz_c*kappa + s**2 + c**2)
             
             eta_eff = R*eta_c
             

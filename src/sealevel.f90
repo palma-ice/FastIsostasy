@@ -61,8 +61,8 @@ module sealevel
         type(isos_class), intent(INOUT)   :: isos
 
         isos%now%canom_full = isos%now%canom_load
-        call add_columnanom(isos%par%rho_litho, isos%now%we, isos%ref%we, isos%now%canom_full)
-        call add_columnanom(isos%par%rho_uppermantle, isos%now%w, isos%ref%w, isos%now%canom_full)
+        ! call add_columnanom(isos%par%rho_litho, isos%now%we, isos%ref%we, isos%now%canom_full)
+        ! call add_columnanom(isos%par%rho_uppermantle, isos%now%w, isos%ref%w, isos%now%canom_full)
         call maskfield(isos%now%canom_full, isos%now%canom_full, isos%domain%maskactive, &
             isos%domain%nx, isos%domain%ny)
         return

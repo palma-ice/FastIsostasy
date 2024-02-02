@@ -52,7 +52,7 @@ program test_isostasy
     ! === Define experiment to be run ====
 
     ! FIXME: analytic solution of test1
-    experiment = "test2"   ! Spada et al. (2011) disc
+    experiment = "test5"   ! Spada et al. (2011) disc
 
     ! Tests are defined in Swierczek-Jereczek et al. (2024), GMD.
     ! Additional: "test5" = Lucía's Greenland ice-sheet load (since 15 ka)
@@ -126,8 +126,8 @@ program test_isostasy
                 time_end  = 15.e3
                 dtt       = 1.0
                 dt_out    = 1.e3
-                dy = dx
                 dx = 16.e3
+                dy = dx
                 xmin = -840.e3
                 ymin = -1440.e3
                 xmax = abs(xmin)
@@ -216,9 +216,6 @@ program test_isostasy
     ! Define ice thickness field based on experiment being run...
     select case(trim(experiment))
 
-        case("constant_thickness")  ! Set ice thickness to a constant value everywhere
-            H_ice = 1000.0
-
         case("variable_tau") ! Constant ice thickness everywhere, with a spatially variable tau
             H_ice = 1000.0
 
@@ -251,10 +248,10 @@ program test_isostasy
                end do
             end do
 
-            allocate(T_ice(nx, ny,1))
+            allocate(T_ice(nx, ny, 1))
             allocate(time_ice(1))
 
-            T_ice(:, :,1) = H_ice(:, :)
+            T_ice(:, :, 1) = H_ice(:, :)
             
         case("test2")   ! Spada et al. (2011)
          
@@ -268,13 +265,13 @@ program test_isostasy
             ycntr = (ymax+ymin)/2.
 
             do j = 1, ny
-               do i = 1, nx
-                  if ( (xc(i)-xcntr)**2 + (yc(j)-ycntr)**2  .le. (r0)**2 ) H_ice(i,j) = h0
-                end do
-             end do
+            do i = 1, nx
+                if ( (xc(i)-xcntr)**2 + (yc(j)-ycntr)**2  .le. (r0)**2 ) H_ice(i,j) = h0
+            end do
+            end do
 
-             allocate(T_ice(nx, ny,1))
-             allocate(time_ice(1))
+            allocate(T_ice(nx, ny, 1))
+            allocate(time_ice(1))
             
             T_ice(:, :,1) = H_ice(:, :)
             
@@ -330,7 +327,7 @@ program test_isostasy
             T_ice = max(T_ice, 0.)
 
             ! Initialize H_ice
-            H_ice = T_ice(:, :,1)
+            H_ice = T_ice(:, :, 1)
 
         case("test5")
 
@@ -343,7 +340,7 @@ program test_isostasy
         
             ! Read in H_ice
 
-            filename = "/Users/montoya/work/isostasy/cloned_isostasy/isostasy/input/gris_lgg/LGM_equilibrium_15kyr.nc"
+            filename = "/home/jan/.julia/dev/FastIsostasy/test/greenland-deglaciation/LGM_equilibrium_15kyr.nc"
             
             Nct = nc_size(filename,"time")
             ncx = nc_size(filename,"xc")
@@ -354,19 +351,20 @@ program test_isostasy
                 stop
             endif
 
-            if (ncx.ne.nx) then
+            write(*, *) nx, ny, ncx, ncy
+            if (ncx .ne. nx) then
                 print*,'ncx not equal to nx'
                 stop
             endif
 
-            if (ncy.ne.ny) then
-               print*,'ncx not equal to nx'
-               stop
+            if (ncy .ne. ny) then
+                print*,'ncx not equal to nx'
+                stop
             endif
             
             allocate(z_bed_ice(ncx,ncy,nct))
             allocate(T_ice(ncx,ncy,nct))
-                        
+
             allocate(xc_ice(ncx))
             allocate(yc_ice(ncy))
             allocate(time_ice(nct))
@@ -458,41 +456,40 @@ program test_isostasy
         call nc_write_dim(filename, "time", x=time_init, dx=1.0_wp, nx=1, &
             units="year", unlimited=.TRUE.)
 
-        ! Write dimensions for regional filter too
-        call nc_write_dim(filename, "xf", x=0, dx=1, nx=size(isos%domain%GV,1), units="pt")
-        call nc_write_dim(filename, "yf", x=0, dx=1, nx=size(isos%domain%GV,2), units="pt")
-
         ! Write constant fields
         call nc_write(filename, "He_lith", isos%domain%He_lith, units="km", &
-            long_name="Lithosphere thickness", &
-            dim1="xc",dim2="yc",dim3="time",start=[1,1])
+            long_name="Lithosphere thickness", dim1="xc", dim2="yc" ,start=[1, 1])
 
         call nc_write(filename, "D_lith", isos%domain%D_lith, units="N m", &
-            long_name="Lithosphere rigidity", &
-            dim1="xc", dim2="yc", dim3="time", start=[1,1])
+            long_name="Lithosphere rigidity", dim1="xc", dim2="yc", start=[1, 1])
 
         call nc_write(filename,"GE",isos%domain%GE, units="", &
-            long_name="Elastic Green function", dim1="xf", dim2="yf", start=[1,1])
+            long_name="Elastic Green function", dim1="xc", dim2="yc", start=[1, 1])
 
-        call nc_write(filename, "GN", isos%domain%GN, units="", &
-                long_name="SSH Green function", dim1="xc", dim2="yc", start=[1,1])
-
+        if (isos%par%interactive_sealevel) then
+            call nc_write(filename, "GN", isos%domain%GN, units="", &
+            long_name="SSH Green function", dim1="xc", dim2="yc", start=[1, 1])
+        end if
+        
         if (isos%par%method .eq. 2) then
             call nc_write(filename, "kei", isos%domain%kei, units="", &
-                long_name="Kelvin function filter", dim1="xf",dim2="yf", start=[1,1])
+                long_name="Kelvin function filter", dim1="xc", dim2="yc", start=[1, 1])
 
             call nc_write(filename,"GV",isos%domain%GV, units="", &
-                long_name="Viscous Green function", dim1="xf", dim2="yf", start=[1,1])
+                long_name="Viscous Green function", dim1="xc", dim2="yc", start=[1, 1])
 
             call nc_write(filename, "tau", isos%domain%tau, units="yr", &
                 long_name="Asthenosphere relaxation timescale", &
-                dim1="xc",dim2="yc",start=[1,1]) 
+                dim1="xc", dim2="yc", start=[1, 1]) 
         end if
 
         if (isos%par%method .eq. 3) then
             call nc_write(filename, "eta_eff", isos%domain%eta_eff, units="Pa s", &
                 long_name="Asthenosphere effective viscosity", &
-                dim1="xc", dim2="yc", dim3="time", start=[1,1])
+                dim1="xc", dim2="yc", start=[1, 1])
+            call nc_write(filename, "kappa", isos%domain%kappa, units="", &
+                long_name="Pseudodifferential operator in Fourier space", &
+                dim1="xc", dim2="yc", start=[1, 1])
         end if
 
         return

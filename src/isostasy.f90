@@ -400,9 +400,6 @@ module isostasy
         isos%now%ssh = ssh
         call copy_state(isos%ref, isos%now)
 
-        ! TODO: this should be made more generic!
-        isos%ref%Hice = 0.0_wp
-
         ! Define initial time of isostasy model
         ! (set time_diagnostics earlier, so that it is definitely updated on the first timestep)
         isos%par%time_diagnostics = time - isos%par%dt_diagnostics
@@ -427,7 +424,6 @@ module isostasy
         if (minval(isos%domain%tau) .le. 0.0) then
             write(error_unit,*) "isos_init_state:: Error: tau initialized with zero values present. &
             &This will lead to the model crashing."
-            !stop
         end if
         
         return
@@ -558,7 +554,7 @@ module isostasy
             ! Step 2: update bedrock elevation and current model time
             if (dt_now .gt. 0.0) then
 
-               isos%now%w = isos%now%w + isos%now%dzbdt*dt_now
+               isos%now%w = 0.0 ! isos%now%w + isos%now%dzbdt*dt_now
                isos%now%z_bed = isos%ref%z_bed + isos%now%w + isos%now%we
 
                 ! Additionally apply bedrock adjustment field

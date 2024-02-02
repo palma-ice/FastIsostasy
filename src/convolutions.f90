@@ -81,19 +81,15 @@ module convolutions
         integer, intent(IN)     :: i1, i2, j1, j2, nx, ny
 
         ! Local variables
-        real(wp), allocatable :: out_ext(:, :)
-        real(wp), allocatable :: in1_ext(:, :)
-        real(wp), allocatable :: in2_ext(:, :)
-        complex(wp), allocatable :: out_ext_hat(:, :)
-        complex(wp), allocatable :: in1_ext_hat(:, :)
-        complex(wp), allocatable :: in2_ext_hat(:, :)
+        real(wp), allocatable       :: out_ext(:, :)
+        real(wp), allocatable       :: in1_ext(:, :)
+        real(wp), allocatable       :: in2_ext(:, :)
+        complex(wp), allocatable    :: out_ext_hat(:, :)
+        complex(wp), allocatable    :: in1_ext_hat(:, :)
+        complex(wp), allocatable    :: in2_ext_hat(:, :)
         
         type(c_ptr), intent(IN)     :: forward_plan
         type(c_ptr), intent(IN)     :: backward_plan
-
-        real(wp), allocatable :: w_reg(:, :)
-
-        integer :: i, j
 
         ! Populate load on extended grid
         allocate(    out_ext(1:2*nx-1,1:2*ny-1))
@@ -106,8 +102,8 @@ module convolutions
         ! Pad with zeros
         in1_ext = 0.
         in2_ext = 0.
-        in1_ext(1:nx,1:ny) = in1
-        in2_ext(1:nx,1:ny) = in2
+        in1_ext(1:nx, 1:ny) = in1
+        in2_ext(1:nx, 1:ny) = in2
 
         ! TODO: we can precompute this
         call calc_fft_forward_r2c(forward_plan, in1_ext, in1_ext_hat)
@@ -118,10 +114,8 @@ module convolutions
 
         ! Invert product
         call calc_fft_backward_c2r(backward_plan, out_ext_hat, out_ext)
-
-        ! TODO: check if normalisation is correctly accounted for in the new version.
-        ! normalisation is needed because of the FFTW definition
-        out(1:nx,1:ny) = out_ext(i1:i2, j1:j2) ! * ((2*nx-1) * (2*ny-1)) ** 0.5  ! sqrt
+        out(1:nx,1:ny) = out_ext(i1:i2, j1:j2)
+        ! (i1+offset:i2+offset, j1-offset:j2-offset)
 
         return
     end subroutine samesize_fftconvolution
@@ -150,7 +144,7 @@ module convolutions
 
         ! Zero-padded FFT
         helper_real = 0.
-        helper_real(1:nx,1:ny) = in
+        helper_real(1:nx, 1:ny) = in
         call calc_fft_forward_r2c(forward_plan, helper_real, helper_cplx)
         ! write(*,*) "helper real 1: ", sum(helper_real),  "helper cplx 1: ", sum(helper_cplx)
 
@@ -161,10 +155,7 @@ module convolutions
         call calc_fft_backward_c2r(backward_plan, helper_cplx, helper_real)
         ! write(*,*) "helper real 2: ", sum(helper_real),  "helper cplx 2: ", sum(helper_cplx)
 
-        ! TODO: check if normalisation is correctly accounted for in the new version.
-        ! normalisation is needed because of the FFTW definition
         out(1:nx,1:ny) = helper_real(i1+offset:i2+offset, j1-offset:j2-offset)
-        ! write(*,*) "out: ", sum(out)
         return
     end subroutine precomputed_fftconvolution
 
