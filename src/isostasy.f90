@@ -121,7 +121,6 @@ module isostasy
         n = max(nx, ny)
         call allocate_isos(isos, n, n)
 
-        ! TODO: allow rectangular domains and rectangular extensions.
         ! Init scalar fields of domain
         isos%domain%nx = n
         isos%domain%ny = n
@@ -144,6 +143,7 @@ module isostasy
         isos%domain%backward_dftplan_c2r = fftw_plan_dft_c2r_2d(2*n-1, 2*n-1, &
             isos%domain%FGE, helper_convo, 1)
 
+        ! TODO: provide square fields for params even if yelmo grid is rectangular.
         ! Init domain
         write(*,*) "Complementing domain informations..."
         if (isos%par%correct_distortion) then
@@ -163,7 +163,6 @@ module isostasy
         call convenient_calc_convolution_indices(isos%domain)
 
         ! Init parameters
-        write(*,*) "Complementing params informations..."
         isos%par%sec_per_year = 3600.0 * 24.0 * 365.25           ! [s/a]
         isos%par%compressibility_correction = 1.5 / (1 + isos%par%nu)
         call calc_density_correction_factor(isos%par)
@@ -172,10 +171,12 @@ module isostasy
         call calc_flexural_lengthscale(isos%par%L_w, D_lith_const, &
             isos%par%rho_uppermantle, isos%par%g)
 
-        ! Populate 2D D_lith field to have it available
+
         isos%domain%D_lith = D_lith_const
 
-        write(*,*) "Initialising ssh Green kernel..."
+        call calc_elastic_green(isos%domain%GE, dx=isos%domain%dx, dy=isos%domain%dx)
+        call precompute_kernel(isos%domain%forward_dftplan_r2c, isos%domain%GE, &
+        isos%domain%FGE, isos%domain%nx, isos%domain%ny)
         if (isos%par%interactive_sealevel) then
             call calc_ssh_green(isos%domain%GN, isos%par%m_earth, &
                 isos%par%r_earth, dx=isos%domain%dx, dy=isos%domain%dx)
@@ -201,7 +202,6 @@ module isostasy
                 write(*,*) "Initialising viscous Green kernel..."
                 call precompute_kernel(isos%domain%forward_dftplan_r2c, isos%domain%GV, &
                     isos%domain%FGV, isos%domain%nx, isos%domain%ny)
-                write(*,*) "GV: ", sum(isos%domain%GV), "FGV: ", sum(isos%domain%FGV)
 
                 ! TODO: allow heterogeneous tau
                 isos%domain%tau        = isos%par%tau          ! [yr]
@@ -211,14 +211,7 @@ module isostasy
             case(3)
                 write(*,*) "Using (laterally-variable) ELVA..."
                 call convenient_calc_kappa(isos%domain)
-
-                write(*,*) "Initialising elastic Green kernel..."
-                call calc_elastic_green(isos%domain%GE, dx=isos%domain%dx, dy=isos%domain%dx)
-                call precompute_kernel(isos%domain%forward_dftplan_r2c, isos%domain%GE, &
-                    isos%domain%FGE, isos%domain%nx, isos%domain%ny)
-                write(*,*) "GE: ", sum(isos%domain%GE), "FGE: ", sum(isos%domain%FGE)
               
-                write(*,*) "Choosing rigidity field..."
                 select case(trim(isos%par%rigidity_method))
                     ! TODO: this part of the code should be in test_isostasy.f90
                     case("uniform")
@@ -348,7 +341,7 @@ module isostasy
         isos%par%time_prognostics = 1e10
 
         isos%now%z_bed          = 0.0
-        isos%now%dzbdt          = 0.0
+        isos%now%dwdt          = 0.0
         isos%now%q              = 0.0
         isos%now%w              = 0.0
         isos%now%w_equilibrium  = 0.0
@@ -372,7 +365,7 @@ module isostasy
         call cropdomain2output(isos%output, isos%domain)
         write(*,*) "isos_init:: complete." 
 
-        return 
+        return
 
     end subroutine isos_init
 
@@ -388,12 +381,11 @@ module isostasy
         real(wp), intent(IN) :: time                ! [a] Initial time 
 
         ! Store initial bedrock field
-        isos%now%z_bed = z_bed
-        isos%now%Hice = H_ice
-        isos%now%ssh = ssh
-        call extendice2isostasy(isos%now, H_ice, isos%domain%icrop1, isos%domain%icrop2, &
+        call extendice2isostasy(isos%now, z_bed, H_ice, ssh, &
+            isos%domain%icrop1, isos%domain%icrop2, &
             isos%domain%jcrop1, isos%domain%jcrop2)
         call copy_state(isos%ref, isos%now)
+        write(*, *) size(isos%ref%z_bed)
 
         ! Define initial time of isostasy model
         ! (set time_diagnostics earlier, so that it is definitely updated on the first timestep)
@@ -405,13 +397,13 @@ module isostasy
         ! (no change to z_bed will be applied since isos%par%time==time)
         call isos_update(isos, H_ice, time, rsl) 
 
-        write(*,*) "isos_init_state:: "
-        write(*,*) "  Initial time:   ", isos%par%time_prognostics 
-        write(*,*) "  range(He_lith): ", minval(isos%domain%He_lith), maxval(isos%domain%He_lith)
-        write(*,*) "  range(tau):     ", minval(isos%domain%tau),     maxval(isos%domain%tau)
-        write(*,*) "  range(w):      ", minval(isos%now%w),      maxval(isos%now%w)
-        write(*,*) "  range(w_equilibrium):      ", minval(isos%now%w_equilibrium),      maxval(isos%now%w_equilibrium)
-        write(*,*) "  range(z_bed):   ", minval(isos%now%z_bed),   maxval(isos%now%z_bed)
+        write(*,*) "isos_init_state: "
+        write(*,*) "    Initial time:   ",  isos%par%time_prognostics
+        write(*,*) "    range(He_lith): ",  minval(isos%domain%He_lith), maxval(isos%domain%He_lith)
+        write(*,*) "    range(tau):     ",  minval(isos%domain%tau), maxval(isos%domain%tau)
+        write(*,*) "    range(w):       ",  minval(isos%now%w), maxval(isos%now%w)
+        write(*,*) "    range(w_eq):    ",  minval(isos%now%w_equilibrium), maxval(isos%now%w_equilibrium)
+        write(*,*) "  range(z_bed):     ",  minval(isos%now%z_bed), maxval(isos%now%z_bed)
 
         ! Make sure tau does not contain zero values, if so
         ! output an error for diagnostics. Don't kill the program
@@ -425,7 +417,7 @@ module isostasy
 
     end subroutine isos_init_state
 
-    subroutine isos_update(isos, H_ice, time, rsl, dzbdt_corr) 
+    subroutine isos_update(isos, H_ice, time, rsl, dwdt_corr) 
 
         implicit none
 
@@ -433,15 +425,16 @@ module isostasy
         real(wp), intent(INOUT)         :: rsl(:, :)        ! [m] Relative sea level = ssh - zb
         real(wp), intent(IN)            :: H_ice(:, :)      ! [m] Current ice thickness
         real(wp), intent(IN)            :: time             ! [a] Current time
-        real(wp), intent(IN), optional  :: dzbdt_corr(:, :) ! [m/yr] Basal topography displacement rate (ie, to relax from low resolution to high resolution) 
+        real(wp), intent(IN), optional  :: dwdt_corr(:, :) ! [m/yr] Basal topography displacement rate (ie, to relax from low resolution to high resolution) 
 
         ! Local variables
         real(wp) :: dt, dt_now
         integer  :: n, nstep
         logical  :: update_diagnostics
  
-        call extendice2isostasy(isos%now, H_ice, isos%domain%icrop1, isos%domain%icrop2, &
-            isos%domain%jcrop1, isos%domain%jcrop2)
+        isos%now%Hice = 0.0
+        isos%now%Hice(isos%domain%icrop1:isos%domain%icrop2, &
+            isos%domain%jcrop1:isos%domain%jcrop2) = H_ice
 
         ! Step 0: determine current timestep and number of iterations
         dt = time - isos%par%time_prognostics
@@ -505,13 +498,13 @@ module isostasy
                     call calc_llra_equilibrium(isos%now%w_equilibrium, &
                         isos%now%canom_load, isos%par%rho_uppermantle)
                     isos%now%w    = isos%now%w_equilibrium
-                    isos%now%dzbdt = 0.0
+                    isos%now%dwdt = 0.0
 
                 ! LLRA
                 case(1)
                     call calc_llra_equilibrium(isos%now%w_equilibrium, &
                         isos%now%canom_load, isos%par%rho_uppermantle)
-                    call calc_asthenosphere_relax(isos%now%dzbdt, isos%now%w, &
+                    call calc_asthenosphere_relax(isos%now%dwdt, isos%now%w, &
                         isos%now%w_equilibrium, isos%domain%tau)
 
                 ! LV-ELRA (Coulon et al. 2021).
@@ -519,8 +512,6 @@ module isostasy
                 case(2)
                     
                     if (update_diagnostics) then
-                        ! call calc_elra_equilibrium(isos%now%w_equilibrium, &
-                        !     isos%now%canom_full, isos%domain%GV, isos%par%g)
                         call precomputed_fftconvolution(isos%now%w_equilibrium, isos%domain%FGV, &
                             isos%now%canom_load * isos%par%g * isos%domain%K ** 2.0, &
                             isos%domain%i1, isos%domain%i2, &
@@ -530,14 +521,13 @@ module isostasy
                         call apply_zerobc_at_corners(isos%now%w_equilibrium, isos%domain%nx, &
                             isos%domain%ny)
                     end if
-                    ! write(*,*) "weq = ", sum(isos%now%w_equilibrium)
-                    call calc_asthenosphere_relax(isos%now%dzbdt, isos%now%w, &
+                    call calc_asthenosphere_relax(isos%now%dwdt, isos%now%w, &
                         isos%now%w_equilibrium, isos%domain%tau)
 
                 ! LV-ELVA (Swierczek-jereczek et al. 2024).
                 ! Gives ELVA (Bueler et al. 2007) if eta = const.
                 case(3)
-                    call calc_lvelva(isos%now%dzbdt, isos%now%w, isos%now%canom_full, &
+                    call calc_lvelva(isos%now%dwdt, isos%now%w, isos%now%canom_full, &
                         isos%domain%maskactive, isos%par%g, isos%par%nu, isos%domain%D_lith, &
                         isos%domain%eta_eff, isos%domain%kappa, isos%domain%nx, isos%domain%ny, &
                         isos%domain%dx_matrix, isos%domain%dy_matrix, isos%par%sec_per_year, &
@@ -552,14 +542,14 @@ module isostasy
             ! Step 2: update bedrock elevation and current model time
             if (dt_now .gt. 0.0) then
 
-                isos%now%w = isos%now%w + isos%now%dzbdt*dt_now
-                isos%now%z_bed = isos%ref%z_bed + isos%now%w + isos%now%we
-
+                ! TODO: do we need this? If yes, lines below should be adapted adequatly
                 ! Additionally apply bedrock adjustment field
-                if (present(dzbdt_corr)) then 
-                    isos%now%z_bed = isos%now%z_bed + dzbdt_corr*dt_now
+                if (present(dwdt_corr)) then 
+                    isos%now%z_bed = isos%now%z_bed + dwdt_corr*dt_now
                 end if
                 
+                isos%now%w = isos%now%w + isos%now%dwdt*dt_now
+                isos%now%z_bed = isos%ref%z_bed + isos%now%w + isos%now%we
                 isos%par%time_prognostics = isos%par%time_prognostics + dt_now
                
             end if
@@ -574,6 +564,7 @@ module isostasy
 
         call cropstate2output(isos%output, isos%now, isos%domain%icrop1, isos%domain%icrop2, &
             isos%domain%jcrop1, isos%domain%jcrop2)
+
         rsl = isos%output%ssh - isos%output%z_bed
 
         return
@@ -687,7 +678,7 @@ module isostasy
         type(isos_state_class), intent(INOUT) :: state
 
         if (allocated(state%z_bed))             deallocate(state%z_bed)
-        if (allocated(state%dzbdt))             deallocate(state%dzbdt)
+        if (allocated(state%dwdt))             deallocate(state%dwdt)
         if (allocated(state%q))                 deallocate(state%q)
         if (allocated(state%w))                 deallocate(state%w)
         if (allocated(state%w_equilibrium))     deallocate(state%w_equilibrium)
@@ -727,7 +718,7 @@ module isostasy
 
         if (allocated(output%Hice))             deallocate(output%Hice)
         if (allocated(output%canom_full))       deallocate(output%canom_full)
-        if (allocated(output%dzbdt))            deallocate(output%dzbdt)
+        if (allocated(output%dwdt))            deallocate(output%dwdt)
 
         if (allocated(output%w))                deallocate(output%w)
         if (allocated(output%we))               deallocate(output%we)
@@ -785,7 +776,7 @@ module isostasy
         nfilt = 2 ! dummy number. TODO: remove element-wise convolutions where possible
 
         allocate(state%z_bed(nx, ny))
-        allocate(state%dzbdt(nx, ny))
+        allocate(state%dwdt(nx, ny))
         allocate(state%q(nx, ny))
         allocate(state%w(nx, ny))
         allocate(state%w_equilibrium(nx, ny))
@@ -827,7 +818,7 @@ module isostasy
 
         allocate(output%Hice(nx, ny))
         allocate(output%canom_full(nx, ny))
-        allocate(output%dzbdt(nx, ny))
+        allocate(output%dwdt(nx, ny))
 
         allocate(output%w(nx, ny))
         allocate(output%we(nx, ny))

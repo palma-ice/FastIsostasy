@@ -528,7 +528,7 @@ program test_isostasy
             long_name="Bedrock elevation", dim1="xc", dim2="yc", dim3="time", &
             start=[1, 1, n], ncid=ncid)
 
-        call nc_write(filename, "dzbdt", isos%output%dzbdt, units="m/yr", &
+        call nc_write(filename, "dwdt", isos%output%dwdt, units="m/yr", &
             long_name="Bedrock elevation change", &
             dim1="xc", dim2="yc", dim3="time", start=[1,1,n], ncid=ncid)
 

@@ -202,7 +202,7 @@ module isos_utils
         type(isos_state_class), intent(IN)      :: now
 
         ref%z_bed           = now%z_bed
-        ref%dzbdt           = now%dzbdt
+        ref%dwdt           = now%dwdt
         ref%q               = now%q
         ref%w               = now%w
         ref%w_equilibrium   = now%w_equilibrium
@@ -240,10 +240,10 @@ module isos_utils
         output%He_lith = domain%He_lith(i1:i2, j1:j2)
         output%D_lith = domain%D_lith(i1:i2, j1:j2)
         output%eta_eff = domain%eta_eff(i1:i2, j1:j2)
-        output%kappa = domain%tau(i1:i2, j1:j2)
+        output%tau = domain%tau(i1:i2, j1:j2)
         output%kappa = domain%kappa(i1:i2, j1:j2)
 
-        output%GE = domain%kei(i1:i2, j1:j2)
+        output%kei = domain%kei(i1:i2, j1:j2)
         output%GE = domain%GE(i1:i2, j1:j2)
         output%GV = domain%GV(i1:i2, j1:j2)
         output%GN = domain%GN(i1:i2, j1:j2)
@@ -260,7 +260,7 @@ module isos_utils
         output%Hice = now%Hice(i1:i2, j1:j2)
         output%ssh = now%ssh(i1:i2, j1:j2)
         output%z_bed = now%z_bed(i1:i2, j1:j2)
-        output%dzbdt = now%dzbdt(i1:i2, j1:j2)
+        output%dwdt = now%dwdt(i1:i2, j1:j2)
         output%w = now%w(i1:i2, j1:j2)
         output%we = now%we(i1:i2, j1:j2)
         output%ssh_perturb = now%ssh_perturb(i1:i2, j1:j2)
@@ -307,14 +307,20 @@ module isos_utils
         return
     end subroutine calc_cropindices
 
-    subroutine extendice2isostasy(now, H_ice, i1, i2, j1, j2)
+    subroutine extendice2isostasy(now, z_bed, H_ice, ssh, i1, i2, j1, j2)
         implicit none
         type(isos_state_class), intent(INOUT)   :: now
+        real(wp), intent(IN)                    :: z_bed(:, :)
         real(wp), intent(IN)                    :: H_ice(:, :)
+        real(wp), intent(IN)                    :: ssh(:, :)
         integer, intent(IN)                     :: i1, i2, j1, j2
 
+        now%z_bed = 0.0
+        now%z_bed(i1:i2, j1:j2) = z_bed
         now%Hice = 0.0
         now%Hice(i1:i2, j1:j2) = H_ice
+        now%ssh = 0.0
+        now%ssh(i1:i2, j1:j2) = ssh
         return
     end subroutine extendice2isostasy
 

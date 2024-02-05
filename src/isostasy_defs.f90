@@ -103,7 +103,7 @@ module isostasy_defs
         real(wp)              :: bsl                ! [m] Barystatic sea level
        
         real(wp), allocatable       :: z_bed(:, :)         ! Bedrock elevation         [m]
-        real(wp), allocatable       :: dzbdt(:, :)         ! Rate of bedrock uplift    [m/a]
+        real(wp), allocatable       :: dwdt(:, :)         ! Rate of bedrock uplift    [m/a]
         real(wp), allocatable       :: q(:, :)             ! [Pa] Load
         real(wp), allocatable       :: w(:, :)             ! Current viscous displacement
         real(wp), allocatable       :: w_equilibrium(:, :) ! Current viscous equilibrium displacement (XLRA)
@@ -139,7 +139,7 @@ module isostasy_defs
         
         real(wp), allocatable       :: Hice(:, :)
         real(wp), allocatable       :: canom_full(:, :)
-        real(wp), allocatable       :: dzbdt(:, :)
+        real(wp), allocatable       :: dwdt(:, :)
         real(wp), allocatable       :: w(:, :)
         real(wp), allocatable       :: we(:, :)
         real(wp), allocatable       :: w_equilibrium(:, :)

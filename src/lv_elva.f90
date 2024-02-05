@@ -66,12 +66,12 @@ module lv_elva
     end subroutine check_fft_r2c
 
     ! TODO: finish adapting this
-    subroutine calc_lvelva_extended(dzbdt, w, canom_full, maskactive, g, nu, D_lith, eta, &
+    subroutine calc_lvelva_extended(dwdt, w, canom_full, maskactive, g, nu, D_lith, eta, &
         kappa, nx, ny, dx_matrix, dy_matrix, sec_per_year, forward_plan, backward_plan, pad)
 
         implicit none
 
-        real(wp), intent(INOUT) :: dzbdt(:, :)
+        real(wp), intent(INOUT) :: dwdt(:, :)
         real(wp), intent(IN)    :: w(:, :)
         real(wp), intent(IN)    :: canom_full(:, :)
         logical,  intent(IN)    :: maskactive(:, :)
@@ -95,19 +95,19 @@ module lv_elva
 
 
     !     ! Step 1: populate variables on a square grid
-    !     sq_dzbdt = 0.0 
-    !     call extend_array(sq_dzbdt, dzbdt, fill_with="mirror", val=0.0_wp)
+    !     sq_dwdt = 0.0 
+    !     call extend_array(sq_dwdt, dwdt, fill_with="mirror", val=0.0_wp)
     !     call extend_array(sq_w, w, fill_with="mirror", val=0.0_wp)
     !     call extend_array(sq_canom_full, canom_full, fill_with="mirror", val=0.0_wp)
     !     call extend_array(sq_D_lith, D_lith, fill_with="mirror", val=0.0_wp)
     !     call extend_array(sq_eta, eta, fill_with="mirror", val=0.0_wp)
 
     !     ! Step 2: solve
-    !     ! call calc_lvelva(sq_dzbdt, sq_w, sq_canom_full, nu, mu, sq_D_lith, &
+    !     ! call calc_lvelva(sq_dwdt, sq_w, sq_canom_full, nu, mu, sq_D_lith, &
     !     !     sq_eta, kappa, nsq, nsq, par, domain)
 
     !     ! Step 3: get solution on original grid
-    !     call reduce_array(dzbdt, sq_dzbdt)
+    !     call reduce_array(dwdt, sq_dwdt)
     !     call reduce_array(w, sq_w)
         
     !     return
@@ -115,12 +115,12 @@ module lv_elva
 
 
     ! Calculate vertical displacement rate (viscous part) on rectangular domain.
-    subroutine calc_lvelva(dzbdt, w, canom_full, maskactive, g, nu, D_lith, eta,&
+    subroutine calc_lvelva(dwdt, w, canom_full, maskactive, g, nu, D_lith, eta,&
         kappa, nx, ny, dx_matrix, dy_matrix, sec_per_year, forward_plan, backward_plan)
 
         implicit none
         
-        real(wp), intent(INOUT) :: dzbdt(:, :)
+        real(wp), intent(INOUT) :: dwdt(:, :)
         real(wp), intent(IN)    :: w(:, :)
         real(wp), intent(IN)    :: canom_full(:, :)
         logical,  intent(IN)    :: maskactive(:, :)
@@ -197,11 +197,11 @@ module lv_elva
         dwdt_hat = f_hat / kappa
 
         ! write(*,*) sum(dwdt_hat), sum(f_hat)
-        call calc_fft_backward_r2r(backward_plan, dwdt_hat, dzbdt)
-        call apply_zerobc_at_corners(dzbdt, nx, ny)
+        call calc_fft_backward_r2r(backward_plan, dwdt_hat, dwdt)
+        call apply_zerobc_at_corners(dwdt, nx, ny)
 
         ! Rate of viscous asthenosphere uplift per unit time (seconds)
-        dzbdt = dzbdt * sec_per_year  !  [m/s] x [s/a] = [m/a]
+        dwdt = dwdt * sec_per_year  !  [m/s] x [s/a] = [m/a]
 
         return
     end subroutine calc_lvelva
