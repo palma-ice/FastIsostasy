@@ -11,7 +11,6 @@ module lv_elva
 
     private
     
-    public :: calc_lvelva_extended
     public :: calc_lvelva
     public :: calc_effective_viscosity_3layer_channel
     public :: calc_effective_viscosity_3d
@@ -23,96 +22,7 @@ module lv_elva
     public :: calc_beta
     public :: convenient_calc_kappa
 
-    public :: check_fft_r2r
-    public :: check_fft_r2c
-
     contains
-
-
-    subroutine check_fft_r2r(X, Z, nx, ny, forward_plan, backward_plan)
-        implicit none
-
-        real(wp), intent(INOUT) :: X(:, :)
-        real(wp), intent(INOUT) :: Z(:, :)
-        integer, intent(IN)     :: nx, ny
-        type(c_ptr), intent(IN) :: forward_plan
-        type(c_ptr), intent(IN) :: backward_plan
-        
-        real(wp), allocatable:: Y(:, :)
-        allocate(Y(nx, ny))
-
-        call calc_fft_forward_r2r(forward_plan, X, Y)
-        call calc_fft_backward_r2r(backward_plan, Y, Z)
-        
-        return
-    end subroutine check_fft_r2r
-
-    subroutine check_fft_r2c(X, Z, nx, ny, forward_plan, backward_plan)
-        implicit none
-
-        real(wp), intent(INOUT) :: X(:, :)
-        real(wp), intent(INOUT) :: Z(:, :)
-        integer, intent(IN)     :: nx, ny
-        type(c_ptr), intent(IN) :: forward_plan
-        type(c_ptr), intent(IN) :: backward_plan
-        
-        complex(wp), allocatable:: Y(:, :)
-        allocate(Y(nx, ny))
-
-        call calc_fft_forward_r2c(forward_plan, X, Y)
-        call calc_fft_backward_c2r(backward_plan, Y, Z)
-        
-        return
-    end subroutine check_fft_r2c
-
-    ! TODO: finish adapting this
-    subroutine calc_lvelva_extended(dwdt, w, canom_full, maskactive, g, nu, D_lith, eta, &
-        kappa, nx, ny, dx_matrix, dy_matrix, sec_per_year, forward_plan, backward_plan, pad)
-
-        implicit none
-
-        real(wp), intent(INOUT) :: dwdt(:, :)
-        real(wp), intent(IN)    :: w(:, :)
-        real(wp), intent(IN)    :: canom_full(:, :)
-        logical,  intent(IN)    :: maskactive(:, :)
-        real(wp), intent(IN)    :: g
-        real(wp), intent(IN)    :: nu
-        real(wp), intent(IN)    :: D_lith(:, :) 
-        real(wp), intent(IN)    :: eta(:, :)   ! [Pa s] Viscosity, eta=1e21 by default. 
-        real(wp), intent(IN)    :: kappa(:, :)
-        integer, intent(IN)     :: nx, ny
-        real(wp), intent(IN)    :: sec_per_year
-        real(wp), intent(IN)    :: dx_matrix(:, :)
-        real(wp), intent(IN)    :: dy_matrix(:, :)
-        type(c_ptr), intent(IN) :: forward_plan
-        type(c_ptr), intent(IN) :: backward_plan
-        integer, intent(IN)     :: pad
-
-        integer                 :: nnx, nny
-        nnx = nx + 2 * pad
-        nny = ny + 2 * pad
-
-
-
-    !     ! Step 1: populate variables on a square grid
-    !     sq_dwdt = 0.0 
-    !     call extend_array(sq_dwdt, dwdt, fill_with="mirror", val=0.0_wp)
-    !     call extend_array(sq_w, w, fill_with="mirror", val=0.0_wp)
-    !     call extend_array(sq_canom_full, canom_full, fill_with="mirror", val=0.0_wp)
-    !     call extend_array(sq_D_lith, D_lith, fill_with="mirror", val=0.0_wp)
-    !     call extend_array(sq_eta, eta, fill_with="mirror", val=0.0_wp)
-
-    !     ! Step 2: solve
-    !     ! call calc_lvelva(sq_dwdt, sq_w, sq_canom_full, nu, mu, sq_D_lith, &
-    !     !     sq_eta, kappa, nsq, nsq, par, domain)
-
-    !     ! Step 3: get solution on original grid
-    !     call reduce_array(dwdt, sq_dwdt)
-    !     call reduce_array(w, sq_w)
-        
-    !     return
-    end subroutine calc_lvelva_extended
-
 
     ! Calculate vertical displacement rate (viscous part) on rectangular domain.
     subroutine calc_lvelva(dwdt, w, canom_full, maskactive, g, nu, D_lith, eta,&
