@@ -3,7 +3,7 @@
     interactive_sealevel = .true.   ! Sea level interacts with solid Earth deformation?
     correct_distortion = .false.    ! Account for distortion of projection?
     method          = 3             ! 0: constant displacement; 1: LLRA; 2: LV-ELRA, 3: LV-ELVA
-    dt_prognostics  = 0.1            ! [yr] Max. timestep to recalculate prognostics
+    dt_prognostics  = 1.0           ! [yr] Max. timestep to recalculate prognostics
     dt_diagnostics  = 10.           ! [yr] Min. timestep to recalculate diagnostics
     visc_method     = uniform       ! Type of viscosity field for sub-lithospheric mantle
     rigidity_method = uniform       ! Type of thickness filed for elastic lithosphere

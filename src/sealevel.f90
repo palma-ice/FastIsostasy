@@ -7,7 +7,6 @@ module sealevel
 
     public :: calc_columnanoms_load
     public :: calc_columnanoms_solidearth
-    public :: calc_seasurfaceheight
     public :: calc_masks
     public :: calc_sl_contribution
 
@@ -15,29 +14,6 @@ module sealevel
 
     ! TODO: implement bsl update
 
-    ! calc_sealevel()
-    ! Update the sea level based on the new ice thickness field
-    ! subroutine calc_sealevel(Hice, isos, update_diagnostics)
-    !     implicit none
-    !     real(wp), intent(IN)            :: Hice(:, :)
-    !     type(isos_class), intent(INOUT) :: isos
-    !     logical, intent(IN)             :: update_diagnostics
-
-    !     call calc_columnanoms_load(Hice, isos)  ! Part 1
-    !     call calc_columnanoms_solidearth(isos)
-
-    !     if (update_diagnostics) then
-    !         call calc_seasurfaceheight(isos)    ! Part 2
-    !         call calc_masks(isos)               ! Part 3
-    !         call calc_sl_contribution(isos)     ! Part 4
-
-    !     endif
-
-    !     return
-    ! end subroutine calc_sealevel
-
-    
-    !!!!!!!!!!!!!!!!!!!!!! Part 1 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     subroutine calc_columnanoms_load(isos)
         implicit none
         type(isos_class), intent(INOUT)     :: isos 
@@ -59,8 +35,8 @@ module sealevel
         type(isos_class), intent(INOUT)   :: isos
 
         isos%now%canom_full = isos%now%canom_load
-        ! call add_columnanom(isos%par%rho_litho, isos%now%we, isos%ref%we, isos%now%canom_full)
-        ! call add_columnanom(isos%par%rho_uppermantle, isos%now%w, isos%ref%w, isos%now%canom_full)
+        call add_columnanom(isos%par%rho_litho, isos%now%we, isos%ref%we, isos%now%canom_full)
+        call add_columnanom(isos%par%rho_uppermantle, isos%now%w, isos%ref%w, isos%now%canom_full)
         call maskfield(isos%now%canom_full, isos%now%canom_full, isos%domain%maskactive, &
             isos%domain%nx, isos%domain%ny)
         return
@@ -79,25 +55,6 @@ module sealevel
         return
     end subroutine add_columnanom
 
-    !!!!!!!!!!!!!!!!!!!!!! Part 2 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    subroutine calc_seasurfaceheight(isos)
-        implicit none
-        type(isos_class), intent(INOUT)   :: isos
-
-        call calc_ssh_perturbation(isos)
-        isos%now%ssh = isos%ref%ssh + isos%now%ssh_perturb + isos%now%bsl
-    end subroutine calc_seasurfaceheight
-
-
-    subroutine calc_ssh_perturbation(isos)
-        implicit none
-        type(isos_class), intent(INOUT)   :: isos
-
-        call calc_mass_anom(isos)
-        !call calc_fft_convo()
-    end subroutine calc_ssh_perturbation
-
-    !
     subroutine calc_mass_anom(isos)
         implicit none
         type(isos_class), intent(INOUT)   :: isos 
@@ -107,7 +64,6 @@ module sealevel
         return
     end subroutine calc_mass_anom
 
-    !!!!!!!!!!!!!!!!!!!!!! Part 3 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     subroutine calc_masks(isos)
         implicit none
         type(isos_class), intent(INOUT)   :: isos
@@ -157,7 +113,6 @@ module sealevel
         isos%now%Haf = isos%now%Hice + Heq_masked * (isos%par%rho_seawater / isos%par%rho_ice)
     end subroutine calc_height_above_floatation
 
-    !!!!!!!!!!!!!!!!!!!!!! Part 4 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     subroutine calc_sl_contribution(isos)
         implicit none
         type(isos_class), intent(INOUT)   :: isos 

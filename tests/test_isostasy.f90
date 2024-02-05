@@ -31,9 +31,10 @@ program test_isostasy
     real(wp) :: xmin, xmax, dx
     real(wp) :: ymin, ymax, dy
     real(wp) :: xcntr, ycntr
-    real(wp), allocatable :: xc(:)
-    real(wp), allocatable :: yc(:)
-    
+    real(wp), allocatable   :: xc(:)
+    real(wp), allocatable   :: yc(:)
+    real(wp)                :: alpha
+
     real(wp), allocatable :: z_bed(:, :) 
     real(wp), allocatable :: H_ice(:, :), T_ice(:, : ,:), z_bed_ice(:, : ,:)
     real(wp), allocatable :: time_ice(:), xc_ice(:), yc_ice(:)
@@ -53,7 +54,7 @@ program test_isostasy
 
     ! FIXME: analytic solution of test1
     experiment = "test5"   ! Spada et al. (2011) disc
-
+    
     ! Tests are defined in Swierczek-Jereczek et al. (2024), GMD.
     ! Additional: "test5" = Lucía's Greenland ice-sheet load (since 15 ka)
     
@@ -122,16 +123,17 @@ program test_isostasy
                 ymax = abs(ymin)
 
             case("test5")
+                alpha = 1.0         ! scaling factor for domain
                 time_init = 0.
                 time_end  = 15.e3
                 dtt       = 1.0
                 dt_out    = 1.e3
-                dx = 16.e3 * 1.5
+                dx = 16.e3 * alpha
                 dy = dx
                 ! xmin = -840.e3
                 ! ymin = -1440.e3
-                xmin = -840.e3 * 1.5
-                ymin = -1440.e3 * 1.5
+                xmin = -840.e3 * alpha
+                ymin = -1440.e3 * alpha
                 xmax = abs(xmin)
                 ymax = abs(ymin)
 
@@ -333,38 +335,39 @@ program test_isostasy
             h0  = 1000.0   ! [m] 
             eta = 1.e+21   ! [Pa s]
         
-            ! Read in H_ice
-            ! filename = "/home/jan/.julia/dev/FastIsostasy/test/greenland-deglaciation/LGM_equilibrium_15kyr.nc"
-            filename = "/home/jan/greenland-lucia-alpha=1.5.nc"
-
-            ! nct = nc_size(filename,"time")
-            ! ncx = nc_size(filename,"xc")
-            ! ncy = nc_size(filename,"yc")
-
-            write(*, *) "Reading dims..."
-            nct = nc_size(filename, "t")
-            ncx = nc_size(filename, "x")
-            ncy = nc_size(filename, "y")
+            write(*, *) "Reading ice .nc..."
+            if (alpha .eq. 1.0) then
+                filename = "/home/jan/.julia/dev/FastIsostasy/test/greenland-deglaciation/LGM_equilibrium_15kyr.nc"
+                nct = nc_size(filename,"time")
+                ncx = nc_size(filename,"xc")
+                ncy = nc_size(filename,"yc")
+            else
+                filename = "/home/jan/greenland-lucia-alpha=1.5.nc"
+                nct = nc_size(filename, "t")
+                ncx = nc_size(filename, "x")
+                ncy = nc_size(filename, "y")
+            end if
 
             allocate(z_bed_ice(ncx, ncy, nct))
             allocate(T_ice(ncx, ncy, nct))
-
             allocate(xc_ice(ncx))
             allocate(yc_ice(ncy))
             allocate(time_ice(nct))
 
-            ! call nc_read(filename, "z_bed", z_bed_ice, start=[1, 1, 1], count=[ncx, ncy, nct])
-            ! call nc_read(filename, "H_ice", T_ice, start=[1, 1, 1], count=[ncx, ncy, nct])
-            ! call nc_read(filename, "xc", xc_ice, start=[1], count=[ncx])
-            ! call nc_read(filename, "time", time_ice, start=[1], count=[nct])
-            ! call nc_read(filename, "yc", yc_ice, start=[1], count=[ncy])
-            
             write(*, *) "Reading fields..."
-            call nc_read(filename, "b", z_bed_ice, start=[1, 1, 1], count=[ncx, ncy, nct])
-            call nc_read(filename, "Hice", T_ice, start=[1, 1, 1], count=[ncx, ncy, nct])
-            call nc_read(filename, "x", xc_ice, start=[1], count=[ncx])
-            call nc_read(filename, "t", time_ice, start=[1], count=[nct])
-            call nc_read(filename, "y", yc_ice, start=[1], count=[ncy])
+            if (alpha .eq. 1.0) then
+                call nc_read(filename, "z_bed", z_bed_ice, start=[1, 1, 1], count=[ncx, ncy, nct])
+                call nc_read(filename, "H_ice", T_ice, start=[1, 1, 1], count=[ncx, ncy, nct])
+                call nc_read(filename, "xc", xc_ice, start=[1], count=[ncx])
+                call nc_read(filename, "time", time_ice, start=[1], count=[nct])
+                call nc_read(filename, "yc", yc_ice, start=[1], count=[ncy])
+            else
+                call nc_read(filename, "b", z_bed_ice, start=[1, 1, 1], count=[ncx, ncy, nct])
+                call nc_read(filename, "Hice", T_ice, start=[1, 1, 1], count=[ncx, ncy, nct])
+                call nc_read(filename, "x", xc_ice, start=[1], count=[ncx])
+                call nc_read(filename, "t", time_ice, start=[1], count=[nct])
+                call nc_read(filename, "y", yc_ice, start=[1], count=[ncy])
+            end if
 
             H_ice = T_ice(:, :, 1)
             z_bed = z_bed_ice(:, :, 1)
@@ -523,7 +526,7 @@ program test_isostasy
 
         call nc_write(filename,"z_bed", isos%output%z_bed, units="m", &
             long_name="Bedrock elevation", dim1="xc", dim2="yc", dim3="time", &
-            start=[1,1,n],ncid=ncid)
+            start=[1, 1, n], ncid=ncid)
 
         call nc_write(filename, "dzbdt", isos%output%dzbdt, units="m/yr", &
             long_name="Bedrock elevation change", &
@@ -550,9 +553,9 @@ program test_isostasy
         if (present(z_bed_bench)) then 
             ! Compare with benchmark solution 
             call nc_write(filename,"z_bed_bench",z_bed_bench,units="m",long_name="Benchmark bedrock elevation", &        
-                dim1="xc",dim2="yc",dim3="time",start=[1,1,n],ncid=ncid)                                                  
+                dim1="xc",dim2="yc",dim3="time",start=[1, 1, n], ncid=ncid)                                                  
             call nc_write(filename,"err_z_bed",isos%now%z_bed - z_bed_bench,units="m",long_name="Error in bedrock elevation", & 
-                dim1="xc",dim2="yc",dim3="time",start=[1,1,n],ncid=ncid)  
+                dim1="xc",dim2="yc",dim3="time",start=[1, 1, n], ncid=ncid)  
         end if 
 
         call nc_close(ncid)     ! Close the netcdf file

@@ -391,6 +391,8 @@ module isostasy
         isos%now%z_bed = z_bed
         isos%now%Hice = H_ice
         isos%now%ssh = ssh
+        call extendice2isostasy(isos%now, H_ice, isos%domain%icrop1, isos%domain%icrop2, &
+            isos%domain%jcrop1, isos%domain%jcrop2)
         call copy_state(isos%ref, isos%now)
 
         ! Define initial time of isostasy model
@@ -550,13 +552,13 @@ module isostasy
             ! Step 2: update bedrock elevation and current model time
             if (dt_now .gt. 0.0) then
 
-               isos%now%w = isos%now%w + isos%now%dzbdt*dt_now
-               isos%now%z_bed = isos%ref%z_bed + isos%now%w + isos%now%we
+                isos%now%w = isos%now%w + isos%now%dzbdt*dt_now
+                isos%now%z_bed = isos%ref%z_bed + isos%now%w + isos%now%we
 
                 ! Additionally apply bedrock adjustment field
                 if (present(dzbdt_corr)) then 
                     isos%now%z_bed = isos%now%z_bed + dzbdt_corr*dt_now
-                end if 
+                end if
                 
                 isos%par%time_prognostics = isos%par%time_prognostics + dt_now
                

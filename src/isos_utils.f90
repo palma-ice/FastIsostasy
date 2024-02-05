@@ -242,7 +242,7 @@ module isos_utils
         output%eta_eff = domain%eta_eff(i1:i2, j1:j2)
         output%kappa = domain%tau(i1:i2, j1:j2)
         output%kappa = domain%kappa(i1:i2, j1:j2)
-        
+
         output%GE = domain%kei(i1:i2, j1:j2)
         output%GE = domain%GE(i1:i2, j1:j2)
         output%GV = domain%GV(i1:i2, j1:j2)
@@ -274,15 +274,6 @@ module isos_utils
         integer, intent(INOUT)  :: icrop1, icrop2, jcrop1, jcrop2
         integer, intent(IN)     :: nx, ny
         integer                 :: pad
-
-        ! if (mod(nx, 2) .ne. 0) then
-        !     write(*,*) "Grids with even number of points in x are not supported so far."
-        !     stop
-        ! end if
-        ! if (mod(ny, 2) .ne. 0) then
-        !     write(*,*) "Grids with even number of points in x are not supported so far."
-        !     stop
-        ! end if
 
         if (nx .eq. ny) then
             icrop1 = 1
