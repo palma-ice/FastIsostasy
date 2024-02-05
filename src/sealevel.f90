@@ -38,12 +38,10 @@ module sealevel
 
     
     !!!!!!!!!!!!!!!!!!!!!! Part 1 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    subroutine calc_columnanoms_load(Hice, isos)
+    subroutine calc_columnanoms_load(isos)
         implicit none
-        real(wp), intent(IN)                :: Hice(:, :)
         type(isos_class), intent(INOUT)     :: isos 
 
-        isos%now%Hice = Hice
         call maskfield(isos%now%Hseawater, isos%now%ssh - isos%now%z_bed, &
             isos%now%maskocean, isos%domain%nx, isos%domain%ny)
 

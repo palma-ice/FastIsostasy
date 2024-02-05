@@ -23,7 +23,47 @@ module lv_elva
     public :: calc_beta
     public :: convenient_calc_kappa
 
+    public :: check_fft_r2r
+    public :: check_fft_r2c
+
     contains
+
+
+    subroutine check_fft_r2r(X, Z, nx, ny, forward_plan, backward_plan)
+        implicit none
+
+        real(wp), intent(INOUT) :: X(:, :)
+        real(wp), intent(INOUT) :: Z(:, :)
+        integer, intent(IN)     :: nx, ny
+        type(c_ptr), intent(IN) :: forward_plan
+        type(c_ptr), intent(IN) :: backward_plan
+        
+        real(wp), allocatable:: Y(:, :)
+        allocate(Y(nx, ny))
+
+        call calc_fft_forward_r2r(forward_plan, X, Y)
+        call calc_fft_backward_r2r(backward_plan, Y, Z)
+        
+        return
+    end subroutine check_fft_r2r
+
+    subroutine check_fft_r2c(X, Z, nx, ny, forward_plan, backward_plan)
+        implicit none
+
+        real(wp), intent(INOUT) :: X(:, :)
+        real(wp), intent(INOUT) :: Z(:, :)
+        integer, intent(IN)     :: nx, ny
+        type(c_ptr), intent(IN) :: forward_plan
+        type(c_ptr), intent(IN) :: backward_plan
+        
+        complex(wp), allocatable:: Y(:, :)
+        allocate(Y(nx, ny))
+
+        call calc_fft_forward_r2c(forward_plan, X, Y)
+        call calc_fft_backward_c2r(backward_plan, Y, Z)
+        
+        return
+    end subroutine check_fft_r2c
 
     ! TODO: finish adapting this
     subroutine calc_lvelva_extended(dzbdt, w, canom_full, maskactive, g, nu, D_lith, eta, &

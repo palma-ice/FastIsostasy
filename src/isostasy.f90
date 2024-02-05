@@ -11,7 +11,8 @@ module isostasy
     use, intrinsic :: iso_fortran_env, only : input_unit, output_unit, error_unit
     use, intrinsic :: iso_c_binding
 
-    use isostasy_defs, only : wp, pi, isos_param_class, isos_state_class, isos_domain_class, isos_class
+    use isostasy_defs, only : wp, pi, isos_param_class, isos_state_class, &
+        isos_domain_class, isos_output_class, isos_class
     use green_functions
     use kelvin_function
     use isos_utils
@@ -80,9 +81,8 @@ module isostasy
         character(len=*), intent(IN), optional  :: rigidity_method
 
         ! Local variables
-        ! integer                 :: nsq
-        real(wp)                :: radius_fac
-        real(wp)                :: filter_scaling
+        integer                 :: n
+        real(wp), allocatable   :: helper_convo(:, :)
         real(wp)                :: D_lith_const
         character*256           :: filename_laty
 
@@ -118,25 +118,31 @@ module isostasy
         if (present(n_lev))             isos%par%n_lev              = n_lev
 
         write(*,*) "Allocating fields..."
-        call allocate_isos(isos, nx, ny)
+        n = max(nx, ny)
+        call allocate_isos(isos, n, n)
 
         ! TODO: allow rectangular domains and rectangular extensions.
         ! Init scalar fields of domain
-        isos%domain%nx = nx
-        isos%domain%ny = ny
+        isos%domain%nx = n
+        isos%domain%ny = n
         isos%domain%dx = dx
         isos%domain%dy = dy
 
+        call calc_cropindices(isos%domain%icrop1, isos%domain%icrop2, &
+            isos%domain%jcrop1, isos%domain%jcrop2, nx, ny)
+
         ! Init plans
         write(*,*) "Computing FFT plans..."
-        isos%domain%forward_fftplan_r2r = fftw_plan_r2r_2d(nx, ny, isos%now%w, &
+        allocate(helper_convo(2*n-1, 2*n-1))
+        helper_convo = 0.0
+        isos%domain%forward_fftplan_r2r = fftw_plan_r2r_2d(n, n, isos%now%w, &
             isos%now%w, FFTW_DHT, FFTW_DHT, FFTW_ESTIMATE)
-        isos%domain%backward_fftplan_r2r = fftw_plan_r2r_2d(nx, ny, isos%now%w, &
+        isos%domain%backward_fftplan_r2r = fftw_plan_r2r_2d(n, n, isos%now%w, &
             isos%now%w, FFTW_DHT, FFTW_DHT, FFTW_ESTIMATE)
-        isos%domain%forward_dftplan_r2c = fftw_plan_dft_r2c_2d(2*nx-1, 2*ny-1, &
-            isos%domain%GE, isos%domain%FGE, 1)
-        isos%domain%backward_dftplan_c2r = fftw_plan_dft_c2r_2d(2*nx-1, 2*ny-1, &
-            isos%domain%FGE, isos%domain%GE, 1)
+        isos%domain%forward_dftplan_r2c = fftw_plan_dft_r2c_2d(2*n-1, 2*n-1, &
+            helper_convo, isos%domain%FGE, 1)
+        isos%domain%backward_dftplan_c2r = fftw_plan_dft_c2r_2d(2*n-1, 2*n-1, &
+            isos%domain%FGE, helper_convo, 1)
 
         ! Init domain
         write(*,*) "Complementing domain informations..."
@@ -179,24 +185,14 @@ module isostasy
 
         select case(isos%par%method)
 
+            ! LV-ELRA method is being used, which allows heterogeneous value of D_Lith(x, y)
+            ! and tau(x, y). ELRA is a particular case of LV-ELRA with constant values.
             case(2)
                 write(*,*) "Using (laterally-variable) ELRA..."
-                ! Calculate radius of grid points to use for regional elastic plate filter
-                ! See Greve and Blatter (2009), Chpt 8, page 192 for methodology 
-                ! and Le Muer and Huybrechts (1996). It seems that this value
-                ! should be 5-6x radius of relative stiffness to capture the forebuldge
-                ! further out from the depression near the center. 
-                ! Note: previous implementation stopped at 400km, hard coded. 
-
-                radius_fac      = 6.0
-                filter_scaling  = 1.0
 
                 ! Calculate the Kelvin function filter
                 call calc_kei_filter_2D(isos%domain%kei, L_w=isos%par%L_w, &
                     dx=isos%domain%dx, dy=isos%domain%dx)
-
-                ! Apply scaling to adjust magnitude of filter for radius of filter cutoff
-                isos%domain%kei = filter_scaling*isos%domain%kei
 
                 ! Calculate the reference Green's function values
                 call calc_viscous_green(isos%domain%GV, isos%domain%kei, &
@@ -207,12 +203,11 @@ module isostasy
                     isos%domain%FGV, isos%domain%nx, isos%domain%ny)
                 write(*,*) "GV: ", sum(isos%domain%GV), "FGV: ", sum(isos%domain%FGV)
 
-                ! Populate 2D D_lith field to have it available
-                isos%domain%eta_eff = isos%par%visc
-                
-            ! LV-ELVA method is being used, which allows for a non-constant value of L_w,
-            ! D_Lith and thus He_lith. ELVA is a particular case of LV-ELVA with constant
-            ! values value of L_w, D_Lith and thus He_lith everywhere.
+                ! TODO: allow heterogeneous tau
+                isos%domain%tau        = isos%par%tau          ! [yr]
+
+            ! LV-ELVA method is being used, which allows heterogeneous value of D_Lith(x, y)
+            ! and eta_eff(x, y). ELVA is a particular case of LV-ELVA with constant values.
             case(3)
                 write(*,*) "Using (laterally-variable) ELVA..."
                 call convenient_calc_kappa(isos%domain)
@@ -341,11 +336,8 @@ module isostasy
                 isos%domain%GE  = 0.0
                 isos%domain%GN  = 0.0
                 
+                isos%domain%tau        = isos%par%tau          ! [yr]
             end select
-
-        ! TODO: allow heterogeneous init of tau
-        isos%domain%tau        = isos%par%tau          ! [yr]
-
 
         ! TODO: the initialisation below should be more generic and coherent with isos_init_state.
         isos%domain%maskactive = .true.
@@ -377,6 +369,7 @@ module isostasy
         isos%now%maskgrounded   = .false.
         isos%now%maskcontinent  = .false.
 
+        call cropdomain2output(isos%output, isos%domain)
         write(*,*) "isos_init:: complete." 
 
         return 
@@ -445,6 +438,9 @@ module isostasy
         integer  :: n, nstep
         logical  :: update_diagnostics
  
+        call extendice2isostasy(isos%now, H_ice, isos%domain%icrop1, isos%domain%icrop2, &
+            isos%domain%jcrop1, isos%domain%jcrop2)
+
         ! Step 0: determine current timestep and number of iterations
         dt = time - isos%par%time_prognostics
 
@@ -466,7 +462,7 @@ module isostasy
                 update_diagnostics = .FALSE.
             end if
 
-            call calc_columnanoms_load(H_ice, isos)
+            call calc_columnanoms_load(isos)
 
             ! update elastic resposne
             if (update_diagnostics) then
@@ -566,8 +562,6 @@ module isostasy
                
             end if
 
-            rsl = isos%now%ssh - isos%now%z_bed
-
             ! TODO: here we should have a better check on the final time
             if ( abs(time-isos%par%time_prognostics) .lt. 1e-5) then 
                 ! Desired time has reached, exit the loop 
@@ -575,6 +569,10 @@ module isostasy
                 exit
             end if
         end do
+
+        call cropstate2output(isos%output, isos%now, isos%domain%icrop1, isos%domain%icrop2, &
+            isos%domain%jcrop1, isos%domain%jcrop2)
+        rsl = isos%output%ssh - isos%output%z_bed
 
         return
     end subroutine isos_update
@@ -587,6 +585,7 @@ module isostasy
         call deallocate_isos_state(isos%now)
         call deallocate_isos_state(isos%ref)
         call deallocate_isos_domain(isos%domain)
+        call deallocate_isos_output(isos%output)
 
         return
     end subroutine isos_end
@@ -644,9 +643,11 @@ module isostasy
         call deallocate_isos_domain(isos%domain)
         call deallocate_isos_state(isos%now)
         call deallocate_isos_state(isos%ref)
+        call deallocate_isos_output(isos%output)
         call allocate_isos_domain(isos%domain, nx, ny)
         call allocate_isos_state(isos%now, nx, ny)
         call allocate_isos_state(isos%ref, nx, ny)
+        call allocate_isos_output(isos%output, nx, ny)
 
         return
     end subroutine allocate_isos
@@ -707,6 +708,36 @@ module isostasy
 
         return 
     end subroutine deallocate_isos_state
+
+    subroutine deallocate_isos_output(output)
+        implicit none 
+        type(isos_output_class), intent(INOUT) :: output
+
+        if (allocated(output%He_lith))          deallocate(output%He_lith)
+        if (allocated(output%D_lith))           deallocate(output%D_lith)
+        if (allocated(output%eta_eff))          deallocate(output%eta_eff)
+        if (allocated(output%tau))              deallocate(output%tau)
+        if (allocated(output%kappa))            deallocate(output%kappa)
+        if (allocated(output%kei))              deallocate(output%kei)
+        if (allocated(output%GE))               deallocate(output%GE)
+        if (allocated(output%GV))               deallocate(output%GV)
+        if (allocated(output%GN))               deallocate(output%GN)
+
+        if (allocated(output%Hice))             deallocate(output%Hice)
+        if (allocated(output%canom_full))       deallocate(output%canom_full)
+        if (allocated(output%dzbdt))            deallocate(output%dzbdt)
+
+        if (allocated(output%w))                deallocate(output%w)
+        if (allocated(output%we))               deallocate(output%we)
+        if (allocated(output%w_equilibrium))    deallocate(output%w_equilibrium)
+        
+
+        if (allocated(output%ssh))              deallocate(output%ssh)
+        if (allocated(output%ssh_perturb))      deallocate(output%ssh_perturb)
+        if (allocated(output%z_bed))            deallocate(output%z_bed)
+
+        return
+    end subroutine deallocate_isos_output
 
     subroutine allocate_isos_domain(domain, nx, ny)
         implicit none
@@ -775,5 +806,36 @@ module isostasy
 
         return
     end subroutine allocate_isos_state
+
+
+    subroutine allocate_isos_output(output, nx, ny)
+        implicit none 
+        type(isos_output_class), intent(INOUT) :: output
+        integer, intent(IN) :: nx, ny
+
+        allocate(output%He_lith(nx, ny))
+        allocate(output%D_lith(nx, ny))
+        allocate(output%eta_eff(nx, ny))
+        allocate(output%tau(nx, ny))
+        allocate(output%kappa(nx, ny))
+        allocate(output%kei(nx, ny))
+        allocate(output%GE(nx, ny))
+        allocate(output%GV(nx, ny))
+        allocate(output%GN(nx, ny))
+
+        allocate(output%Hice(nx, ny))
+        allocate(output%canom_full(nx, ny))
+        allocate(output%dzbdt(nx, ny))
+
+        allocate(output%w(nx, ny))
+        allocate(output%we(nx, ny))
+        allocate(output%w_equilibrium(nx, ny))
+
+        allocate(output%ssh(nx, ny))
+        allocate(output%ssh_perturb(nx, ny))
+        allocate(output%z_bed(nx, ny))
+
+        return
+    end subroutine allocate_isos_output
 
 end module isostasy

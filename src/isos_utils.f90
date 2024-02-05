@@ -1,7 +1,8 @@
 module isos_utils
 
     use, intrinsic :: iso_c_binding
-    use isostasy_defs, only : wp, pi, isos_domain_class, isos_param_class, isos_state_class
+    use isostasy_defs, only : wp, pi, isos_domain_class, isos_param_class, &
+        isos_state_class, isos_output_class
 
     implicit none
     include 'fftw3.f03'
@@ -23,6 +24,10 @@ module isos_utils
     public :: calc_fft_forward_r2c
 
     public :: copy_state
+    public :: cropdomain2output
+    public :: cropstate2output
+    public :: calc_cropindices
+    public :: extendice2isostasy
 
     public :: extend_array
     public :: reduce_array
@@ -219,6 +224,108 @@ module isos_utils
         ref%maskcontinent   = now%maskcontinent
         return
     end subroutine copy_state
+
+
+    subroutine cropdomain2output(output, domain)
+        implicit none
+        type(isos_output_class), intent(INOUT)  :: output
+        type(isos_domain_class), intent(IN)     :: domain
+        integer                                 :: i1, i2, j1, j2
+
+        i1 = domain%icrop1
+        i2 = domain%icrop2
+        j1 = domain%jcrop1
+        j2 = domain%jcrop2
+
+        output%He_lith = domain%He_lith(i1:i2, j1:j2)
+        output%D_lith = domain%D_lith(i1:i2, j1:j2)
+        output%eta_eff = domain%eta_eff(i1:i2, j1:j2)
+        output%kappa = domain%tau(i1:i2, j1:j2)
+        output%kappa = domain%kappa(i1:i2, j1:j2)
+        
+        output%GE = domain%kei(i1:i2, j1:j2)
+        output%GE = domain%GE(i1:i2, j1:j2)
+        output%GV = domain%GV(i1:i2, j1:j2)
+        output%GN = domain%GN(i1:i2, j1:j2)
+
+        return
+    end subroutine cropdomain2output
+
+    subroutine cropstate2output(output, now, i1, i2, j1, j2)
+        implicit none
+        type(isos_output_class), intent(INOUT)  :: output
+        type(isos_state_class), intent(IN)      :: now
+        integer, intent(IN)                     :: i1, i2, j1, j2
+
+        output%Hice = now%Hice(i1:i2, j1:j2)
+        output%ssh = now%ssh(i1:i2, j1:j2)
+        output%z_bed = now%z_bed(i1:i2, j1:j2)
+        output%dzbdt = now%dzbdt(i1:i2, j1:j2)
+        output%w = now%w(i1:i2, j1:j2)
+        output%we = now%we(i1:i2, j1:j2)
+        output%ssh_perturb = now%ssh_perturb(i1:i2, j1:j2)
+        output%canom_full = now%canom_full(i1:i2, j1:j2)
+
+        return
+    end subroutine cropstate2output
+
+    subroutine calc_cropindices(icrop1, icrop2, jcrop1, jcrop2, nx, ny)
+        implicit none
+        integer, intent(INOUT)  :: icrop1, icrop2, jcrop1, jcrop2
+        integer, intent(IN)     :: nx, ny
+        integer                 :: pad
+
+        ! if (mod(nx, 2) .ne. 0) then
+        !     write(*,*) "Grids with even number of points in x are not supported so far."
+        !     stop
+        ! end if
+        ! if (mod(ny, 2) .ne. 0) then
+        !     write(*,*) "Grids with even number of points in x are not supported so far."
+        !     stop
+        ! end if
+
+        if (nx .eq. ny) then
+            icrop1 = 1
+            icrop2 = nx
+            jcrop1 = 1
+            jcrop2 = ny
+        else if (nx < ny) then
+            if ( mod(ny - nx, 2) .eq. 0) then
+                pad = (ny - nx) / 2
+            else
+                pad = (ny - nx + 1) / 2
+            end if
+
+            icrop1 = pad
+            icrop2 = ny-pad
+            jcrop1 = 1
+            jcrop2 = ny
+        else
+            if ( mod(nx - ny, 2) .eq. 0) then
+                pad = (nx - ny) / 2
+            else
+                pad = (nx - ny + 1) / 2
+            end if
+
+            jcrop1 = pad
+            icrop1 = 1
+            icrop2 = nx
+            jcrop2 = nx-pad
+        end if
+
+        return
+    end subroutine calc_cropindices
+
+    subroutine extendice2isostasy(now, H_ice, i1, i2, j1, j2)
+        implicit none
+        type(isos_state_class), intent(INOUT)   :: now
+        real(wp), intent(IN)                    :: H_ice(:, :)
+        integer, intent(IN)                     :: i1, i2, j1, j2
+
+        now%Hice = 0.0
+        now%Hice(i1:i2, j1:j2) = H_ice
+        return
+    end subroutine extendice2isostasy
 
     ! ===== ARRAY SIZING FUNCTIONS ==============================
 
@@ -745,6 +852,5 @@ module isos_utils
         end if
 
     end function midindex
-
 
 end module isos_utils

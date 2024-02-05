@@ -80,7 +80,7 @@ program test_isostasy
                 dt_out    = 1.e3
                 dx        = 50.e3
                 dy = dx
-                xmin      = -3000.e3
+                xmin = -3000.e3
                 xmax = abs(xmin)
                 ymin = xmin
                 ymax = abs(ymin)
@@ -92,7 +92,7 @@ program test_isostasy
                 dt_out    = 1.e3
                 dx        = 50.e3
                 dy = dx
-                xmin      = -3000.e3
+                xmin = -3000.e3
                 xmax = abs(xmin)
                 ymin = xmin
                 ymax = abs(ymin)
@@ -104,7 +104,7 @@ program test_isostasy
                 dt_out    = 1.e3
                 dx        = 50.e3
                 dy = dx
-                xmin      = -3000.e3
+                xmin = -3000.e3
                 xmax = abs(xmin)
                 ymin = xmin
                 ymax = abs(ymin)
@@ -242,7 +242,6 @@ program test_isostasy
             H_ice = 0.
             xcntr = (xmax+xmin)/2.0
             ycntr = (ymax+ymin)/2.0
-
 
             do j = 1, ny
                do i = 1, nx
@@ -387,7 +386,7 @@ program test_isostasy
     call isos_write_init(isos1, xc, yc, file_out, time_init)
 
     ! Determine total number of iterations to run
-    nt = ceiling((time_end-time_init)/dtt) + 1 
+    nt = ceiling((time_end-time_init)/dtt) + 1
 
     ! Advance isostasy model
     do n = 1, nt 
@@ -449,37 +448,38 @@ program test_isostasy
             units="year", unlimited=.TRUE.)
 
         ! Write constant fields
-        call nc_write(filename, "He_lith", isos%domain%He_lith, units="km", &
+        call nc_write(filename, "He_lith", isos%output%He_lith, units="km", &
             long_name="Lithosphere thickness", dim1="xc", dim2="yc" ,start=[1, 1])
 
-        call nc_write(filename, "D_lith", isos%domain%D_lith, units="N m", &
+        call nc_write(filename, "D_lith", isos%output%D_lith, units="N m", &
             long_name="Lithosphere rigidity", dim1="xc", dim2="yc", start=[1, 1])
 
-        call nc_write(filename,"GE",isos%domain%GE, units="", &
+        call nc_write(filename,"GE",isos%output%GE, units="", &
             long_name="Elastic Green function", dim1="xc", dim2="yc", start=[1, 1])
 
         if (isos%par%interactive_sealevel) then
-            call nc_write(filename, "GN", isos%domain%GN, units="", &
+            call nc_write(filename, "GN", isos%output%GN, units="", &
             long_name="SSH Green function", dim1="xc", dim2="yc", start=[1, 1])
         end if
         
         if (isos%par%method .eq. 2) then
-            call nc_write(filename, "kei", isos%domain%kei, units="", &
+            call nc_write(filename, "kei", isos%output%kei, units="", &
                 long_name="Kelvin function filter", dim1="xc", dim2="yc", start=[1, 1])
 
-            call nc_write(filename,"GV",isos%domain%GV, units="", &
+            call nc_write(filename,"GV",isos%output%GV, units="", &
                 long_name="Viscous Green function", dim1="xc", dim2="yc", start=[1, 1])
 
-            call nc_write(filename, "tau", isos%domain%tau, units="yr", &
+            call nc_write(filename, "tau", isos%output%tau, units="yr", &
                 long_name="Asthenosphere relaxation timescale", &
                 dim1="xc", dim2="yc", start=[1, 1]) 
         end if
 
         if (isos%par%method .eq. 3) then
-            call nc_write(filename, "eta_eff", isos%domain%eta_eff, units="Pa s", &
+            call nc_write(filename, "eta_eff", isos%output%eta_eff, units="Pa s", &
                 long_name="Asthenosphere effective viscosity", &
                 dim1="xc", dim2="yc", start=[1, 1])
-            call nc_write(filename, "kappa", isos%domain%kappa, units="", &
+
+            call nc_write(filename, "kappa", isos%output%kappa, units="", &
                 long_name="Pseudodifferential operator in Fourier space", &
                 dim1="xc", dim2="yc", start=[1, 1])
         end if
@@ -515,33 +515,33 @@ program test_isostasy
         call nc_write(filename,"time", time, dim1="time", start=[n], count=[1], ncid=ncid)
         
         ! Write variables
-        call nc_write(filename, "H_ice", H_ice, units="m", long_name="Ice thickness", &
+        call nc_write(filename, "H_ice", isos%output%Hice, units="m", long_name="Ice thickness", &
               dim1="xc", dim2="yc", dim3="time", start=[1,1,n], ncid=ncid)
 
-        call nc_write(filename, "ssh", isos%now%ssh, units="m", long_name="Sea-surface height", &
+        call nc_write(filename, "ssh", isos%output%ssh, units="m", long_name="Sea-surface height", &
               dim1="xc", dim2="yc", dim3="time", start=[1,1,n], ncid=ncid)
 
-        call nc_write(filename,"z_bed", isos%now%z_bed, units="m", &
+        call nc_write(filename,"z_bed", isos%output%z_bed, units="m", &
             long_name="Bedrock elevation", dim1="xc", dim2="yc", dim3="time", &
             start=[1,1,n],ncid=ncid)
 
-        call nc_write(filename, "dzbdt", isos%now%dzbdt, units="m/yr", &
+        call nc_write(filename, "dzbdt", isos%output%dzbdt, units="m/yr", &
             long_name="Bedrock elevation change", &
             dim1="xc", dim2="yc", dim3="time", start=[1,1,n], ncid=ncid)
 
-        call nc_write(filename, "w_viscous", isos%now%w, units="m", &
+        call nc_write(filename, "w_viscous", isos%output%w, units="m", &
             long_name="Displacement (viscous)", &
             dim1="xc", dim2="yc", dim3="time", start=[1,1,n], ncid=ncid)
 
-        call nc_write(filename, "w_elastic", isos%now%we, units="m", &
+        call nc_write(filename, "w_elastic", isos%output%we, units="m", &
             long_name="Displacement (elastic)", &
             dim1="xc", dim2="yc", dim3="time", start=[1,1,n], ncid=ncid)
 
-        call nc_write(filename, "ssh_perturbation", isos%now%ssh_perturb, units="m", &
+        call nc_write(filename, "ssh_perturbation", isos%output%ssh_perturb, units="m", &
             long_name="Geoid displacement", dim1="xc", dim2="yc", dim3="time", &
             start=[1,1,n], ncid=ncid)
 
-        call nc_write(filename, "column_anomaly", isos%now%canom_full, units="N m^-2", &
+        call nc_write(filename, "column_anomaly", isos%output%canom_full, units="N m^-2", &
             long_name = "Anomaly in column pressure", &
             dim1="xc", dim2="yc", dim3="time", start=[1,1,n], ncid=ncid)
 

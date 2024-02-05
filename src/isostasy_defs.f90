@@ -58,6 +58,10 @@ module isostasy_defs
         integer                 :: i2
         integer                 :: j1
         integer                 :: j2
+        integer                 :: icrop1
+        integer                 :: icrop2
+        integer                 :: jcrop1
+        integer                 :: jcrop2
         integer                 :: offset
         integer                 :: nx
         integer                 :: ny
@@ -122,11 +126,35 @@ module isostasy_defs
         logical, allocatable :: maskcontinent(:, :)  ! [1] Continent mask
     end type isos_state_class
 
+    type isos_output_class
+        real(wp), allocatable       :: He_lith(:, :)
+        real(wp), allocatable       :: D_lith(:, :)
+        real(wp), allocatable       :: eta_eff(:, :)
+        real(wp), allocatable       :: tau(:, :)
+        real(wp), allocatable       :: kappa(:, :)
+        real(wp), allocatable       :: kei(:, :)
+        real(wp), allocatable       :: GE(:, :)
+        real(wp), allocatable       :: GN(:, :)
+        real(wp), allocatable       :: GV(:, :)
+        
+        real(wp), allocatable       :: Hice(:, :)
+        real(wp), allocatable       :: canom_full(:, :)
+        real(wp), allocatable       :: dzbdt(:, :)
+        real(wp), allocatable       :: w(:, :)
+        real(wp), allocatable       :: we(:, :)
+        real(wp), allocatable       :: w_equilibrium(:, :)
+        real(wp), allocatable       :: ssh(:, :)
+        real(wp), allocatable       :: ssh_perturb(:, :)
+        real(wp), allocatable       :: z_bed(:, :)
+
+    end type isos_output_class
+
     type isos_class
         type(isos_param_class)  :: par
         type(isos_domain_class) :: domain
         type(isos_state_class)  :: now
         type(isos_state_class)  :: ref
+        type(isos_output_class) :: output
     end type
 
     public :: isos_param_class
