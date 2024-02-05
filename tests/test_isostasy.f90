@@ -53,7 +53,7 @@ program test_isostasy
     ! === Define experiment to be run ====
 
     ! FIXME: analytic solution of test1
-    experiment = "test5"   ! Spada et al. (2011) disc
+    experiment = "test2"   ! Spada et al. (2011) disc
     
     ! Tests are defined in Swierczek-Jereczek et al. (2024), GMD.
     ! Additional: "test5" = Lucía's Greenland ice-sheet load (since 15 ka)
@@ -251,10 +251,12 @@ program test_isostasy
                end do
             end do
 
-            allocate(T_ice(nx, ny, 1))
-            allocate(time_ice(1))
-
-            T_ice(:, :, 1) = H_ice(:, :)
+            allocate(T_ice(nx, ny, 2))
+            allocate(time_ice(2))
+            time_ice(1) = 0.0
+            time_ice(2) = 1e-9
+            T_ice(:, :, 1) = 0.0_wp
+            T_ice(:, :, 2) = H_ice
             
         case("test2")   ! Spada et al. (2011)
          
@@ -273,10 +275,12 @@ program test_isostasy
             end do
             end do
 
-            allocate(T_ice(nx, ny, 1))
-            allocate(time_ice(1))
-            
-            T_ice(:, :,1) = H_ice(:, :)
+            allocate(T_ice(nx, ny, 2))
+            allocate(time_ice(2))
+            time_ice(1) = 0.0
+            time_ice(2) = 1e-9
+            T_ice(:, :, 1) = 0.0_wp
+            T_ice(:, :, 2) = H_ice
             
         case("test4")  ! ICE6G_D
         ! Comment on “An Assessment of the ICE-6G_C (VM5a) Glacial Isostatic Adjustment Model” by Purcell et al.
@@ -319,10 +323,10 @@ program test_isostasy
             allocate(T_ice(ncx, ncy, nct))
             allocate(time_ice(nct))
             
-            call nc_read(filename,"time",time_ice,start=[1],count=[nct])
+            call nc_read(filename, "time", time_ice, start=[1], count=[nct])
             time_ice = -1.e3 * time_ice
             
-            call nc_read(filename,"IceT",T_ice,start=[1, 1, 1],count=[ncx, ncy, nct])
+            call nc_read(filename, "IceT", T_ice,start=[1, 1, 1], count=[ncx, ncy, nct])
             T_ice = max(T_ice, 0.)
 
             ! Initialize H_ice
@@ -383,7 +387,7 @@ program test_isostasy
     ! Inititalize state
     z_bed = 0.0_wp
     ssh = -1000.0_wp
-    call isos_init_state(isos1, z_bed, H_ice, ssh, rsl, time=time_init) 
+    call isos_init_state(isos1, z_bed, T_ice(:, :, 1), ssh, rsl, time=time_init) 
 
     ! Initialize writing output
     call isos_write_init(isos1, xc, yc, file_out, time_init)
@@ -592,7 +596,7 @@ program test_isostasy
             else if (j .eq. n+1) then
                 yout = y(:, :,n)
             else
-               alph = (xout - x(j-1)) / (x(j) - x(j-1))
+                alph = (xout - x(j-1)) / (x(j) - x(j-1))
                 yout = y(:, :,j-1) + alph*(y(:, :,j) - y(:, :,j-1))
              end if
         end if
