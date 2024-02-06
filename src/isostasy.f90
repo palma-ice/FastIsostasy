@@ -1,4 +1,4 @@
-! TODO: We should rename the module to something more specific. For instance:
+!# TODO: We should rename the module to something more specific. For instance:
 ! RegionalGIA
 module isostasy 
     ! Isostasy (Greek ísos "equal", stásis "standstill") is the state of 
@@ -85,13 +85,13 @@ module isostasy
         real(wp), allocatable   :: helper_convo(:, :)
         real(wp)                :: D_lith_const
         character*256           :: filename_laty
-        character(len=*)        :: ocean_surface_file
-        integer                 :: nbsl
+        character*256           :: ocean_surface_file
+        integer                 :: nbsl, i, j
 
         ! First, load parameters from parameter file `filename`
         write(*,*) "Defining params..."
         call isos_par_load(isos%par, filename, group)
-        isos%par%n_lev = 1.             ! By default one level in asthenosphere
+        ! isos%par%n_lev = 1.             ! By default one level in asthenosphere
 
         if (present(interactive_sealevel))  isos%par%interactive_sealevel   = interactive_sealevel
         if (present(correct_distortion))    isos%par%correct_distortion     = correct_distortion
@@ -121,7 +121,9 @@ module isostasy
 
         write(*,*) "Allocating fields..."
         n = max(nx, ny)
-        call allocate_isos(isos, n, n)
+        ocean_surface_file = "input/OceanSurfaceETOPO2022.nc"
+        nbsl = nc_size(ocean_surface_file, "z")
+        call allocate_isos(isos, n, n, isos%par%n_lev, nbsl)
 
         ! Init scalar fields of domain
         isos%domain%nx = n
@@ -130,10 +132,9 @@ module isostasy
         isos%domain%dy = dy
 
         ! Init ocean surface interpolator
-        ocean_surface_file = "input/OceanSurfaceETOPO2022.nc"
-        nbsl = nc_size(ocean_surface_file, "z")
-        call nc_read(filename, "z", isos%domain%bsl_vec, start=[1], count=[nbsl])
-        call nc_read(filename, "A", isos%domain%A_ocean_vec, start=[1], count=[nbsl])
+        call nc_read(ocean_surface_file, "z", isos%domain%bsl_vec, start=[1], count=[nbsl])
+        call nc_read(ocean_surface_file, "A", isos%domain%A_ocean_vec, start=[1], &
+            count=[nbsl])
 
         call calc_cropindices(isos%domain%icrop1, isos%domain%icrop2, &
             isos%domain%jcrop1, isos%domain%jcrop2, nx, ny)
@@ -151,7 +152,7 @@ module isostasy
         isos%domain%backward_dftplan_c2r = fftw_plan_dft_c2r_2d(2*n-1, 2*n-1, &
             isos%domain%FGE, helper_convo, 1)
 
-        ! TODO: provide square fields for params even if yelmo grid is rectangular.
+        !# TODO: provide square fields for params even if yelmo grid is rectangular.
         ! Init domain
         write(*,*) "Complementing domain informations..."
         if (isos%par%correct_distortion) then
@@ -211,7 +212,7 @@ module isostasy
                 call precompute_kernel(isos%domain%forward_dftplan_r2c, isos%domain%GV, &
                     isos%domain%FGV, isos%domain%nx, isos%domain%ny)
 
-                ! TODO: allow heterogeneous tau
+                !# TODO: allow heterogeneous tau
                 isos%domain%tau        = isos%par%tau          ! [yr]
 
             ! LV-ELVA method is being used, which allows heterogeneous value of D_Lith(x, y)
@@ -219,7 +220,9 @@ module isostasy
             case(3)
                 write(*,*) "Using (laterally-variable) ELVA..."
                 call convenient_calc_kappa(isos%domain)
-              
+                isos%domain%maskactive  = .true.
+
+                write(*,*) "Choosing rigidity field..."
                 select case(trim(isos%par%rigidity_method))
                     ! TODO: this part of the code should be in test_isostasy.f90
                     case("uniform")
@@ -244,15 +247,15 @@ module isostasy
 
                     case("laty")
                         ! TODO: this should be a relative path to isostasy_data
-                        filename_laty = "/Users/montoya/work/ice_data/Antarctica/ANT-32KM/ANT-32KM_latyparams.nc"
+                        filename_laty = "input/test4/ANT-32KM_latyparams.nc"
                         call nc_read(filename_laty, "lithos_thck", isos%domain%He_lith, &
-                            start=[1,1], count=[isos%domain%nx, isos%domain%ny])
+                            start=[1, 1], count=[isos%domain%nx, isos%domain%ny])
 
                         ! TODO: recheck line below for stability
                         isos%domain%He_lith = isos%domain%He_lith*1.e-3  ! * 0.1
                         call calc_heterogeneous_rigidity(isos%domain%D_lith, isos%par%E, &
                             isos%domain%He_lith, isos%par%nu)
-    
+
                     case DEFAULT
                         ! do nothing, eta was set above
                         print*,'what is the default?' 
@@ -283,13 +286,25 @@ module isostasy
 
                     case("laty")
                         ! TODO: change the path here
-                        filename_laty = "/Users/montoya/work/ice_data/Antarctica/ANT-32KM/ANT-32KM_latyparams.nc"
+                        filename_laty = "input/test4/ANT-32KM_latyparams.nc"
+                        write(*,*) size(isos%domain%eta, 1),  size(isos%domain%eta, 2), size(isos%domain%eta, 3)
                         call nc_read(filename_laty, "log10_mantle_visc", &
-                            isos%domain%eta,start=[1,1,1], &
+                            isos%domain%eta, start=[1, 1, 1], &
                             count=[isos%domain%nx, isos%domain%ny, isos%par%n_lev])
-                        isos%domain%eta = 10.**(isos%domain%eta)
+                        write(*,*) size(isos%domain%eta)
+                        isos%domain%eta = 10. ** (isos%domain%eta)
                         call calc_effective_viscosity_3d(isos%domain%eta_eff, &
                             isos%domain%eta, isos%domain%dx, isos%domain%dx)
+                        write(*,*) size(isos%domain%eta)
+
+                        do i = 1, nx
+                        do j = 1, ny
+                            if ((abs( (i - nx/2) * dx ) > 2500e3) .or. &
+                                (abs( (j - ny/2) * dy ) > 2500e3)) then
+                                isos%domain%maskactive(i, j) = .false.
+                            end if
+                        end do
+                        end do
 
                     case DEFAULT
                         ! do nothing, eta was set above
@@ -315,7 +330,7 @@ module isostasy
                 write(*,*) "    range(eta_eff):  ", minval(isos%domain%eta_eff),    maxval(isos%domain%eta_eff) 
                 write(*,*) "    range(He_lith):  ", minval(isos%domain%He_lith),    maxval(isos%domain%He_lith)
                 
-                write(*,*) "    L_w (m):      ", isos%par%L_w 
+                write(*,*) "    L_w (m):      ", isos%par%L_w
                 write(*,*) "    nx:           ", isos%domain%nx
                 write(*,*) "    ny:           ", isos%domain%ny
                 write(*,*) "    dx (m):       ", isos%domain%dx
@@ -337,29 +352,31 @@ module isostasy
                 isos%domain%GE  = 0.0
                 isos%domain%GN  = 0.0
                 
-                isos%domain%tau        = isos%par%tau          ! [yr]
+                isos%domain%tau         = isos%par%tau          ! [yr]
+                isos%domain%maskactive  = .true.
+
             end select
 
-        ! TODO: the initialisation below should be more generic and coherent with isos_init_state.
-        isos%domain%maskactive = .true.
-        isos%now%bsl            = -1e10
+        !# TODO: the initialisation below should be more generic and coherent with isos_init_state.
+        ! isos%now%bsl            = -1e10
+        isos%now%bsl            = 0.0
 
         ! Set time to very large value in the future 
         isos%par%time_diagnostics = 1e10 
         isos%par%time_prognostics = 1e10
 
+        ! This is then changed by isos_init_state
         isos%now%z_bed          = 0.0
-        isos%now%dwdt          = 0.0
-        isos%now%q              = 0.0
+        isos%now%dwdt           = 0.0
         isos%now%w              = 0.0
         isos%now%w_equilibrium  = 0.0
         isos%now%we             = 0.0
-        isos%now%cplx_out_aux   = 0.0
 
         isos%now%Haf            = 0.0
         isos%now%Hice           = 0.0
         isos%now%Hseawater      = 0.0
 
+        isos%now%rsl            = -1e6_wp
         isos%now%ssh            = 0.0
         isos%now%ssh_perturb    = 0.0
         isos%now%canom_load     = 0.0
@@ -374,10 +391,9 @@ module isostasy
         write(*,*) "isos_init:: complete." 
 
         return
-
     end subroutine isos_init
 
-    subroutine isos_init_state(isos, z_bed, H_ice, ssh, rsl, time)
+    subroutine isos_init_state(isos, z_bed, H_ice, ssh, time)
 
         implicit none
 
@@ -385,14 +401,13 @@ module isostasy
         real(wp), intent(IN) :: z_bed(:, :)         ! [m] Current bedrock elevation
         real(wp), intent(IN) :: H_ice(:, :)         ! [m] Current ice thickness
         real(wp), intent(IN) :: ssh(:, :)           ! [m] Current sea-surface height
-        real(wp), intent(INOUT) :: rsl(:, :)        ! [m] Current relative sea level
         real(wp), intent(IN) :: time                ! [a] Initial time 
 
         ! Store initial bedrock field
         call extendice2isostasy(isos%now, z_bed, H_ice, ssh, &
             isos%domain%icrop1, isos%domain%icrop2, &
             isos%domain%jcrop1, isos%domain%jcrop2)
-        call copy_state(isos%ref, isos%now)
+        ! call copy_state(isos%ref, isos%now)
 
         ! Define initial time of isostasy model
         ! (set time_diagnostics earlier, so that it is definitely updated on the first timestep)
@@ -402,7 +417,14 @@ module isostasy
         write(*,*) "Calling first update..."
         ! Call isos_update to diagnose rate of change
         ! (no change to z_bed will be applied since isos%par%time==time)
-        call isos_update(isos, H_ice, time, rsl) 
+        isos%now%ssh = isos%now%bsl + isos%ref%ssh + isos%now%ssh_perturb
+        isos%now%rsl = isos%now%ssh - isos%now%z_bed
+        call calc_masks(isos)
+        call calc_columnanoms_load(isos)
+        call calc_columnanoms_solidearth(isos)
+        call copy_sparsestate(isos%ref, isos%now)
+        call isos_update(isos, H_ice, time)
+        call copy_state(isos%ref, isos%now)
 
         write(*,*) "isos_init_state: "
         write(*,*) "    Initial time:   ",  isos%par%time_prognostics
@@ -424,12 +446,11 @@ module isostasy
 
     end subroutine isos_init_state
 
-    subroutine isos_update(isos, H_ice, time, rsl, dwdt_corr) 
+    subroutine isos_update(isos, H_ice, time, dwdt_corr) 
 
         implicit none
 
         type(isos_class), intent(INOUT) :: isos 
-        real(wp), intent(INOUT)         :: rsl(:, :)        ! [m] Relative sea level = ssh - zb
         real(wp), intent(IN)            :: H_ice(:, :)      ! [m] Current ice thickness
         real(wp), intent(IN)            :: time             ! [a] Current time
         real(wp), intent(IN), optional  :: dwdt_corr(:, :) ! [m/yr] Basal topography displacement rate (ie, to relax from low resolution to high resolution) 
@@ -466,7 +487,7 @@ module isostasy
 
             call calc_columnanoms_load(isos)
 
-            ! update elastic resposne
+            ! update elastic response
             if (update_diagnostics) then
                 call precomputed_fftconvolution(isos%now%we, isos%domain%FGE, &
                     isos%now%canom_load * isos%par%g * isos%domain%K ** 2.0, &
@@ -490,12 +511,19 @@ module isostasy
                     isos%domain%forward_dftplan_r2c, isos%domain%backward_dftplan_c2r)
                 call apply_zerobc_at_corners(isos%now%ssh_perturb, &
                     isos%domain%nx, isos%domain%ny)
+                
+                ! write(*,*) "Updating sea-level contributions..."
+                ! call calc_sl_contribution(isos)
                 isos%now%ssh = isos%now%bsl + isos%ref%ssh + isos%now%ssh_perturb
+                isos%now%rsl = isos%now%ssh - isos%now%z_bed
+
                 ! write(*,*) "Updating masks..."
                 call calc_masks(isos)
-                ! write(*,*) "Updating sea-level contributions..."
-                call calc_sl_contribution(isos)
             endif
+
+            ! Need to re-compute the load after updateing the ssh
+            call calc_columnanoms_load(isos)
+            call calc_columnanoms_solidearth(isos)
 
             ! Step 1: diagnose equilibrium displacement and rate of bedrock uplift
             select case(isos%par%method)
@@ -542,28 +570,29 @@ module isostasy
                 end select
 
             if (update_diagnostics) then 
-                ! Update current time_diagnostics value 
-                isos%par%time_diagnostics = isos%par%time_prognostics + dt_now 
-             end if
+                ! Update current time_diagnostics value
+                isos%par%time_diagnostics = isos%par%time_prognostics + dt_now
+            end if
 
             ! Step 2: update bedrock elevation and current model time
             if (dt_now .gt. 0.0) then
 
-                ! TODO: do we need this? If yes, lines below should be adapted adequatly
+                !# TODO: do we need this? If yes, lines below should be adapted adequatly
                 ! Additionally apply bedrock adjustment field
                 if (present(dwdt_corr)) then 
                     isos%now%z_bed = isos%now%z_bed + dwdt_corr*dt_now
                 end if
-                
+
                 isos%now%w = isos%now%w + isos%now%dwdt*dt_now
+                call apply_zerobc_at_corners(isos%now%w, isos%domain%nx, isos%domain%ny)
                 isos%now%z_bed = isos%ref%z_bed + isos%now%w + isos%now%we
                 isos%par%time_prognostics = isos%par%time_prognostics + dt_now
-               
+
             end if
 
-            ! TODO: here we should have a better check on the final time
+            !# TODO: here we should have a better check on the final time
             if ( abs(time-isos%par%time_prognostics) .lt. 1e-5) then 
-                ! Desired time has reached, exit the loop 
+                ! Final time has been reached, exit the loop 
                 isos%par%time_prognostics = time 
                 exit
             end if
@@ -572,7 +601,7 @@ module isostasy
         call cropstate2output(isos%output, isos%now, isos%domain%icrop1, isos%domain%icrop2, &
             isos%domain%jcrop1, isos%domain%jcrop2)
 
-        rsl = isos%output%ssh - isos%output%z_bed
+        ! rsl = isos%output%ssh - isos%output%z_bed
 
         return
     end subroutine isos_update
@@ -634,17 +663,17 @@ module isostasy
         return
     end subroutine isos_par_load
 
-    subroutine allocate_isos(isos, nx, ny)
-        implicit none 
+    subroutine allocate_isos(isos, nx, ny, nz, nbsl)
+        implicit none
         type(isos_class), intent(INOUT) :: isos
-        integer, intent(IN)             :: nx, ny
+        integer, intent(IN)             :: nx, ny, nz, nbsl
 
         ! First ensure arrays are not allocated
         call deallocate_isos_domain(isos%domain)
         call deallocate_isos_state(isos%now)
         call deallocate_isos_state(isos%ref)
         call deallocate_isos_output(isos%output)
-        call allocate_isos_domain(isos%domain, nx, ny)
+        call allocate_isos_domain(isos%domain, nx, ny, nz, nbsl)
         call allocate_isos_state(isos%now, nx, ny)
         call allocate_isos_state(isos%ref, nx, ny)
         call allocate_isos_output(isos%output, nx, ny)
@@ -688,18 +717,17 @@ module isostasy
         type(isos_state_class), intent(INOUT) :: state
 
         if (allocated(state%z_bed))             deallocate(state%z_bed)
-        if (allocated(state%dwdt))             deallocate(state%dwdt)
-        if (allocated(state%q))                 deallocate(state%q)
+        if (allocated(state%dwdt))              deallocate(state%dwdt)
         if (allocated(state%w))                 deallocate(state%w)
         if (allocated(state%w_equilibrium))     deallocate(state%w_equilibrium)
         if (allocated(state%we))                deallocate(state%we)
-        if (allocated(state%cplx_out_aux))      deallocate(state%cplx_out_aux)
 
         if (allocated(state%ssh_perturb))       deallocate(state%ssh_perturb)
         if (allocated(state%Haf))               deallocate(state%Haf)
         if (allocated(state%Hice))              deallocate(state%Hice)
         if (allocated(state%Hseawater))         deallocate(state%Hseawater)
 
+        if (allocated(state%rsl))               deallocate(state%rsl)
         if (allocated(state%ssh))               deallocate(state%ssh)
         if (allocated(state%canom_load))        deallocate(state%canom_load)
         if (allocated(state%canom_full))        deallocate(state%canom_full)
@@ -733,22 +761,22 @@ module isostasy
         if (allocated(output%w))                deallocate(output%w)
         if (allocated(output%we))               deallocate(output%we)
         if (allocated(output%w_equilibrium))    deallocate(output%w_equilibrium)
-        
 
+        if (allocated(output%rsl))              deallocate(output%rsl)
         if (allocated(output%ssh))              deallocate(output%ssh)
         if (allocated(output%ssh_perturb))      deallocate(output%ssh_perturb)
         if (allocated(output%z_bed))            deallocate(output%z_bed)
 
+        if (allocated(output%maskocean))        deallocate(output%maskocean)
+        if (allocated(output%maskgrounded))     deallocate(output%maskgrounded)
+        if (allocated(output%maskcontinent))    deallocate(output%maskcontinent)
         return
     end subroutine deallocate_isos_output
 
-    subroutine allocate_isos_domain(domain, nx, ny, nbsl)
+    subroutine allocate_isos_domain(domain, nx, ny, nz, nbsl)
         implicit none
-        integer, intent(IN) :: nx, ny, nbsl
+        integer, intent(IN) :: nx, ny, nz, nbsl
         type(isos_domain_class), intent(INOUT) :: domain
-
-        integer :: nz
-        nz = 1
 
         allocate(domain%bsl_vec(nbsl))
         allocate(domain%A_ocean_vec(nbsl))
@@ -784,22 +812,18 @@ module isostasy
         integer, intent(IN) :: ny
         type(isos_state_class), intent(INOUT) :: state
 
-        integer :: nfilt
-        nfilt = 2 ! dummy number. TODO: remove element-wise convolutions where possible
-
         allocate(state%z_bed(nx, ny))
         allocate(state%dwdt(nx, ny))
-        allocate(state%q(nx, ny))
         allocate(state%w(nx, ny))
         allocate(state%w_equilibrium(nx, ny))
         allocate(state%we(nx, ny))
-        allocate(state%cplx_out_aux(nx, ny))
 
         allocate(state%ssh_perturb(nx, ny))
         allocate(state%Haf(nx, ny))
         allocate(state%Hice(nx, ny))
         allocate(state%Hseawater(nx, ny))
 
+        allocate(state%rsl(nx, ny))
         allocate(state%ssh(nx, ny))
         allocate(state%canom_load(nx, ny))
         allocate(state%canom_full(nx, ny))
@@ -835,10 +859,14 @@ module isostasy
         allocate(output%we(nx, ny))
         allocate(output%w_equilibrium(nx, ny))
 
+        allocate(output%rsl(nx, ny))
         allocate(output%ssh(nx, ny))
         allocate(output%ssh_perturb(nx, ny))
         allocate(output%z_bed(nx, ny))
 
+        allocate(output%maskocean(nx, ny))
+        allocate(output%maskgrounded(nx, ny))
+        allocate(output%maskcontinent(nx, ny))
         return
     end subroutine allocate_isos_output
 

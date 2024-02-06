@@ -5,6 +5,7 @@ module sealevel
 
     implicit none
 
+    public :: calc_bsl_pwconstant_Aocean
     public :: calc_columnanoms_load
     public :: calc_columnanoms_solidearth
     public :: calc_masks
@@ -12,20 +13,20 @@ module sealevel
 
     contains
 
-    ! TODO: implement bsl update
-    subroutine calc_piecewise_constant_bsl(isos)
+    subroutine calc_bsl_pwconstant_Aocean(isos)
         implicit none
-        type(isos_class), intent(INOUT)     :: isos 
+        type(isos_class), intent(INOUT)     :: isos
 
         isos%now%bsl = isos%now%bsl / isos%now%A_ocean
-        call interp_2d_over_time(z, A, isos%now%bsl, isos%now%A_ocean)
-    end subroutine calc_piecewise_constant_bsl
+        call interp_0d_over_time(isos%domain%bsl_vec, isos%domain%A_ocean_vec, &
+            isos%now%bsl, isos%now%A_ocean)
+    end subroutine calc_bsl_pwconstant_Aocean
 
     subroutine calc_columnanoms_load(isos)
         implicit none
         type(isos_class), intent(INOUT)     :: isos 
 
-        call maskfield(isos%now%Hseawater, isos%now%ssh - isos%now%z_bed, &
+        call maskfield(isos%now%Hseawater, isos%now%rsl, &
             isos%now%maskocean, isos%domain%nx, isos%domain%ny)
 
         isos%now%canom_load(:, :) = 0
@@ -75,10 +76,10 @@ module sealevel
         implicit none
         type(isos_class), intent(INOUT)   :: isos
 
-        isos%now%maskcontinent = (isos%now%ssh - isos%now%z_bed) > 0
+        isos%now%maskcontinent = isos%now%rsl < 0
 
         ! maskgrounded
-        call calc_height_above_floatation(isos)
+        isos%now%Haf = isos%now%Hice - isos%now%rsl * (isos%par%rho_seawater / isos%par%rho_ice)
         isos%now%maskgrounded = isos%now%Haf > 0
 
         call calc_maskocean(isos)
@@ -93,32 +94,16 @@ module sealevel
         integer                         :: i, j
 
         do i = 1, isos%domain%nx
-            do j = 1, isos%domain%ny
-                if (isos%now%maskcontinent(i, j) .or. isos%now%maskgrounded(i, j)) then
-                    isos%now%maskocean(i, j) = .true.
-                else
-                    isos%now%maskocean(i, j) = .false.
-                endif
-            enddo
-        enddo
+        do j = 1, isos%domain%ny
+            if (isos%now%maskcontinent(i, j) .or. isos%now%maskgrounded(i, j)) then
+                isos%now%maskocean(i, j) = .false.
+            else
+                isos%now%maskocean(i, j) = .true.
+            endif
+        end do
+        end do
 
     end subroutine calc_maskocean
-
-    !
-    subroutine calc_height_above_floatation(isos)
-        implicit none
-        type(isos_class), intent(INOUT) :: isos
-        real(wp), allocatable           :: Heq(:, :)
-        real(wp), allocatable           :: Heq_masked(:, :)
-
-        allocate(Heq(isos%domain%nx, isos%domain%ny))
-        allocate(Heq_masked(isos%domain%nx, isos%domain%ny))
-
-        Heq = isos%now%z_bed - isos%now%ssh
-        call maskfield(Heq_masked, Heq, Heq > 0, isos%domain%nx, isos%domain%ny)
-
-        isos%now%Haf = isos%now%Hice + Heq_masked * (isos%par%rho_seawater / isos%par%rho_ice)
-    end subroutine calc_height_above_floatation
 
     subroutine calc_sl_contribution(isos)
         implicit none

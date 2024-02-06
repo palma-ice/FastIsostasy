@@ -49,11 +49,9 @@ program test_isostasy
     type(isos_class)    :: isos1
     ! type(ice_class)     :: ice
 
-
     ! === Define experiment to be run ====
 
-    ! FIXME: analytic solution of test1
-    experiment = "test2"   ! Spada et al. (2011) disc
+    experiment = "test4"   ! Spada et al. (2011) disc
     
     ! Tests are defined in Swierczek-Jereczek et al. (2024), GMD.
     ! Additional: "test5" = Lucía's Greenland ice-sheet load (since 15 ka)
@@ -208,9 +206,10 @@ program test_isostasy
     allocate(z_bed_bench(nx, ny))
     allocate(mask(nx, ny))
     
+    ! These inits are potentially overwritten depending on the case. See `select` below.
     z_bed       = 0.0
     H_ice       = 0.0
-    ssh         = -1e3
+    ssh         = 0.0
     rsl         = ssh - z_bed
     z_bed_bench = z_bed
 
@@ -237,8 +236,8 @@ program test_isostasy
 
         case("test0", "test1","test3a","test3b","test3c","test3d") ! ice disk of R=1000 km and H=1000 m
 
-            r0  = 1000.0e3 ! [m] 
-            h0  = 1000.0   ! [m] 
+            r0  = 1000.0e3 ! [m]
+            h0  = 1000.0   ! [m]
             eta = 1.e+21   ! [Pa s]
         
             H_ice = 0.
@@ -266,8 +265,8 @@ program test_isostasy
             eta = 1.e+21   ! [Pa s]
         
             H_ice = 0.
-            xcntr = (xmax+xmin)/2.0
-            ycntr = (ymax+ymin)/2.
+            xcntr = (xmax + xmin)/2.0
+            ycntr = (ymax + ymin)/2.0
 
             do j = 1, ny
             do i = 1, nx
@@ -293,44 +292,39 @@ program test_isostasy
             H_ice = 0.
 
             ! Read in H_ice
-            filename = "/Users/montoya/work/ice_data/Antarctica/ANT-32KM/ANT-32KM_ICE-6G_D.nc"
-            
+            filename = "input/test4/ANT-32KM_ICE-6G_D.nc"
             nct = nc_size(filename,"time")
             ncx = nc_size(filename,"xc")
             ncy = nc_size(filename,"yc")
 
-            if (time_end.lt.nt) then
-
-               print*,'Need to increase time_end to read full data length'
-               stop
-               
-            endif
-
-            if (ncx.ne.nx) then
-                           
-               print*,'ncx not equal to nx'
-               stop
-               
-            endif
-
-            if (ncy.ne.ny) then
-                           
-               print*,'ncx not equal to nx'
-               stop
-               
+            if ((time_end .lt. nt) .or. (ncx .ne. nx) .or. (ncy .ne. ny)) then
+                print*, 'Some dimensions do not correspond to those of the nc file.'
+                stop
             endif
 
             allocate(T_ice(ncx, ncy, nct))
             allocate(time_ice(nct))
-            
             call nc_read(filename, "time", time_ice, start=[1], count=[nct])
             time_ice = -1.e3 * time_ice
-            
             call nc_read(filename, "IceT", T_ice,start=[1, 1, 1], count=[ncx, ncy, nct])
             T_ice = max(T_ice, 0.)
-
-            ! Initialize H_ice
             H_ice = T_ice(:, :, 1)
+
+
+            ! Read z_bed
+            filename = "input/test4/ANT-32KM_zbed_laty.nc"
+            ncx = nc_size(filename,"xc")
+            ncy = nc_size(filename,"yc")
+
+            if ((ncx .ne. nx) .or. (ncy .ne. ny)) then
+                print*, 'Some dimensions do not correspond to those of the nc file.'
+                stop
+            endif
+
+            allocate(z_bed_ice(ncx, ncy, 1))
+            call nc_read(filename,"b", z_bed_ice, start=[1, 1, 1], count=[ncx, ncy, 1])
+            
+            z_bed = z_bed_ice(:, :, 1)
 
         case("test5")
 
@@ -377,17 +371,15 @@ program test_isostasy
             z_bed = z_bed_ice(:, :, 1)
 
         case DEFAULT
-
             write(*,*) "Error: experiment name not recognized."
             write(*,*) "experiment = ", trim(experiment)
-            stop 
+            stop
 
-        end select
-         
+    end select
+
     ! Inititalize state
-    z_bed = 0.0_wp
-    ssh = -1000.0_wp
-    call isos_init_state(isos1, z_bed, T_ice(:, :, 1), ssh, rsl, time=time_init) 
+    ssh = 0.0_wp
+    call isos_init_state(isos1, z_bed, T_ice(:, :, 1), ssh, time=time_init) 
 
     ! Initialize writing output
     call isos_write_init(isos1, xc, yc, file_out, time_init)
@@ -401,7 +393,7 @@ program test_isostasy
         ! Update bedrock
         time = time_init + (n-1)*dtt
         call interp_2d_over_time(time_ice, T_ice, time, H_ice)
-        call isos_update(isos1, H_ice, time, rsl)
+        call isos_update(isos1, H_ice, time)
 
         if (mod(time-time_init, dt_out) .eq. 0.0) then  ! Write output for this timestep
 
@@ -436,10 +428,10 @@ program test_isostasy
 
         implicit none
 
-        type(isos_class), intent(IN) :: isos 
+        type(isos_class), intent(IN) :: isos
         real(wp),         intent(IN) :: xc(:)
         real(wp),         intent(IN) :: yc(:)
-        character(len=*), intent(IN) :: filename 
+        character(len=*), intent(IN) :: filename
         real(wp),         intent(IN) :: time_init
         
         ! Local variables
@@ -458,24 +450,24 @@ program test_isostasy
         call nc_write(filename, "He_lith", isos%output%He_lith, units="km", &
             long_name="Lithosphere thickness", dim1="xc", dim2="yc" ,start=[1, 1])
 
-        call nc_write(filename,"GE",isos%output%GE, units="", &
-            long_name="Elastic Green function", dim1="xc", dim2="yc", start=[1, 1])
+        ! call nc_write(filename,"GE",isos%output%GE, units="", &
+        !     long_name="Elastic Green function", dim1="xc", dim2="yc", start=[1, 1])
 
-        if (isos%par%interactive_sealevel) then
-            call nc_write(filename, "GN", isos%output%GN, units="", &
-            long_name="SSH Green function", dim1="xc", dim2="yc", start=[1, 1])
-        end if
+        ! if (isos%par%interactive_sealevel) then
+        !     call nc_write(filename, "GN", isos%output%GN, units="", &
+        !     long_name="SSH Green function", dim1="xc", dim2="yc", start=[1, 1])
+        ! end if
         
         if (isos%par%method .eq. 2) then
-            call nc_write(filename, "kei", isos%output%kei, units="", &
-                long_name="Kelvin function filter", dim1="xc", dim2="yc", start=[1, 1])
+            ! call nc_write(filename, "kei", isos%output%kei, units="", &
+            !     long_name="Kelvin function filter", dim1="xc", dim2="yc", start=[1, 1])
 
-            call nc_write(filename,"GV",isos%output%GV, units="", &
-                long_name="Viscous Green function", dim1="xc", dim2="yc", start=[1, 1])
+            ! call nc_write(filename,"GV",isos%output%GV, units="", &
+            !     long_name="Viscous Green function", dim1="xc", dim2="yc", start=[1, 1])
 
             call nc_write(filename, "tau", isos%output%tau, units="yr", &
                 long_name="Asthenosphere relaxation timescale", &
-                dim1="xc", dim2="yc", start=[1, 1]) 
+                dim1="xc", dim2="yc", start=[1, 1])
         end if
 
         if (isos%par%method .eq. 3) then
@@ -483,9 +475,9 @@ program test_isostasy
                 long_name="Asthenosphere effective viscosity", &
                 dim1="xc", dim2="yc", start=[1, 1])
 
-            call nc_write(filename, "kappa", isos%output%kappa, units="", &
-                long_name="Pseudodifferential operator in Fourier space", &
-                dim1="xc", dim2="yc", start=[1, 1])
+            ! call nc_write(filename, "kappa", isos%output%kappa, units="", &
+            !     long_name="Pseudodifferential operator in Fourier space", &
+            !     dim1="xc", dim2="yc", start=[1, 1])
         end if
 
         return
@@ -500,7 +492,7 @@ program test_isostasy
         type(isos_class), intent(IN) :: isos
         character(len=*), intent(IN) :: filename
         real(wp),         intent(IN) :: time
-        real(wp),         intent(IN) :: H_ice(:, :) 
+        real(wp),         intent(IN) :: H_ice(:, :)
         real(wp),         intent(IN), optional :: z_bed_bench(:, :)
 
         ! Local variables
@@ -510,20 +502,20 @@ program test_isostasy
         ! Open the file for writing
         call nc_open(filename, ncid, writable=.TRUE.)
 
-        ! Determine current writing time step 
+        ! Determine current writing time step
         n = nc_size(filename, "time", ncid)
-        call nc_read(filename, "time", time_prev, start=[n], count=[1], ncid=ncid) 
-        if (abs(time-time_prev) .gt. 1e-5) n = n+1 
+        call nc_read(filename, "time", time_prev, start=[n], count=[1], ncid=ncid)
+        if (abs(time-time_prev) .gt. 1e-5) n = n+1
 
         ! Update the time step
         call nc_write(filename,"time", time, dim1="time", start=[n], count=[1], ncid=ncid)
         
         ! Write variables
         call nc_write(filename, "H_ice", isos%output%Hice, units="m", long_name="Ice thickness", &
-              dim1="xc", dim2="yc", dim3="time", start=[1,1,n], ncid=ncid)
+              dim1="xc", dim2="yc", dim3="time", start=[1, 1, n], ncid=ncid)
 
         call nc_write(filename, "ssh", isos%output%ssh, units="m", long_name="Sea-surface height", &
-              dim1="xc", dim2="yc", dim3="time", start=[1,1,n], ncid=ncid)
+              dim1="xc", dim2="yc", dim3="time", start=[1, 1, n], ncid=ncid)
 
         call nc_write(filename,"z_bed", isos%output%z_bed, units="m", &
             long_name="Bedrock elevation", dim1="xc", dim2="yc", dim3="time", &
@@ -531,33 +523,47 @@ program test_isostasy
 
         call nc_write(filename, "dwdt", isos%output%dwdt, units="m/yr", &
             long_name="Bedrock elevation change", &
-            dim1="xc", dim2="yc", dim3="time", start=[1,1,n], ncid=ncid)
+            dim1="xc", dim2="yc", dim3="time", start=[1, 1, n], ncid=ncid)
 
         call nc_write(filename, "w_viscous", isos%output%w, units="m", &
             long_name="Displacement (viscous)", &
-            dim1="xc", dim2="yc", dim3="time", start=[1,1,n], ncid=ncid)
+            dim1="xc", dim2="yc", dim3="time", start=[1, 1, n], ncid=ncid)
 
         call nc_write(filename, "w_elastic", isos%output%we, units="m", &
             long_name="Displacement (elastic)", &
-            dim1="xc", dim2="yc", dim3="time", start=[1,1,n], ncid=ncid)
+            dim1="xc", dim2="yc", dim3="time", start=[1, 1, n], ncid=ncid)
 
         call nc_write(filename, "ssh_perturbation", isos%output%ssh_perturb, units="m", &
             long_name="Geoid displacement", dim1="xc", dim2="yc", dim3="time", &
-            start=[1,1,n], ncid=ncid)
+            start=[1, 1, n], ncid=ncid)
 
         call nc_write(filename, "column_anomaly", isos%output%canom_full, units="N m^-2", &
             long_name = "Anomaly in column pressure", &
-            dim1="xc", dim2="yc", dim3="time", start=[1,1,n], ncid=ncid)
+            dim1="xc", dim2="yc", dim3="time", start=[1, 1, n], ncid=ncid)
 
-        ! TODO: We could remove the analytical solutions alltogether and make the comparison
+        call nc_write(filename, "ocean_mask", isos%output%maskocean, units="1", &
+            long_name = "Ocean mask", &
+            dim1="xc", dim2="yc", dim3="time", start=[1, 1, n], ncid=ncid)
+
+        call nc_write(filename, "grounded_mask", isos%output%maskgrounded, units="1", &
+            long_name = "Grounded mask", &
+            dim1="xc", dim2="yc", dim3="time", start=[1, 1, n], ncid=ncid)
+
+        call nc_write(filename, "continent_mask", isos%output%maskcontinent, units="1", &
+            long_name = "Continent mask", &
+            dim1="xc", dim2="yc", dim3="time", start=[1, 1, n], ncid=ncid)
+
+        !# TODO: We could remove the analytical solutions alltogether and make the comparison
         ! as post-processing.
-        if (present(z_bed_bench)) then 
-            ! Compare with benchmark solution 
-            call nc_write(filename,"z_bed_bench",z_bed_bench,units="m",long_name="Benchmark bedrock elevation", &        
-                dim1="xc",dim2="yc",dim3="time",start=[1, 1, n], ncid=ncid)                                                  
-            call nc_write(filename,"err_z_bed",isos%now%z_bed - z_bed_bench,units="m",long_name="Error in bedrock elevation", & 
-                dim1="xc",dim2="yc",dim3="time",start=[1, 1, n], ncid=ncid)  
-        end if 
+        if (present(z_bed_bench)) then
+            ! Compare with benchmark solution
+            call nc_write(filename, "z_bed_bench", z_bed_bench,units="m", &
+                long_name="Benchmark bedrock elevation", &
+                dim1="xc", dim2="yc", dim3="time", start=[1, 1, n], ncid=ncid)
+            call nc_write(filename, "err_z_bed", isos%now%z_bed - z_bed_bench,units="m", &
+                long_name="Error in bedrock elevation", &
+                dim1="xc", dim2="yc", dim3="time", start=[1, 1, n], ncid=ncid)
+        end if
 
         call nc_close(ncid)     ! Close the netcdf file
 
@@ -565,4 +571,3 @@ program test_isostasy
     end subroutine isos_write_step
 
 end program test_isostasy
-

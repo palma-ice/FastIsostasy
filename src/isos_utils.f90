@@ -23,6 +23,7 @@ module isos_utils
     public :: calc_fft_backward_c2r
     public :: calc_fft_forward_r2c
 
+    public :: copy_sparsestate
     public :: copy_state
     public :: cropdomain2output
     public :: cropstate2output
@@ -197,24 +198,33 @@ module isos_utils
 
     ! ===== MISC ==============================
 
+    subroutine copy_sparsestate(ref, now)
+        implicit none
+        type(isos_state_class), intent(INOUT)   :: ref
+        type(isos_state_class), intent(IN)      :: now
+
+        ref%Hice            = now%Hice
+        ref%Hseawater       = now%Hseawater
+
+        ref%w               = now%w
+        ref%w_equilibrium   = now%w_equilibrium
+        ref%we              = now%we
+
+        ref%z_bed           = now%z_bed
+        ref%rsl             = now%rsl
+        ref%ssh             = now%ssh
+
+        return
+    end subroutine copy_sparsestate
+
     subroutine copy_state(ref, now)
         implicit none
         type(isos_state_class), intent(INOUT)   :: ref
         type(isos_state_class), intent(IN)      :: now
 
-        ref%z_bed           = now%z_bed
-        ref%dwdt           = now%dwdt
-        ref%q               = now%q
-        ref%w               = now%w
-        ref%w_equilibrium   = now%w_equilibrium
-        ref%we              = now%we
-        ref%cplx_out_aux    = now%cplx_out_aux
-
+        call copy_sparsestate(ref, now)
+        ref%dwdt            = now%dwdt
         ref%Haf             = now%Haf
-        ref%Hice            = now%Hice
-        ref%Hseawater       = now%Hseawater
-
-        ref%ssh             = now%ssh
         ref%ssh_perturb     = now%ssh_perturb
         ref%canom_load      = now%canom_load
         ref%canom_full      = now%canom_full
@@ -260,6 +270,7 @@ module isos_utils
         integer, intent(IN)                     :: i1, i2, j1, j2
 
         output%Hice = now%Hice(i1:i2, j1:j2)
+        output%rsl = now%rsl(i1:i2, j1:j2)
         output%ssh = now%ssh(i1:i2, j1:j2)
         output%z_bed = now%z_bed(i1:i2, j1:j2)
         output%dwdt = now%dwdt(i1:i2, j1:j2)
@@ -268,6 +279,9 @@ module isos_utils
         output%ssh_perturb = now%ssh_perturb(i1:i2, j1:j2)
         output%canom_full = now%canom_full(i1:i2, j1:j2)
 
+        output%maskocean = now%maskocean(i1:i2, j1:j2)
+        output%maskgrounded = now%maskgrounded(i1:i2, j1:j2)
+        output%maskcontinent = now%maskcontinent(i1:i2, j1:j2)
         return
     end subroutine cropstate2output
 
@@ -318,10 +332,10 @@ module isos_utils
         integer, intent(IN)                     :: i1, i2, j1, j2
 
         now%z_bed = 0.0
-        now%z_bed(i1:i2, j1:j2) = z_bed
         now%Hice = 0.0
-        now%Hice(i1:i2, j1:j2) = H_ice
         now%ssh = 0.0
+        now%z_bed(i1:i2, j1:j2) = z_bed
+        now%Hice(i1:i2, j1:j2) = H_ice
         now%ssh(i1:i2, j1:j2) = ssh
         return
     end subroutine extendice2isostasy

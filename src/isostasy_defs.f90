@@ -101,24 +101,23 @@ module isostasy_defs
 
     end type isos_domain_class
 
-    type isos_state_class 
+    type isos_state_class
         real(wp)              :: t                  ! [yr] Time
         real(wp)              :: bsl                ! [m] Barystatic sea level
         real(wp)              :: A_ocean            ! [m] Ocean surface (depends on bsl)
 
-        real(wp), allocatable       :: z_bed(:, :)         ! Bedrock elevation         [m]
-        real(wp), allocatable       :: dwdt(:, :)         ! Rate of bedrock uplift    [m/a]
-        real(wp), allocatable       :: q(:, :)             ! [Pa] Load
-        real(wp), allocatable       :: w(:, :)             ! Current viscous displacement
-        real(wp), allocatable       :: w_equilibrium(:, :) ! Current viscous equilibrium displacement (XLRA)
-        real(wp), allocatable       :: we(:, :)            ! [m] Elastic displacement
-        complex(wp), allocatable    :: cplx_out_aux(:, :)
+        real(wp), allocatable       :: z_bed(:, :)          ! Bedrock elevation         [m]
+        real(wp), allocatable       :: dwdt(:, :)           ! Rate of bedrock uplift    [m/a]
+        real(wp), allocatable       :: w(:, :)              ! Current viscous displacement
+        real(wp), allocatable       :: w_equilibrium(:, :)  ! Current viscous equilibrium displacement (XLRA)
+        real(wp), allocatable       :: we(:, :)             ! [m] Elastic displacement
 
         real(wp), allocatable :: Haf(:, :)           ! [m] Ice thickness above floatation
         real(wp), allocatable :: Hice(:, :)          ! [m] Thickness of ice column
         real(wp), allocatable :: Hseawater(:, :)     ! [m] Thickness of seawater column
         ! real(wp), allocatable :: Hsediment(:, :)     ! [m] Thickness of sediment column
 
+        real(wp), allocatable :: rsl(:, :)           ! [m] relative sea level
         real(wp), allocatable :: ssh(:, :)           ! [m] sea-surface height
         real(wp), allocatable :: ssh_perturb(:, :)   ! [m] sea-surface height perturbation
         real(wp), allocatable :: canom_load(:, :)    ! [kg m^-2] Load column anomaly
@@ -147,10 +146,15 @@ module isostasy_defs
         real(wp), allocatable       :: w(:, :)
         real(wp), allocatable       :: we(:, :)
         real(wp), allocatable       :: w_equilibrium(:, :)
+
+        real(wp), allocatable       :: rsl(:, :)
         real(wp), allocatable       :: ssh(:, :)
         real(wp), allocatable       :: ssh_perturb(:, :)
         real(wp), allocatable       :: z_bed(:, :)
 
+        logical, allocatable        :: maskocean(:, :)
+        logical, allocatable        :: maskgrounded(:, :)
+        logical, allocatable        :: maskcontinent(:, :)
     end type isos_output_class
 
     type isos_class
