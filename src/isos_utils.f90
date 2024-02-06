@@ -29,8 +29,9 @@ module isos_utils
     public :: calc_cropindices
     public :: extendice2isostasy
 
-    public :: extend_array
-    public :: reduce_array
+    public :: interp_0d_over_time
+    public :: interp_2d_over_time
+
     public :: maskfield
     public :: isos_set_field
     public :: isos_set_smoothed_field
@@ -225,6 +226,7 @@ module isos_utils
         return
     end subroutine copy_state
 
+    ! ===== ARRAY SIZING FUNCTIONS ==============================
 
     subroutine cropdomain2output(output, domain)
         implicit none
@@ -324,156 +326,82 @@ module isos_utils
         return
     end subroutine extendice2isostasy
 
-    ! ===== ARRAY SIZING FUNCTIONS ==============================
 
-    subroutine extend_array(ve,v,fill_with,val)
-        ! Given an array ve with dimensions >= those of v, 
-        ! populate ve with values of v, centered in the larger array.
-        ! Fill extra cells with value of user's choice. 
+    ! ===== INTERPOLATION FUNCTIONS ==============================
 
-        implicit none
-
-        real(wp), intent(INOUT) :: ve(:, :) 
-        real(wp), intent(IN)    :: v(:, :)
-        character(len=*), intent(IN) :: fill_with
-        real(wp), intent(IN), optional :: val
-
-        ! Local variables
-        integer  :: i, j, nx, ny, nx1, ny1
-        integer  :: i0, i1, j0, j1
-        real(wp) :: fill_value 
-
-        nx = size(v,1)
-        ny = size(v,2) 
-
-        nx1 = size(ve,1)
-        ny1 = size(ve,2)
-
-        ! Determine fill value to be used
-
-        select case(trim(fill_with))
-
-            case("zero","zeros")
-
-                fill_value = 0.0
-
-            case("mean")
-
-                fill_value = sum(v) / real(nx*ny,wp)
-
-            case("val")
-
-                if (.not. present(val)) then
-                    write(*,*) "extend_array:: Error: for fill_with='val', the optional &
-                    &argument val must be provided and is missing right now."
-                    stop
-                end if
-
-                fill_value = val
-
-            case("mirror")
-                ! Set fill_value to zero, it will not be used 
-
-                fill_value = 0.0 
-
-            case DEFAULT
-                write(*,*) "extend_array:: Error: choice of 'fill_with' not recognized."
-                write(*,*) "fill_with = ", trim(fill_with)
-                stop
-        
-        end select
-
-        ! Initialize extended array to correct fill value
-
-        ve = fill_value 
-
-        ! Fill in the actual values centered within the extended array
-
-        if (nx .eq. nx1) then
-            i0 = 1
-        else
-            i0 = floor( (nx1-nx)/2.0 )
-        end if 
-        i1 = i0+nx-1
-
-        if (ny .eq. ny1) then
-            j0 = 1
-        else
-            j0 = floor( (ny1-ny)/2.0 )
-        end if 
-        j1 = j0+ny-1
-
-        ve(i0:i1,j0:j1) = v
-
-
-        if (trim(fill_with) .eq. "mirror") then
-            ! Populate extended array region with mirrored points 
-
-            ! Left
-            if (i0 .gt. 1) then 
-                ve(1:i0-1,j0:j1) = v(i0-1:1:-1,:)
-            end if
-            ! Right
-            if (i1 .lt. nx1) then 
-                ve(i1+1:nx1,j0:j1) = v(nx:nx-(nx1-i1)+1:-1,:)
-            end if
-            
-            ! Bottom
-            if (j0 .gt. 1) then 
-                ve(i0:i1,1:j0-1) = v(:,j0-1:1:-1)
-            end if
-            ! Top
-            if (j1 .lt. ny1) then 
-                ve(i0:i1,j1+1:ny1) = v(:,ny:ny-(ny1-j1)+1:-1)
-            end if
-            ! TODO: populate the corners too. For now ignore, and keep 
-            ! extended array values equal to fill_value=0.0. 
-        end if 
-
-        return
-    end subroutine extend_array
-
-    subroutine reduce_array(v,ve)
-        ! Given an array of dimensions >= those of v
-        ! extract centered values of ve of interest,
-        ! discarding remaining values around the borders.
+    ! Linear interpolation of scalar value over time
+    subroutine interp_0d_over_time(x, y, xout, yout)
 
         implicit none
 
-        real(wp), intent(INOUT) :: v(:, :)
-        real(wp), intent(IN)    :: ve(:, :) 
-        
-        ! Local variables
-        integer  :: i, j, nx, ny, nx1, ny1
-        integer  :: i0, i1, j0, j1
-        real(wp) :: fill_value 
+        real(wp), dimension(:), intent(IN) :: x 
+        real(wp), dimension(:), intent(IN) :: y
+        real(wp), intent(IN) :: xout
+        real(wp), intent(OUT) :: yout
+        integer  :: j, n
+        real(wp) :: alpha
 
-        nx = size(v,1)
-        ny = size(v,2) 
+        n    = size(x)
 
-        nx1 = size(ve,1)
-        ny1 = size(ve,2)
-
-        ! Fill in the actual values from those centered within the extended array
-
-        if (nx .eq. nx1) then
-            i0 = 1
+        if (xout .lt. x(1)) then
+            yout = y(1)
+        else if (xout .gt. x(n)) then
+            yout = y(n)
         else
-            i0 = floor( (nx1-nx)/2.0 )
-        end if 
-        i1 = i0+nx-1
+            do j = 1, n
+                if (x(j) .ge. xout) exit
+            end do
 
-        if (ny .eq. ny1) then
-            j0 = 1
-        else
-            j0 = floor( (ny1-ny)/2.0 )
-        end if 
-        j1 = j0+ny-1
-
-        v = ve(i0:i1,j0:j1)
+            if (j .eq. 1) then
+                yout = y(1)
+            else if (j .eq. n+1) then
+                yout = y(n)
+            else
+                alpha = (xout - x(j-1)) / (x(j) - x(j-1))
+                yout = y(j-1) + alpha*(y(j) - y(j-1))
+             end if
+        end if
 
         return
-    end subroutine reduce_array
+    end subroutine interp_0d_over_time
+
+    ! Simple linear interpolation of 2D field over time
+    subroutine interp_2d_over_time(x, y, xout, yout)
+
+        implicit none
+
+        real(wp), dimension(:), intent(IN) :: x 
+        real(wp), dimension(:, : ,:), intent(IN) :: y
+        real(wp), intent(IN) :: xout
+        real(wp), dimension(:, :),intent(OUT) :: yout
+        integer  :: j, n
+        real(wp) :: alpha
+
+        n    = size(x)
+
+        if (xout .lt. x(1)) then
+            yout = y(:, :,1)
+        else if (xout .gt. x(n)) then
+            yout = y(:, :,n)
+        else
+            do j = 1, n
+                if (x(j) .ge. xout) exit
+            end do
+
+            if (j .eq. 1) then
+                yout = y(:, :,1)
+            else if (j .eq. n+1) then
+                yout = y(:, :,n)
+            else
+                alpha = (xout - x(j-1)) / (x(j) - x(j-1))
+                yout = y(:, :,j-1) + alpha*(y(:, :,j) - y(:, :,j-1))
+             end if
+        end if
+
+        return
+    end subroutine interp_2d_over_time
+
+    ! ===== MASKING FUNCTIONS ==============================
 
     ! Mask the input field
     subroutine maskfield(out, in, mask, nx, ny)

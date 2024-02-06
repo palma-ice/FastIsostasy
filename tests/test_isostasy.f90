@@ -400,7 +400,7 @@ program test_isostasy
 
         ! Update bedrock
         time = time_init + (n-1)*dtt
-        call interp_linear(time_ice, T_ice, time, H_ice)
+        call interp_2d_over_time(time_ice, T_ice, time, H_ice)
         call isos_update(isos1, H_ice, time, rsl)
 
         if (mod(time-time_init, dt_out) .eq. 0.0) then  ! Write output for this timestep
@@ -457,9 +457,6 @@ program test_isostasy
         ! Write constant fields
         call nc_write(filename, "He_lith", isos%output%He_lith, units="km", &
             long_name="Lithosphere thickness", dim1="xc", dim2="yc" ,start=[1, 1])
-
-        call nc_write(filename, "D_lith", isos%output%D_lith, units="N m", &
-            long_name="Lithosphere rigidity", dim1="xc", dim2="yc", start=[1, 1])
 
         call nc_write(filename,"GE",isos%output%GE, units="", &
             long_name="Elastic Green function", dim1="xc", dim2="yc", start=[1, 1])
@@ -567,43 +564,5 @@ program test_isostasy
         return 
     end subroutine isos_write_step
 
-
-    ! Simple linear interpolation of a point
-    subroutine interp_linear(x, y, xout, yout)
-
-        implicit none
-
-        real(wp), dimension(:), intent(IN) :: x 
-        real(wp), dimension(:, : ,:), intent(IN) :: y
-        real(wp), intent(IN) :: xout
-        real(wp), dimension(:, :),intent(OUT) :: yout
-        integer  :: i, j, n, nout
-        real(wp) :: alph
-
-        n    = size(x)
-
-        if (xout .lt. x(1)) then
-            yout = y(:, :,1)
-        else if (xout .gt. x(n)) then
-            yout = y(:, :,n)
-        else
-            do j = 1, n
-                if (x(j) .ge. xout) exit
-            end do
-
-            if (j .eq. 1) then
-                yout = y(:, :,1)
-            else if (j .eq. n+1) then
-                yout = y(:, :,n)
-            else
-                alph = (xout - x(j-1)) / (x(j) - x(j-1))
-                yout = y(:, :,j-1) + alph*(y(:, :,j) - y(:, :,j-1))
-             end if
-        end if
-
-        return
-    
-      end subroutine interp_linear
-    
 end program test_isostasy
 
