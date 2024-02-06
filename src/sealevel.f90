@@ -13,6 +13,13 @@ module sealevel
     contains
 
     ! TODO: implement bsl update
+    subroutine calc_piecewise_constant_bsl(isos)
+        implicit none
+        type(isos_class), intent(INOUT)     :: isos 
+
+        isos%now%bsl = isos%now%bsl / isos%now%A_ocean
+        call interp_2d_over_time(z, A, isos%now%bsl, isos%now%A_ocean)
+    end subroutine calc_piecewise_constant_bsl
 
     subroutine calc_columnanoms_load(isos)
         implicit none
@@ -23,8 +30,8 @@ module sealevel
 
         isos%now%canom_load(:, :) = 0
         call add_columnanom(isos%par%rho_ice, isos%now%Hice, isos%ref%Hice, isos%now%canom_load)
-        ! call add_columnanom(isos%par%rho_seawater, isos%now%Hseawater, isos%ref%Hseawater, &
-        !     isos%now%canom_load)
+        call add_columnanom(isos%par%rho_seawater, isos%now%Hseawater, isos%ref%Hseawater, &
+            isos%now%canom_load)
         call maskfield(isos%now%canom_load, isos%now%canom_load, isos%domain%maskactive, &
             isos%domain%nx, isos%domain%ny)
     end subroutine calc_columnanoms_load

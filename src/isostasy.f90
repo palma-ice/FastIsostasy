@@ -45,8 +45,8 @@ module isostasy
         implicit none
 
         type(isos_class), intent(INOUT) :: isos
-        character(len=*), intent(IN)  :: filename
-        character(len=*), intent(IN)  :: group
+        character(len=*), intent(IN)    :: filename
+        character(len=*), intent(IN)    :: group
         integer,  intent(IN)  :: nx
         integer,  intent(IN)  :: ny
         real(wp), intent(IN)  :: dx
@@ -85,6 +85,8 @@ module isostasy
         real(wp), allocatable   :: helper_convo(:, :)
         real(wp)                :: D_lith_const
         character*256           :: filename_laty
+        character(len=*)        :: ocean_surface_file
+        integer                 :: nbsl
 
         ! First, load parameters from parameter file `filename`
         write(*,*) "Defining params..."
@@ -126,6 +128,12 @@ module isostasy
         isos%domain%ny = n
         isos%domain%dx = dx
         isos%domain%dy = dy
+
+        ! Init ocean surface interpolator
+        ocean_surface_file = "input/OceanSurfaceETOPO2022.nc"
+        nbsl = nc_size(ocean_surface_file, "z")
+        call nc_read(filename, "z", isos%domain%bsl_vec, start=[1], count=[nbsl])
+        call nc_read(filename, "A", isos%domain%A_ocean_vec, start=[1], count=[nbsl])
 
         call calc_cropindices(isos%domain%icrop1, isos%domain%icrop2, &
             isos%domain%jcrop1, isos%domain%jcrop2, nx, ny)
@@ -385,7 +393,6 @@ module isostasy
             isos%domain%icrop1, isos%domain%icrop2, &
             isos%domain%jcrop1, isos%domain%jcrop2)
         call copy_state(isos%ref, isos%now)
-        write(*, *) size(isos%ref%z_bed)
 
         ! Define initial time of isostasy model
         ! (set time_diagnostics earlier, so that it is definitely updated on the first timestep)
@@ -649,6 +656,9 @@ module isostasy
         implicit none 
         type(isos_domain_class), intent(INOUT) :: domain
 
+        if (allocated(domain%bsl_vec))      deallocate(domain%bsl_vec)
+        if (allocated(domain%A_ocean_vec))  deallocate(domain%A_ocean_vec)
+
         if (allocated(domain%dx_matrix))    deallocate(domain%dx_matrix)
         if (allocated(domain%dy_matrix))    deallocate(domain%dy_matrix)
         if (allocated(domain%A))            deallocate(domain%A)
@@ -732,14 +742,16 @@ module isostasy
         return
     end subroutine deallocate_isos_output
 
-    subroutine allocate_isos_domain(domain, nx, ny)
+    subroutine allocate_isos_domain(domain, nx, ny, nbsl)
         implicit none
-        integer, intent(IN) :: nx
-        integer, intent(IN) :: ny
+        integer, intent(IN) :: nx, ny, nbsl
         type(isos_domain_class), intent(INOUT) :: domain
 
         integer :: nz
         nz = 1
+
+        allocate(domain%bsl_vec(nbsl))
+        allocate(domain%A_ocean_vec(nbsl))
 
         allocate(domain%dx_matrix(nx, ny))
         allocate(domain%dy_matrix(nx, ny))
@@ -799,7 +811,6 @@ module isostasy
 
         return
     end subroutine allocate_isos_state
-
 
     subroutine allocate_isos_output(output, nx, ny)
         implicit none 

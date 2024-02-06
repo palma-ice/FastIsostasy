@@ -69,6 +69,9 @@ module isostasy_defs
         real(wp)                :: dx
         real(wp)                :: dy
 
+        real(wp), allocatable   :: bsl_vec(:)        ! [m]
+        real(wp), allocatable   :: A_ocean_vec(:)    ! [m^2]
+
         real(wp), allocatable   :: dx_matrix(:, :)   ! [m] K * dx
         real(wp), allocatable   :: dy_matrix(:, :)   ! [m] K * dy
         real(wp), allocatable   :: A(:, :)           ! [m^2] Cell area
@@ -101,7 +104,8 @@ module isostasy_defs
     type isos_state_class 
         real(wp)              :: t                  ! [yr] Time
         real(wp)              :: bsl                ! [m] Barystatic sea level
-       
+        real(wp)              :: A_ocean            ! [m] Ocean surface (depends on bsl)
+
         real(wp), allocatable       :: z_bed(:, :)         ! Bedrock elevation         [m]
         real(wp), allocatable       :: dwdt(:, :)         ! Rate of bedrock uplift    [m/a]
         real(wp), allocatable       :: q(:, :)             ! [Pa] Load
