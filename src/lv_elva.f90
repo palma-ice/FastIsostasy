@@ -12,8 +12,8 @@ module lv_elva
     private
     
     public :: calc_lvelva
-    public :: calc_effective_viscosity_3layer_channel
-    public :: calc_effective_viscosity_3d
+    public :: calc_layerboundaries
+    public :: calc_effective_viscosity
     public :: calc_fft_backward_r2r
     public :: calc_fft_forward_r2r
     public :: calc_fft_backward_c2r
@@ -115,225 +115,91 @@ module lv_elva
 
         return
     end subroutine calc_lvelva
-
-    !# TODO: this subroutine should be removed
-    subroutine calc_effective_viscosity_3layer_channel(eta_eff, visc_c, thck_c, He_lith, &
-        n_lev, dx, dy)
-
+    
+    subroutine calc_layerboundaries(layer_boundaries, He_lith, layer_boundaries_vec)
         implicit none
+        real(wp), intent(INOUT) :: layer_boundaries(:, :, :)
+        real(wp), intent(IN)    :: He_lith(:, :)
+        real(wp), intent(IN)    :: layer_boundaries_vec(:)
+        integer                 :: k, n_lev
 
-        real(wp), intent(INOUT)  :: eta_eff(:, :)
-        real(wp), intent(IN)     :: visc_c
-        real(wp), intent(IN)     :: thck_c
-        real(wp), intent(IN)     :: He_lith !(:, :) 
-        integer,  intent(IN)     :: n_lev
-        real(wp), intent(IN)     :: dx, dy
-        
-        real(wp) :: Lx, Ly, L
-        real(wp) :: xcntr, ycntr, xmax, xmin, ymax, ymin
-        real(wp), allocatable :: xc(:), yc(:)
+        n_lev = size(layer_boundaries_vec)
+        layer_boundaries = 0.0_wp
+        layer_boundaries(:, :, 1) = He_lith
 
-        real(wp), allocatable ::  R(:, :)
-        real(wp), allocatable ::  eta(:, :,:)
-        real(wp), allocatable ::  eta_ratio(:, :)
-        real(wp), allocatable ::  eta_c(:, :)
-        real(wp), allocatable ::  dz(:, :,:)
-        real(wp), allocatable ::  dz_c(:, :)
-        real(wp), allocatable ::  eta_ratiom1(:, :)
-        real(wp), allocatable ::  c(:, :)
-        real(wp), allocatable ::  s(:, :)
-        real(wp), allocatable :: kappa(:, :)
-       
-        integer  :: i, j, k, nx, ny
-
-        nx = size(eta_eff,1)
-        ny = size(eta_eff,2) 
-        
-        allocate(xc(nx))
-        allocate(yc(ny))
-        allocate(R(nx, ny))
-        allocate(eta_ratio(nx, ny))
-        allocate(eta_ratiom1(nx, ny))
-        allocate(c(nx, ny))
-        allocate(s(nx, ny))
-        allocate(eta(nx,ny,n_lev))
-        allocate(eta_c(nx, ny))
-        allocate(dz_c(nx, ny))
-        allocate(dz(nx,ny,n_lev))
-        allocate(kappa(nx, ny))
-
-        if (n_lev.lt.2) then
-
-           print*,'n_lev should be at least 2'
-           stop
-           
-        else if (n_lev.gt.3) then
-           print*,'Option n_lev > 3 not enabled for viscosity yet'
-           stop
-
-        else if (n_lev.eq.3) then
-
-            do i = 1, nx
-                xc(i) = dx*(i-1)
-            end do
-            xmin = xc(1)
-            xmax = xc(nx)
-
-            do j = 1, ny
-                yc(j) = dy*(j-1)
-            enddo
-            ymin = yc(1)
-            ymax = yc(ny)
-
-            xcntr = (xmax+xmin)/2.0
-            ycntr = (ymax+ymin)/2.0
-
-            Lx = xmax - xmin
-            Ly = ymax - ymin
-            L = (Lx + Ly) / 2.0
-
-            kappa = 2*pi/L
-
-            eta(:, :,1)  = 0.
-            eta(:, :,2)  = visc_c
-            eta(:, :,3)  = eta_eff
-
-            dz(:, :,1)  = He_lith*1.e3
-            dz(:, :,2)  = thck_c*1.e3     ![m]
-            dz(:, :,3)  = 2000.*1.e3      ![m]
-        
-            ! Start with n-th layer: viscous half space
-            
-            eta_eff(:, :) = eta(:, :,n_lev)
-            
-            do k = 1, n_lev-1
-
-                eta_c = eta(:, :,n_lev-1)
-                dz_c = dz(:, :,n_lev-k+1)
-
-                eta_ratio = eta_c/eta_eff
-                eta_ratiom1 = 1./eta_ratio
-
-                c = cosh(dz_c*kappa)
-                s = sinh(dz_c*kappa)
-
-                R = (2.0 * eta_ratio * c * s + (1-eta_ratio**2) * (dz_c*kappa)**2 + &
-                    (eta_ratio*s)**2 + c**2 ) / ((eta_ratio + eta_ratiom1)* c * s + &
-                    (eta_ratio - eta_ratiom1)*dz_c*kappa + s**2 + c**2)
-                
-                eta_eff = R*eta_c
-                
-            end do
-
-        else
-            print*,'n_lev = ', n_lev
-            stop
-        endif
-     
+        do k = 2, n_lev
+            layer_boundaries(:, :, k) = layer_boundaries_vec(k)
+        end do
         return
-    end subroutine calc_effective_viscosity_3layer_channel
+    end subroutine calc_layerboundaries
 
-    !# TODO: adapt this to heterogeneous lithospheric thickness!
-    subroutine calc_effective_viscosity_3d(eta_eff, eta, dx, dy)
+    subroutine calc_effective_viscosity(eta_eff, eta, dx, dy, layer_boundaries)
 
         implicit none
 
         real(wp), intent(INOUT)  :: eta_eff(:, :)
-        real(wp), intent(IN)     :: eta(:, :,:)
+        real(wp), intent(IN)     :: eta(:, :, :)
         real(wp), intent(IN)     :: dx, dy
-        
-        real(wp) :: Lx, Ly, L
-        real(wp) :: xcntr, ycntr, xmax, xmin, ymax, ymin
-        real(wp), allocatable :: xc(:), yc(:)
+        real(wp), intent(IN)     :: layer_boundaries(:, :, :)
 
-        real(wp), allocatable ::  R(:, :)
-        real(wp), allocatable ::  eta_ratio(:, :)
+        real(wp) :: Lx, Ly, L
+        real(wp) :: kappa
         real(wp), allocatable ::  eta_c(:, :)
-        real(wp), allocatable ::  dz(:, :,:)
-        real(wp), allocatable ::  dz_c(:, :)
-        real(wp), allocatable ::  eta_ratiom1(:, :)
+        real(wp), allocatable ::  eta_ratio(:, :)
+        real(wp), allocatable ::  inv_ratio(:, :)
+        real(wp), allocatable ::  R(:, :)
+        real(wp), allocatable ::  dz(:, :)
         real(wp), allocatable ::  c(:, :)
         real(wp), allocatable ::  s(:, :)
-        real(wp), allocatable :: kappa(:, :)
        
         integer  :: i, j, k, nx, ny, n_lev
 
         nx = size(eta_eff, 1)
         ny = size(eta_eff, 2)
         n_lev = size(eta, 3)
-        
-        allocate(xc(nx))
-        allocate(yc(ny))
-        allocate(R(nx, ny))
+        if (n_lev .ne. size(layer_boundaries, 3)) then
+            write(*,*) "Number of levels in eta and in boundaries do not coincide."
+            stop
+        end if
+
+        allocate(eta_c(nx, ny))
         allocate(eta_ratio(nx, ny))
-        allocate(eta_ratiom1(nx, ny))
+        allocate(inv_ratio(nx, ny))
+        allocate(R(nx, ny))
+        allocate(dz(nx, ny))
         allocate(c(nx, ny))
         allocate(s(nx, ny))
-        allocate(eta_c(nx, ny))
-        allocate(dz_c(nx, ny))
-        allocate(dz(nx,ny,n_lev))
-        allocate(kappa(nx, ny))
 
-        dz = 100.0*1.e3
+        if (n_lev .eq. 1) then
+            eta_eff = eta(:, :, 1)
 
-        if (n_lev.lt.2) then
-
-           print*,'n_lev should be at least 2'
-           stop
-           
-!        else if (n_lev.gt.3) then
-!           print*,'Option n_lev > 3 not enabled for viscosity yet'
-!           stop
-
-        else if (n_lev.ge.3) then
-
-            do i = 1, nx
-                xc(i) = dx*(i-1)
-            end do
-            xmin = xc(1)
-            xmax = xc(nx)
-
-            do j = 1, ny
-                yc(j) = dy*(j-1)
-            enddo
-            ymin = yc(1)
-            ymax = yc(ny)
-
-            
-            xcntr = (xmax+xmin)/2.0
-            ycntr = (ymax+ymin)/2.0
-
-            Lx = xmax - xmin
-            Ly = ymax - ymin
+        else if (n_lev .ge. 1) then
+            Lx = dx * (nx-1)
+            Ly = dy * (ny-1)
             L = (Lx + Ly) / 2.0
+            kappa = 2*pi/L
 
-            kappa = 2*pi/L 
-                    
-        
             ! Start with n-th layer: viscous half space
-            eta_eff(:, :) = eta(:, :,n_lev)
+            eta_eff(:, :) = eta(:, :, n_lev)
             
-            do k = 1, n_lev-1
+            do k = n_lev, 2
+                write(*,*) k
+                dz = layer_boundaries(:, :, k) - layer_boundaries(:, :, k-1)
+                eta_c = eta(:, :, k-1)
+                eta_ratio = eta_c / eta_eff
+                inv_ratio = 1. / eta_ratio
 
-                eta_c = eta(:, :,n_lev-1)
-                dz_c = 100.*1.e3 !dz(:, :,n_lev-k+1)
-                
-                eta_ratio = eta_c/eta_eff
-                eta_ratiom1 = 1./eta_ratio
+                c = cosh(dz*kappa)
+                s = sinh(dz*kappa)
 
-                c = cosh(dz_c*kappa)
-                s = sinh(dz_c*kappa)
-
-                R = (2.0 * eta_ratio * c * s + (1-eta_ratio**2) * (dz_c*kappa)**2 + &
-                    (eta_ratio*s)**2 + c**2 ) / ((eta_ratio + eta_ratiom1)* c * s + &
-                    (eta_ratio - eta_ratiom1)*dz_c*kappa + s**2 + c**2)
-                
-                eta_eff = R*eta_c
-            
+                R = (2.0 * eta_ratio * c * s + (1-eta_ratio**2) * (dz*kappa)**2 + &
+                    (eta_ratio*s)**2 + c**2 ) / ((eta_ratio + inv_ratio)* c * s + &
+                    (eta_ratio - inv_ratio)*dz*kappa + s**2 + c**2)
+                eta_eff = R * eta_eff
             end do
 
         else
-            print*,'n_lev = ', n_lev
+            print*,'Number of levels is wrong: n_lev = ', n_lev
             stop
         endif
 
