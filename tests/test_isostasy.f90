@@ -110,7 +110,7 @@ program test_isostasy
 
             case("test4")
                 time_init =  -122.5e3
-                time_end  =     2.5e3
+                time_end  =    0.25e3
                 dtt       = 1.0
                 dt_out    = 1.e3
                 dx = 32.e3
@@ -286,8 +286,6 @@ program test_isostasy
         ! W. Richard Peltier, Donald F. Argus, Rosemarie Drummond
         ! https://agupubs.onlinelibrary.wiley.com/doi/full/10.1002/2016JB013844
 
-            R0 = 6.378e6*10.*3.1416/180. 
-            h0  = 1000.0   ! [m] 
             eta = 1.e+21   ! [Pa s]
             H_ice = 0.
 

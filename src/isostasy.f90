@@ -285,26 +285,21 @@ module isostasy
                             isos%par%n_lev, isos%domain%dx, isos%domain%dy)
 
                     case("laty")
-                        ! TODO: change the path here
                         filename_laty = "input/test4/ANT-32KM_latyparams.nc"
-                        write(*,*) size(isos%domain%eta, 1),  size(isos%domain%eta, 2), size(isos%domain%eta, 3)
                         call nc_read(filename_laty, "log10_mantle_visc", &
                             isos%domain%eta, start=[1, 1, 1], &
                             count=[isos%domain%nx, isos%domain%ny, isos%par%n_lev])
-                        write(*,*) size(isos%domain%eta)
                         isos%domain%eta = 10. ** (isos%domain%eta)
                         call calc_effective_viscosity_3d(isos%domain%eta_eff, &
                             isos%domain%eta, isos%domain%dx, isos%domain%dx)
-                        write(*,*) size(isos%domain%eta)
-
-                        do i = 1, nx
-                        do j = 1, ny
-                            if ((abs( (i - nx/2) * dx ) > 2500e3) .or. &
-                                (abs( (j - ny/2) * dy ) > 2500e3)) then
-                                isos%domain%maskactive(i, j) = .false.
-                            end if
-                        end do
-                        end do
+                        
+                        ! use w_equilibrium as helper to load mask since it is not used.
+                        filename_laty = "input/test4/LGMmask.nc"
+                        call nc_read(filename_laty, "M", &
+                            isos%now%w_equilibrium, start=[1, 1], &
+                            count=[isos%domain%nx, isos%domain%ny])
+                        write(*,*) sum(isos%now%w_equilibrium), size(isos%now%w_equilibrium)
+                        where(isos%now%w_equilibrium .lt. 0.5) isos%domain%maskactive = .false.
 
                     case DEFAULT
                         ! do nothing, eta was set above
