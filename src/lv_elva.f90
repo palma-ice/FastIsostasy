@@ -116,7 +116,7 @@ module lv_elva
         return
     end subroutine calc_lvelva
 
-    ! TODO: this subroutine should be removed
+    !# TODO: this subroutine should be removed
     subroutine calc_effective_viscosity_3layer_channel(eta_eff, visc_c, thck_c, He_lith, &
         n_lev, dx, dy)
 
@@ -233,6 +233,7 @@ module lv_elva
         return
     end subroutine calc_effective_viscosity_3layer_channel
 
+    !# TODO: adapt this to heterogeneous lithospheric thickness!
     subroutine calc_effective_viscosity_3d(eta_eff, eta, dx, dy)
 
         implicit none
@@ -257,9 +258,9 @@ module lv_elva
        
         integer  :: i, j, k, nx, ny, n_lev
 
-        nx = size(eta_eff,1)
-        ny = size(eta_eff,2)
-        n_lev = size(eta,3)
+        nx = size(eta_eff, 1)
+        ny = size(eta_eff, 2)
+        n_lev = size(eta, 3)
         
         allocate(xc(nx))
         allocate(yc(ny))

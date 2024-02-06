@@ -105,7 +105,7 @@ module convolutions
         in1_ext(1:nx, 1:ny) = in1
         in2_ext(1:nx, 1:ny) = in2
 
-        ! TODO: we can precompute this
+        !# TODO: we can precompute this
         call calc_fft_forward_r2c(forward_plan, in1_ext, in1_ext_hat)
         call calc_fft_forward_r2c(forward_plan, in2_ext, in2_ext_hat)
 
