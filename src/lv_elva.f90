@@ -174,18 +174,17 @@ module lv_elva
         else if (n_lev.eq.3) then
 
             do i = 1, nx
-            xc(i) = dx*(i-1)
+                xc(i) = dx*(i-1)
             end do
             xmin = xc(1)
             xmax = xc(nx)
 
             do j = 1, ny
-            yc(j) = dy*(j-1)
+                yc(j) = dy*(j-1)
             enddo
             ymin = yc(1)
             ymax = yc(ny)
 
-            
             xcntr = (xmax+xmin)/2.0
             ycntr = (ymax+ymin)/2.0
 
@@ -193,10 +192,10 @@ module lv_elva
             Ly = ymax - ymin
             L = (Lx + Ly) / 2.0
 
-            kappa = 2*pi/L 
-                    
+            kappa = 2*pi/L
+
             eta(:, :,1)  = 0.
-            eta(:, :,2)  = visc_c      
+            eta(:, :,2)  = visc_c
             eta(:, :,3)  = eta_eff
 
             dz(:, :,1)  = He_lith*1.e3
@@ -209,31 +208,27 @@ module lv_elva
             
             do k = 1, n_lev-1
 
-            eta_c = eta(:, :,n_lev-1)
-            dz_c = dz(:, :,n_lev-k+1)
+                eta_c = eta(:, :,n_lev-1)
+                dz_c = dz(:, :,n_lev-k+1)
 
-            eta_ratio = eta_c/eta_eff
-            eta_ratiom1 = 1./eta_ratio
+                eta_ratio = eta_c/eta_eff
+                eta_ratiom1 = 1./eta_ratio
 
-            c = cosh(dz_c*kappa)
-            s = sinh(dz_c*kappa)
+                c = cosh(dz_c*kappa)
+                s = sinh(dz_c*kappa)
 
-            R = (2.0 * eta_ratio * c * s + (1-eta_ratio**2) * (dz_c*kappa)**2 + &
-                (eta_ratio*s)**2 + c**2 ) / ((eta_ratio + eta_ratiom1)* c * s + &
-                (eta_ratio - eta_ratiom1)*dz_c*kappa + s**2 + c**2)
-            
-            eta_eff = R*eta_c
-            
+                R = (2.0 * eta_ratio * c * s + (1-eta_ratio**2) * (dz_c*kappa)**2 + &
+                    (eta_ratio*s)**2 + c**2 ) / ((eta_ratio + eta_ratiom1)* c * s + &
+                    (eta_ratio - eta_ratiom1)*dz_c*kappa + s**2 + c**2)
+                
+                eta_eff = R*eta_c
+                
             end do
 
         else
-
             print*,'n_lev = ', n_lev
-        
             stop
-
         endif
-        ! move this out for symmetry     eta_eff    = eta_eff  * (1.5/(1. + nu))         ! [Pa s]
      
         return
     end subroutine calc_effective_viscosity_3layer_channel
