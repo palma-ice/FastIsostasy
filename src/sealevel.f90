@@ -26,13 +26,10 @@ module sealevel
         implicit none
         type(isos_class), intent(INOUT)     :: isos 
 
-        call maskfield(isos%now%Hseawater, isos%now%rsl, &
-            isos%now%maskocean, isos%domain%nx, isos%domain%ny)
-
         isos%now%canom_load(:, :) = 0
         call add_columnanom(isos%par%rho_ice, isos%now%Hice, isos%ref%Hice, isos%now%canom_load)
-        call add_columnanom(isos%par%rho_seawater, isos%now%Hseawater, isos%ref%Hseawater, &
-            isos%now%canom_load)
+        call add_columnanom(isos%par%rho_seawater, isos%now%rsl, isos%ref%rsl, &
+            isos%now%canom_load, isos%now%maskocean)
         call maskfield(isos%now%canom_load, isos%now%canom_load, isos%domain%maskactive, &
             isos%domain%nx, isos%domain%ny)
     end subroutine calc_columnanoms_load
@@ -51,15 +48,29 @@ module sealevel
     end subroutine calc_columnanoms_solidearth
 
     !
-    subroutine add_columnanom(rho, H_now, H_ref, canom)
+    subroutine add_columnanom(rho, H_now, H_ref, canom, mask)
         implicit none
 
         real(wp), intent(IN)    :: rho
         real(wp), intent(IN)    :: H_now(:, :)
         real(wp), intent(IN)    :: H_ref(:, :)
         real(wp), intent(INOUT) :: canom(:, :)
+        logical, intent(INOUT), optional  :: mask(:, :)
 
-        canom = canom + rho * (H_now - H_ref)
+        integer                 :: nx, ny
+        real(wp), allocatable   :: canom_helper(:, :)
+
+        if (present(mask)) then
+            nx = size(canom, 1)
+            ny = size(canom, 2)
+            allocate(canom_helper(nx, ny))
+            canom_helper = 0.0_wp
+
+            call maskfield(canom_helper, rho * (H_now - H_ref), mask, nx, ny)
+            canom = canom + canom_helper
+        else
+            canom = canom + rho * (H_now - H_ref)
+        end if
         return
     end subroutine add_columnanom
 

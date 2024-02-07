@@ -103,7 +103,6 @@ module isostasy_defs
 
         real(wp), allocatable :: Haf(:, :)           ! [m] Ice thickness above floatation
         real(wp), allocatable :: Hice(:, :)          ! [m] Thickness of ice column
-        real(wp), allocatable :: Hseawater(:, :)     ! [m] Thickness of seawater column
         ! real(wp), allocatable :: Hsediment(:, :)     ! [m] Thickness of sediment column
 
         real(wp), allocatable :: rsl(:, :)           ! [m] relative sea level

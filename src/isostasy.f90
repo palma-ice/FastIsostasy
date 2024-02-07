@@ -376,7 +376,6 @@ module isostasy
 
         isos%now%Haf            = 0.0
         isos%now%Hice           = 0.0
-        isos%now%Hseawater      = 0.0
 
         isos%now%rsl            = -1e6_wp
         isos%now%ssh            = 0.0
@@ -721,7 +720,6 @@ module isostasy
         if (allocated(state%ssh_perturb))       deallocate(state%ssh_perturb)
         if (allocated(state%Haf))               deallocate(state%Haf)
         if (allocated(state%Hice))              deallocate(state%Hice)
-        if (allocated(state%Hseawater))         deallocate(state%Hseawater)
 
         if (allocated(state%rsl))               deallocate(state%rsl)
         if (allocated(state%ssh))               deallocate(state%ssh)
@@ -818,7 +816,6 @@ module isostasy
         allocate(state%ssh_perturb(nx, ny))
         allocate(state%Haf(nx, ny))
         allocate(state%Hice(nx, ny))
-        allocate(state%Hseawater(nx, ny))
 
         allocate(state%rsl(nx, ny))
         allocate(state%ssh(nx, ny))

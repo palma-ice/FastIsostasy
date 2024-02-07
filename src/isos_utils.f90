@@ -204,7 +204,6 @@ module isos_utils
         type(isos_state_class), intent(IN)      :: now
 
         ref%Hice            = now%Hice
-        ref%Hseawater       = now%Hseawater
 
         ref%w               = now%w
         ref%w_equilibrium   = now%w_equilibrium
