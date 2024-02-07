@@ -51,7 +51,7 @@ program test_isostasy
 
     ! === Define experiment to be run ====
 
-    experiment = "test4"   ! Spada et al. (2011) disc
+    experiment = "test2"   ! Spada et al. (2011) disc
     
     ! Tests are defined in Swierczek-Jereczek et al. (2024), GMD.
     ! Additional: "test5" = Lucía's Greenland ice-sheet load (since 15 ka)

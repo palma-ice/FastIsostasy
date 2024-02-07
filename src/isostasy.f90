@@ -109,29 +109,20 @@ module isostasy
 
         if (present(rigidity_method))   isos%par%rigidity_method    = rigidity_method
         if (present(visc_method))       isos%par%visc_method        = visc_method
-
         if (present(boundaries))        isos%par%boundaries         = boundaries
         if (present(viscosities))       isos%par%viscosities        = viscosities
-
-        isos%domain%n_lev = size(boundaries, 3)
-        if (isos%domain%n_lev .ne. size(viscosities, 3)) then
-            write(*,*) "Number of levels in viscosities and in boundaries do not coincide."
-            stop
-        end if
 
         write(*,*) "Allocating fields..."
         n = max(nx, ny)
         ocean_surface_file = "input/OceanSurfaceETOPO2022.nc"
         nbsl = nc_size(ocean_surface_file, "z")
-        call allocate_isos(isos, n, n, isos%domain%n_lev, nbsl)
+        call allocate_isos(isos, n, n, isos%par%nl, nbsl)
 
         ! Init scalar fields of domain
         isos%domain%nx = n
         isos%domain%ny = n
         isos%domain%dx = dx
         isos%domain%dy = dy
-        isos%domain%boundaries_vec = boundaries
-        isos%domain%viscosities_vec = viscosities
 
         ! Init ocean surface interpolator
         call nc_read(ocean_surface_file, "z", isos%domain%bsl_vec, start=[1], count=[nbsl])
@@ -178,7 +169,7 @@ module isostasy
         isos%par%compressibility_correction = 1.5 / (1 + isos%par%nu)
         call calc_density_correction_factor(isos%par)
         call calc_homogeneous_rigidity(D_lith_const, isos%par%E, &
-            isos%domain%boundaries_vec(1), isos%par%nu)
+            isos%par%boundaries(1), isos%par%nu)
         call calc_flexural_lengthscale(isos%par%L_w, D_lith_const, &
             isos%par%rho_uppermantle, isos%par%g)
 
@@ -228,20 +219,20 @@ module isostasy
                     ! TODO: this part of the code should be in test_isostasy.f90
                     case("uniform")
                         isos%domain%D_lith   = D_lith_const
-                        isos%domain%He_lith  = isos%domain%boundaries_vec(1)
+                        isos%domain%He_lith  = isos%par%boundaries(1)
 
                     case("gaussian_plus")
                         call calc_gaussian_rigidity(isos%domain%He_lith, &
-                            1.5*isos%domain%boundaries_vec(1), &
-                            isos%domain%boundaries_vec(1), sign=1._wp, &
+                            1.5*isos%par%boundaries(1), &
+                            isos%par%boundaries(1), sign=1._wp, &
                             dx=isos%domain%dx, dy=isos%domain%dx)
                         call calc_heterogeneous_rigidity(isos%domain%D_lith, isos%par%E, &
                             isos%domain%He_lith, isos%par%nu)
 
                     case("gaussian_minus")
                         call calc_gaussian_rigidity(isos%domain%He_lith, &
-                            1.5*isos%domain%boundaries_vec(1), &
-                            isos%domain%boundaries_vec(1), sign=1._wp, &
+                            1.5*isos%par%boundaries(1), &
+                            isos%par%boundaries(1), sign=1._wp, &
                             dx=isos%domain%dx, dy=isos%domain%dx)
                         call calc_heterogeneous_rigidity(isos%domain%D_lith, isos%par%E, &
                             isos%domain%He_lith, isos%par%nu)
@@ -264,44 +255,40 @@ module isostasy
                 end select
 
                 call calc_layerboundaries(isos%domain%boundaries, isos%domain%He_lith, &
-                    isos%domain%boundaries_vec)
+                    isos%par%boundaries)
 
                 write(*,*) "Choosing viscosity field..."
+                call layered_viscosity(isos%domain%eta, isos%par%viscosities)
                 select case(trim(isos%par%visc_method))
-                ! TODO: this part of the code should be in test_isostasy.f90
-
+                !# TODO: this part of the code should be in test_isostasy.f90
                     case("uniform")
-                        isos%domain%eta_eff = isos%domain%viscosities_vec(1)
+                        call calc_effective_viscosity(isos%domain%eta_eff, isos%domain%eta, &
+                            isos%domain%dx, isos%domain%dy, isos%domain%boundaries)
 
                     case("gaussian_plus")
                         call calc_gaussian_viscosity(isos%domain%eta_eff, &
-                            isos%domain%viscosities_vec(1), &
-                            +1._wp, dx=isos%domain%dx, dy=isos%domain%dx)
+                            isos%par%viscosities(1), +1._wp, &
+                            dx=isos%domain%dx, dy=isos%domain%dx)
 
                     case("gaussian_minus")
-                        call calc_gaussian_viscosity(isos%domain%eta_eff, isos%par%visc, &
-                            isos%domain%viscosities_vec(1), &
-                            -1._wp, dx=isos%domain%dx, dy=isos%domain%dx)
-
-                    case("viscous_channel")
-                        call calc_effective_viscosity(isos%domain%eta_eff, isos%domain%eta, &
-                            isos%domain%dx, isos%domain%dy, isos%domain%layer_boundaries)
+                        call calc_gaussian_viscosity(isos%domain%eta_eff, &
+                            isos%par%viscosities(1), -1._wp, &
+                            dx=isos%domain%dx, dy=isos%domain%dx)
 
                     case("laty")
                         filename_laty = "input/test4/ANT-32KM_latyparams.nc"
                         call nc_read(filename_laty, "log10_mantle_visc", &
                             isos%domain%eta, start=[1, 1, 1], &
-                            count=[isos%domain%nx, isos%domain%ny, isos%par%n_lev])
+                            count=[isos%domain%nx, isos%domain%ny, isos%par%nl])
                         isos%domain%eta = 10. ** (isos%domain%eta)
                         call calc_effective_viscosity(isos%domain%eta_eff, isos%domain%eta, &
-                            isos%domain%dx, isos%domain%dy, isos%domain%layer_boundaries)
+                            isos%domain%dx, isos%domain%dy, isos%domain%boundaries)
                         
                         ! use w_equilibrium as helper to load mask since it is not used.
                         filename_laty = "input/test4/LGMmask.nc"
                         call nc_read(filename_laty, "M", &
                             isos%now%w_equilibrium, start=[1, 1], &
                             count=[isos%domain%nx, isos%domain%ny])
-                        write(*,*) sum(isos%now%w_equilibrium), size(isos%now%w_equilibrium)
                         where(isos%now%w_equilibrium .lt. 0.5) isos%domain%maskactive = .false.
 
                     case DEFAULT
@@ -632,8 +619,15 @@ module isostasy
         call nml_read(filename,group,"method",              par%method)
         call nml_read(filename,group,"dt_diagnostics",      par%dt_diagnostics)
         call nml_read(filename,group,"dt_prognostics",      par%dt_prognostics)
-        call nml_read(filename,group,"He_lith",             par%He_lith)
-        call nml_read(filename,group,"visc",                par%visc)
+        call nml_read(filename,group,"visc_method",         par%visc_method) 
+        call nml_read(filename,group,"rigidity_method",     par%rigidity_method)
+
+        call nml_read(filename,group,"nl",                  par%nl)
+        allocate(par%boundaries(par%nl))
+        allocate(par%viscosities(par%nl))
+
+        call nml_read(filename,group,"boundaries",          par%boundaries)
+        call nml_read(filename,group,"viscosities",         par%viscosities)
         call nml_read(filename,group,"tau",                 par%tau)
 
         ! Physical constants
@@ -649,29 +643,20 @@ module isostasy
         call nml_read(filename,group,"m_earth",         par%m_earth)
         call nml_read(filename,group,"A_ocean_pd",      par%A_ocean_pd)
 
-        ! Viscous asthenosphere-related parameters
-        call nml_read(filename,group,"visc_method",     par%visc_method) 
-        call nml_read(filename,group,"visc_c",          par%visc_c)              
-        call nml_read(filename,group,"thck_c",          par%thck_c)
-        call nml_read(filename,group,"n_lev",           par%n_lev)
-        
-        ! Lithosphere effective thickness (and therefore ridigidity)
-        call nml_read(filename,group,"rigidity_method",  par%rigidity_method)
-
         return
     end subroutine isos_par_load
 
-    subroutine allocate_isos(isos, nx, ny, nz, nbsl)
+    subroutine allocate_isos(isos, nx, ny, nl, nbsl)
         implicit none
         type(isos_class), intent(INOUT) :: isos
-        integer, intent(IN)             :: nx, ny, nz, nbsl
+        integer, intent(IN)             :: nx, ny, nl, nbsl
 
         ! First ensure arrays are not allocated
         call deallocate_isos_domain(isos%domain)
         call deallocate_isos_state(isos%now)
         call deallocate_isos_state(isos%ref)
         call deallocate_isos_output(isos%output)
-        call allocate_isos_domain(isos%domain, nx, ny, nz, nbsl)
+        call allocate_isos_domain(isos%domain, nx, ny, nl, nbsl)
         call allocate_isos_state(isos%now, nx, ny)
         call allocate_isos_state(isos%ref, nx, ny)
         call allocate_isos_output(isos%output, nx, ny)
@@ -771,9 +756,9 @@ module isostasy
         return
     end subroutine deallocate_isos_output
 
-    subroutine allocate_isos_domain(domain, nx, ny, nz, nbsl)
+    subroutine allocate_isos_domain(domain, nx, ny, nl, nbsl)
         implicit none
-        integer, intent(IN) :: nx, ny, nz, nbsl
+        integer, intent(IN) :: nx, ny, nl, nbsl
         type(isos_domain_class), intent(INOUT) :: domain
 
         allocate(domain%bsl_vec(nbsl))
@@ -790,7 +775,8 @@ module isostasy
         allocate(domain%D_lith(nx, ny))
         allocate(domain%eta_eff(nx, ny))
         allocate(domain%tau(nx, ny))
-        allocate(domain%eta(nx, ny, nz))
+        allocate(domain%eta(nx, ny, nl))
+        allocate(domain%boundaries(nx, ny, nl))
 
         allocate(domain%kei(nx, ny))
         allocate(domain%GV(nx, ny))

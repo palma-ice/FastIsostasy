@@ -21,6 +21,9 @@ module isostasy_defs
         
         character(len=56)       :: visc_method      ! [-] Method to prescribe viscosity field
         character(len=56)       :: rigidity_method  ! [-] Method to prescribe lithospheric thickness field
+        real(wp), allocatable   :: boundaries(:)    ! [km] Layer boundaries
+        real(wp), allocatable   :: viscosities(:)   ! [Pa s] Layer viscosities
+        integer                 :: nl               ! [-] Number of layers for LV-ELVA
         real(wp)                :: tau              ! [yr] Asthenospheric relaxation time
 
         ! Physical constants
@@ -53,10 +56,6 @@ module isostasy_defs
         integer                 :: offset
         integer                 :: nx, ny
         real(wp)                :: dx, dy
-
-        real(wp), allocatable   :: boundaries_vec(:)    ! [km] Layer boundaries
-        real(wp), allocatable   :: viscosities_vec(:)   ! [Pa s] Layer viscosities
-        integer                 :: n_lev                ! [-] Number of layers for LV-ELVA
 
         real(wp), allocatable   :: bsl_vec(:)       ! [m]
         real(wp), allocatable   :: A_ocean_vec(:)   ! [m^2]

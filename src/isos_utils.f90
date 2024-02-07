@@ -672,17 +672,15 @@ module isos_utils
     end function gauss_values
 
 
-    subroutine calc_gaussian_viscosity(eta,eta_0,sign,dx,dy)
+    subroutine calc_gaussian_viscosity(eta, eta_0, sign, dx, dy)
 
         real(wp), intent(OUT) :: eta(:, :)
         real(wp), intent(IN) :: eta_0, sign, dx, dy
-        real(wp) :: Lx, Ly, L, det_eta_sigma, f
+
+        real(wp) :: Lx, Ly, f
         real(wp) :: xcntr, ycntr, xmax, xmin, ymax, ymin
-
         real(wp), allocatable :: xc(:), yc(:)
-
-        real(wp) :: eta_sigma(2,2)
-        real(wp) :: eta_sigma_m1(2,2)
+        real(wp) :: eta_sigma_m1(2, 2)
 
         integer  :: i, j, nx, ny
 
@@ -716,7 +714,8 @@ module isos_utils
 
         do i = 1, nx
            do j = 1, ny
-              f = exp(-0.5*dot_product([xc(i),yc(j)]-[xcntr,ycntr], matmul(eta_sigma_m1, [xc(i),yc(j)]-[xcntr,ycntr]) ))              
+              f = exp(-0.5*dot_product([xc(i),yc(j)]-[xcntr,ycntr], &
+                matmul(eta_sigma_m1, [xc(i),yc(j)]-[xcntr,ycntr]) ))
               eta(i,j) = eta_0 * 10**(sign * f)
            enddo
         enddo
@@ -730,14 +729,11 @@ module isos_utils
 
         real(wp), intent(IN) :: He_lith_0, He_lith_1,sign, dx, dy
         real(wp), intent(OUT) :: He_lith(:, :)
-        real(wp) :: Lx, Ly, L, det_He_lith_sigma
+
+        real(wp) :: Lx, Ly
         real(wp) :: xcntr, ycntr, xmax, xmin, ymax, ymin
-
         real(wp), allocatable :: xc(:), yc(:)
-
-        real(wp) :: He_lith_sigma(2,2)
         real(wp) :: He_lith_sigma_m1(2,2)
-
         integer  :: i, j, nx, ny
 
         nx = size(He_lith,1)

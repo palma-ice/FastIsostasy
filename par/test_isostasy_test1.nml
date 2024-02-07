@@ -11,7 +11,7 @@
     ! 1D reference model
     boundaries = 88.0, 600.0        ! [km] Depth of layer boundaries. The first value is overwritten
                                     ! if a lithospheric thickness filed is provided.
-    viscosities = 1.e21, 1.e21      ! [Pa s] Layer viscosities. The values are overwritten if a 3D
+    viscosities = 1.e21, 2.e21      ! [Pa s] Layer viscosities. The values are overwritten if a 3D
                                     ! viscosity field is provided.
     tau             = 2000.0        ! [yr] Relaxation time
 

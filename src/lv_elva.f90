@@ -13,6 +13,7 @@ module lv_elva
     
     public :: calc_lvelva
     public :: calc_layerboundaries
+    public :: layered_viscosity
     public :: calc_effective_viscosity
     public :: calc_fft_backward_r2r
     public :: calc_fft_forward_r2r
@@ -121,17 +122,31 @@ module lv_elva
         real(wp), intent(INOUT) :: layer_boundaries(:, :, :)
         real(wp), intent(IN)    :: He_lith(:, :)
         real(wp), intent(IN)    :: layer_boundaries_vec(:)
-        integer                 :: k, n_lev
+        integer                 :: k, nl
 
-        n_lev = size(layer_boundaries_vec)
+        nl = size(layer_boundaries_vec)
         layer_boundaries = 0.0_wp
         layer_boundaries(:, :, 1) = He_lith
 
-        do k = 2, n_lev
+        do k = 2, nl
             layer_boundaries(:, :, k) = layer_boundaries_vec(k)
         end do
         return
     end subroutine calc_layerboundaries
+
+    subroutine layered_viscosity(eta, eta_vec)
+        implicit none
+        real(wp), intent(INOUT) :: eta(:, :, :)
+        real(wp), intent(IN)    :: eta_vec(:)
+        integer                 :: k, nl
+
+        nl = size(eta_vec)
+        do k = 1, nl
+            eta(:, :, k) = eta_vec(k)
+        end do
+
+        return
+    end subroutine layered_viscosity
 
     subroutine calc_effective_viscosity(eta_eff, eta, dx, dy, layer_boundaries)
 
@@ -152,12 +167,12 @@ module lv_elva
         real(wp), allocatable ::  c(:, :)
         real(wp), allocatable ::  s(:, :)
        
-        integer  :: i, j, k, nx, ny, n_lev
+        integer  :: i, j, k, nx, ny, nl
 
         nx = size(eta_eff, 1)
         ny = size(eta_eff, 2)
-        n_lev = size(eta, 3)
-        if (n_lev .ne. size(layer_boundaries, 3)) then
+        nl = size(eta, 3)
+        if (nl .ne. size(layer_boundaries, 3)) then
             write(*,*) "Number of levels in eta and in boundaries do not coincide."
             stop
         end if
@@ -170,19 +185,19 @@ module lv_elva
         allocate(c(nx, ny))
         allocate(s(nx, ny))
 
-        if (n_lev .eq. 1) then
+        if (nl .eq. 1) then
             eta_eff = eta(:, :, 1)
 
-        else if (n_lev .ge. 1) then
+        else if (nl .ge. 1) then
             Lx = dx * (nx-1)
             Ly = dy * (ny-1)
             L = (Lx + Ly) / 2.0
             kappa = 2*pi/L
 
             ! Start with n-th layer: viscous half space
-            eta_eff(:, :) = eta(:, :, n_lev)
+            eta_eff(:, :) = eta(:, :, nl)
             
-            do k = n_lev, 2
+            do k = nl, 2
                 write(*,*) k
                 dz = layer_boundaries(:, :, k) - layer_boundaries(:, :, k-1)
                 eta_c = eta(:, :, k-1)
@@ -199,12 +214,12 @@ module lv_elva
             end do
 
         else
-            print*,'Number of levels is wrong: n_lev = ', n_lev
+            print*,'Number of levels is wrong: nl = ', nl
             stop
         endif
 
         return
-    end subroutine calc_effective_viscosity_3d
+    end subroutine calc_effective_viscosity
 
     subroutine calc_beta(beta, kappa, D_lith, rho_uppermantle, g) 
         ! Calculate analytical solution as in Bueler et al 2007 (eq 11)

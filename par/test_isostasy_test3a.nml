@@ -9,12 +9,12 @@
     rigidity_method = gaussian_minus! Type of thickness filed for elastic lithosphere
 
     ! 1D reference model
-    He_lith         = 150.          ! [km] Effective elastic thickness lithosphere
-    visc            = 1.e21         ! [Pa s] Asthenosphere viscosity, visc=1e21 for Bueler et al. (2007)
-    tau             = 2000.0         ! [yr] Relaxation time 
-    visc_c          = 1.e21         ! [Pa s] Channel viscosity 
-    thck_c          = 600.          ! [km]   Channel thickness
-    n_lev           = 3             ! [-]    Number of layers (including lithosphere)
+    nl          = 1                 ! [1] Number of viscous layers for sub-lithospheric mantle
+    boundaries  = 150.0             ! [km] Depth of layer boundaries. The first value is overwritten
+                                    ! if a lithospheric thickness filed is provided.
+    viscosities = 1.e21             ! [Pa s] Layer viscosities. The values are overwritten if a 3D
+                                    ! viscosity field is provided.
+    tau             = 2000.0        ! [yr] Relaxation time
 
     ! Physical constants
     E               = 66.0          ! [GPa] Young modulus
