@@ -402,7 +402,7 @@ module isostasy
         write(*,*) "Calling first update..."
         ! Call isos_update to diagnose rate of change
         ! (no change to z_bed will be applied since isos%par%time==time)
-        isos%now%ssh = isos%now%bsl + isos%ref%ssh + isos%now%ssh_perturb
+        ! isos%now%ssh = isos%now%bsl + isos%ref%ssh + isos%now%ssh_perturb
         isos%now%rsl = isos%now%ssh - isos%now%z_bed
         call calc_masks(isos)
         call calc_columnanoms_load(isos)
@@ -575,7 +575,6 @@ module isostasy
 
             end if
 
-            !# TODO: here we should have a better check on the final time
             if ( abs(time-isos%par%time_prognostics) .lt. 1e-5) then 
                 ! Final time has been reached, exit the loop 
                 isos%par%time_prognostics = time 

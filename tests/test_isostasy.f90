@@ -280,6 +280,7 @@ program test_isostasy
             time_ice(2) = 1e-9
             T_ice(:, :, 1) = 0.0_wp
             T_ice(:, :, 2) = H_ice
+            ssh = -1e3
             
         case("test4")  ! ICE6G_D
         ! Comment on “An Assessment of the ICE-6G_C (VM5a) Glacial Isostatic Adjustment Model” by Purcell et al.
@@ -323,6 +324,7 @@ program test_isostasy
             call nc_read(filename,"b", z_bed_ice, start=[1, 1, 1], count=[ncx, ncy, 1])
             
             z_bed = z_bed_ice(:, :, 1)
+            ssh = 0.0_wp
 
         case("test5")
 
@@ -367,6 +369,7 @@ program test_isostasy
 
             H_ice = T_ice(:, :, 1)
             z_bed = z_bed_ice(:, :, 1)
+            ssh = 0.0_wp
 
         case DEFAULT
             write(*,*) "Error: experiment name not recognized."
@@ -375,11 +378,8 @@ program test_isostasy
 
     end select
 
-    ! Inititalize state
-    ssh = 0.0_wp
+    ! Inititalize and write state
     call isos_init_state(isos1, z_bed, T_ice(:, :, 1), ssh, time=time_init) 
-
-    ! Initialize writing output
     call isos_write_init(isos1, xc, yc, file_out, time_init)
 
     ! Determine total number of iterations to run
