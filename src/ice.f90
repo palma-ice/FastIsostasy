@@ -237,7 +237,7 @@ contains
     end subroutine read_series_nc
 
     function series_interp(series,year_bp) result(var)
-        ! Wrapper for simple `interp_2d_over_time` function
+        ! Wrapper for simple `interp_2d` function
         ! for series_types. 
         implicit none 
 
@@ -247,13 +247,13 @@ contains
         integer  :: nt, i 
 
         ! Interpolate series object
-        var = interp_2d_over_time(series%time,series%var,xout=year_bp)
+        var = interp_2d(series%time,series%var,xout=year_bp)
 
         return 
 
     end function series_interp
 
-    function interp_2d_over_time(x,y,xout) result(yout)
+    function interp_2d(x,y,xout) result(yout)
         ! Simple linear interpolation of a point
 
         implicit none 
@@ -287,7 +287,7 @@ contains
 
         return 
 
-    end function interp_2d_over_time
+    end function interp_2d
     
     subroutine series_allocate(series,nt)
 

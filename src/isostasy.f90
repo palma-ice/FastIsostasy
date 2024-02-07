@@ -78,8 +78,10 @@ module isostasy
 
 
         ! Local variables
-        integer                 :: n, nbsl, i, j
+        integer                 :: n, nbsl, i, j, l, ncz    ! ncz = helper to load 3D fields
+        real(wp), allocatable   :: z(:)
         real(wp), allocatable   :: helper_convo(:, :)
+        real(wp), allocatable   :: eta_raw(:, :, :)
         real(wp)                :: D_lith_const
         character*256           :: filename_laty
         character*256           :: ocean_surface_file
@@ -243,8 +245,8 @@ module isostasy
                         call nc_read(filename_laty, "lithos_thck", isos%domain%He_lith, &
                             start=[1, 1], count=[isos%domain%nx, isos%domain%ny])
 
-                        ! TODO: recheck line below for stability
-                        isos%domain%He_lith = isos%domain%He_lith !*1.e-3  ! * 0.1
+                        ! calc_heterogeneous_rigidity assumes km, not m. Therefore conversion.
+                        isos%domain%He_lith = isos%domain%He_lith*1.e-3
                         call calc_heterogeneous_rigidity(isos%domain%D_lith, isos%par%E, &
                             isos%domain%He_lith, isos%par%nu)
 
@@ -276,10 +278,25 @@ module isostasy
                             dx=isos%domain%dx, dy=isos%domain%dx)
 
                     case("laty")
+                        !# TODO: loading fields should be more general (with 2D interpolation)
                         filename_laty = "input/test4/ANT-32KM_latyparams.nc"
-                        call nc_read(filename_laty, "log10_mantle_visc", &
-                            isos%domain%eta, start=[1, 1, 1], &
-                            count=[isos%domain%nx, isos%domain%ny, isos%par%nl])
+                        ncz = nc_size(filename_laty,"zc")
+                        allocate(z(ncz))
+                        allocate(eta_raw(n, n, ncz))
+                        call nc_read(filename_laty, "zc", z, start=[1], count=[ncz])
+                        call nc_read(filename_laty, "log10_mantle_visc", eta_raw, &
+                            start=[1, 1, 1], count=[n, n, ncz])
+                        where (eta_raw < 16) eta_raw = 1e16
+
+                        do l = 1, isos%par%nl
+                            do i = 1, nx
+                            do j = 1, ny
+                                call interp_0d(z, eta_raw(i, j, :), &
+                                    isos%domain%boundaries(i, j, l), isos%domain%eta(i, j, l))
+                            end do
+                            end do
+                        end do
+
                         isos%domain%eta = 10. ** (isos%domain%eta)
                         call calc_effective_viscosity(isos%domain%eta_eff, isos%domain%eta, &
                             isos%domain%dx, isos%domain%dy, isos%domain%boundaries)
@@ -419,9 +436,6 @@ module isostasy
         write(*,*) "    range(w_eq):    ",  minval(isos%now%w_equilibrium), maxval(isos%now%w_equilibrium)
         write(*,*) "  range(z_bed):     ",  minval(isos%now%z_bed), maxval(isos%now%z_bed)
 
-        ! Make sure tau does not contain zero values, if so
-        ! output an error for diagnostics. Don't kill the program
-        ! so that external program can still write output as needed.
         if (minval(isos%domain%tau) .le. 0.0) then
             write(error_unit,*) "isos_init_state:: Error: tau initialized with zero values present. &
             &This will lead to the model crashing."

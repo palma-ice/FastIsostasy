@@ -51,7 +51,7 @@ program test_isostasy
 
     ! === Define experiment to be run ====
 
-    experiment = "test2"   ! Spada et al. (2011) disc
+    experiment = "test4"   ! Spada et al. (2011) disc
     
     ! Tests are defined in Swierczek-Jereczek et al. (2024), GMD.
     ! Additional: "test5" = Lucía's Greenland ice-sheet load (since 15 ka)
@@ -390,7 +390,7 @@ program test_isostasy
 
         ! Update bedrock
         time = time_init + (n-1)*dtt
-        call interp_2d_over_time(time_ice, T_ice, time, H_ice)
+        call interp_2d(time_ice, T_ice, time, H_ice)
         call isos_update(isos1, H_ice, time)
 
         if (mod(time-time_init, dt_out) .eq. 0.0) then  ! Write output for this timestep
@@ -469,8 +469,8 @@ program test_isostasy
         end if
 
         if (isos%par%method .eq. 3) then
-            call nc_write(filename, "eta_eff", isos%output%eta_eff, units="Pa s", &
-                long_name="Asthenosphere effective viscosity", &
+            call nc_write(filename, "log10_eta_eff", log10(isos%output%eta_eff), units="Pa s", &
+                long_name="Effective upper-mantle viscosity", &
                 dim1="xc", dim2="yc", start=[1, 1])
 
             ! call nc_write(filename, "kappa", isos%output%kappa, units="", &

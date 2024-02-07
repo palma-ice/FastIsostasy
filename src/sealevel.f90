@@ -18,7 +18,7 @@ module sealevel
         type(isos_class), intent(INOUT)     :: isos
 
         isos%now%bsl = isos%now%bsl / isos%now%A_ocean
-        call interp_0d_over_time(isos%domain%bsl_vec, isos%domain%A_ocean_vec, &
+        call interp_0d(isos%domain%bsl_vec, isos%domain%A_ocean_vec, &
             isos%now%bsl, isos%now%A_ocean)
     end subroutine calc_bsl_pwconstant_Aocean
 

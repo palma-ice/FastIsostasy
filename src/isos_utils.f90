@@ -30,8 +30,8 @@ module isos_utils
     public :: calc_cropindices
     public :: extendice2isostasy
 
-    public :: interp_0d_over_time
-    public :: interp_2d_over_time
+    public :: interp_0d
+    public :: interp_2d
 
     public :: maskfield
     public :: isos_set_field
@@ -344,7 +344,7 @@ module isos_utils
     ! ===== INTERPOLATION FUNCTIONS ==============================
 
     ! Linear interpolation of scalar value over time
-    subroutine interp_0d_over_time(x, y, xout, yout)
+    subroutine interp_0d(x, y, xout, yout)
 
         implicit none
 
@@ -377,10 +377,10 @@ module isos_utils
         end if
 
         return
-    end subroutine interp_0d_over_time
+    end subroutine interp_0d
 
     ! Simple linear interpolation of 2D field over time
-    subroutine interp_2d_over_time(x, y, xout, yout)
+    subroutine interp_2d(x, y, xout, yout)
 
         implicit none
 
@@ -413,7 +413,7 @@ module isos_utils
         end if
 
         return
-    end subroutine interp_2d_over_time
+    end subroutine interp_2d
 
     ! ===== MASKING FUNCTIONS ==============================
 
