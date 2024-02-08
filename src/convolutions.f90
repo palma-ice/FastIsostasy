@@ -86,7 +86,7 @@ module convolutions
         call calc_fft_backward_c2r(backward_plan, helper_cplx, helper_real)
 
         call apply_zerobc_at_corners(helper_real, 2*nx-1, 2*ny-1)
-        out(1:nx,1:ny) = helper_real(i1+offset:i2+offset, j1-offset:j2-offset)
+        out(1:nx, 1:ny) = helper_real(i1+offset:i2+offset, j1-offset:j2-offset)
         return
     end subroutine precomputed_fftconvolution
 

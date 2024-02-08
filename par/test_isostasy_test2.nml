@@ -14,7 +14,7 @@
                                     ! if a lithospheric thickness filed is provided.
     viscosities = 1.e21, 2.e21      ! [Pa s] Layer viscosities. The values are overwritten if a 3D
                                     ! viscosity field is provided.
-    tau             = 2000.0        ! [yr] Relaxation time
+    tau         = 2000.0            ! [yr] Relaxation time
 
     ! Physical constants
     E               = 128.0     ! [GPa] Young modulus
