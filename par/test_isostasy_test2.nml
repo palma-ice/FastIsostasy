@@ -4,17 +4,17 @@
     correct_distortion = .false.    ! Account for distortion of projection?
     method          = 3             ! 0: constant displacement; 1: LLRA; 2: LV-ELRA, 3: LV-ELVA
     dt_prognostics  = 1.            ! [yr] Max. timestep to recalculate prognostics
-    dt_diagnostics  = 10.           ! [yr] Min. timestep to recalculate diagnostics
+    dt_diagnostics  = 1000.         ! [yr] Min. timestep to recalculate diagnostics
     visc_method     = uniform       ! Type of viscosity field for sub-lithospheric mantle
     rigidity_method = uniform       ! Type of thickness filed for elastic lithosphere
 
     ! 1D reference model
-    He_lith         = 70.       ! [km] Effective elastic thickness lithosphere
-    visc_c          = 1.e21     ! [Pa s] Channel viscosity 
-    visc            = 2.e21     ! [Pa s] Half-space viscosity
-    tau             = 2000.0    ! [yr] Relaxation time 
-    thck_c          = 600.      ! [km]   Channel thickness
-    n_lev           = 3         ! [-]    Number of layers (including lithosphere)
+    nl          = 2                 ! [1] Number of viscous layers for sub-lithospheric mantle
+    boundaries  = 70.0, 600.0       ! [km] Depth of layer boundaries. The first value is overwritten
+                                    ! if a lithospheric thickness filed is provided.
+    viscosities = 1.e21, 2.e21      ! [Pa s] Layer viscosities. The values are overwritten if a 3D
+                                    ! viscosity field is provided.
+    tau             = 2000.0        ! [yr] Relaxation time
 
     ! Physical constants
     E               = 128.0     ! [GPa] Young modulus

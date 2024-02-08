@@ -14,15 +14,15 @@ module lv_xlra
 
     ! Calculate rate of change of vertical bedrock height from a relaxing asthenosphere.
     ! Allows laterally variable relaxation times (LV-LLRA and LV-ELRA)
-    subroutine calc_asthenosphere_relax(dzbdt, w, w_equilibrium, tau)
+    subroutine calc_asthenosphere_relax(dwdt, w, w_equilibrium, tau)
         implicit none
 
-        real(wp), intent(OUT) :: dzbdt(:, :)
+        real(wp), intent(OUT) :: dwdt(:, :)
         real(wp), intent(IN)  :: w(:, :)
         real(wp), intent(IN)  :: w_equilibrium(:, :)
         real(wp), intent(IN)  :: tau(:, :)
 
-        dzbdt = (w_equilibrium-w) / tau
+        dwdt = (w_equilibrium-w) / tau
         return
     end subroutine calc_asthenosphere_relax
 

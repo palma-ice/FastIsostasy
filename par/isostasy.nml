@@ -9,12 +9,12 @@
     rigidity_method = uniform       ! Type of thickness filed for elastic lithosphere
 
     ! 1D reference model
-    He_lith         = 88.0       ! [km] Effective elastic thickness lithosphere
-    visc_c          = 1.e21     ! [Pa s] Channel viscosity 
-    visc            = 2.e21     ! [Pa s] Half-space viscosity
-    tau             = 2000.0     ! [yr] Relaxation time 
-    thck_c          = 600.      ! [km]   Channel thickness
-    n_lev           = 3         ! [-]    Number of layers (including lithosphere)
+    nl          = 2                 ! [1] Number of viscous layers for sub-lithospheric mantle
+    boundaries  = 88.0, 600.0       ! [km] Depth of layer boundaries. The first value is overwritten
+                                    ! if a lithospheric thickness filed is provided.
+    viscosities = 1.e21, 2.e21      ! [Pa s] Layer viscosities. The values are overwritten if a 3D
+                                    ! viscosity field is provided.
+    tau         = 2000.0            ! [yr] Relaxation time
 
     ! Physical constants
     E               = 66.0      ! [GPa] Young modulus

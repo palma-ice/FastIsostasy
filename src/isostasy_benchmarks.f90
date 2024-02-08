@@ -200,10 +200,7 @@ contains
         end do
         end do
 
-        deallocate(n)
-         
         return
-      
     end subroutine calc_analytical_viscous_disk_params
     
     subroutine calc_analytical_viscous_disk(me,w,dx,t) 
@@ -279,10 +276,7 @@ contains
       
         w  = w - 0.25*(w(1,1)+w(nx,ny)+w(1,ny)+w(nx,1)) 
 
-        deallocate(n)
-
         return
-         
     end subroutine calc_analytical_viscous_disk
 
     subroutine initialize_integration_class(me,fx,xl,xu,tolx,methodx)

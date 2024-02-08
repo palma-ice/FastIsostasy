@@ -1,13 +1,16 @@
 module isos_utils
 
     use, intrinsic :: iso_c_binding
-    use isostasy_defs, only : wp, pi, isos_domain_class, isos_param_class, isos_state_class
+    use isostasy_defs, only : wp, pi, isos_domain_class, isos_param_class, &
+        isos_state_class, isos_output_class
 
     implicit none
     include 'fftw3.f03'
 
     private
     
+    public :: midindex
+
     public :: calc_density_correction_factor
     public :: calc_flexural_lengthscale
     public :: calc_homogeneous_rigidity
@@ -20,10 +23,16 @@ module isos_utils
     public :: calc_fft_backward_c2r
     public :: calc_fft_forward_r2c
 
+    public :: copy_sparsestate
     public :: copy_state
+    public :: cropdomain2output
+    public :: cropstate2output
+    public :: calc_cropindices
+    public :: extendice2isostasy
 
-    public :: extend_array
-    public :: reduce_array
+    public :: interp_0d
+    public :: interp_2d
+
     public :: maskfield
     public :: isos_set_field
     public :: isos_set_smoothed_field
@@ -136,13 +145,12 @@ module isos_utils
         real(wp), intent(INOUT)     :: in(:, :)
         real(wp), intent(INOUT)     :: out(:, :)
 
-        integer(kind=4)             :: m, n
-
-        m = size(in, 1)
-        n = size(in, 2)
+        integer(kind=4)            :: nx, ny
+        nx = size(in,1)
+        ny = size(in,2)
 
         call fftw_execute_r2r(plan, in, out)
-        out = out / (m*n*1.)
+        out = out / (nx * ny * 1.)
 
         return
     end subroutine calc_fft_backward_r2r
@@ -178,36 +186,44 @@ module isos_utils
         complex(wp), intent(INOUT) :: in(:, :)
         real(wp), intent(INOUT)    :: out(:, :)
 
-        integer(kind=4)            :: m,n
+        integer(kind=4)            :: nx, ny
+        nx = size(in,1)
+        ny = size(in,2)
 
-        m = size(in,1)
-        n = size(in,2)
         call fftw_execute_dft_c2r(plan, in, out)
-        out = out / (m*n*1.)
+        out = out / (nx * ny * 1._wp)
 
         return
     end subroutine calc_fft_backward_c2r
 
     ! ===== MISC ==============================
 
+    subroutine copy_sparsestate(ref, now)
+        implicit none
+        type(isos_state_class), intent(INOUT)   :: ref
+        type(isos_state_class), intent(IN)      :: now
+
+        ref%Hice            = now%Hice
+
+        ref%w               = now%w
+        ref%w_equilibrium   = now%w_equilibrium
+        ref%we              = now%we
+
+        ref%z_bed           = now%z_bed
+        ref%rsl             = now%rsl
+        ref%ssh             = now%ssh
+
+        return
+    end subroutine copy_sparsestate
+
     subroutine copy_state(ref, now)
         implicit none
         type(isos_state_class), intent(INOUT)   :: ref
         type(isos_state_class), intent(IN)      :: now
 
-        ref%z_bed           = now%z_bed
-        ref%dzbdt           = now%dzbdt
-        ref%q               = now%q
-        ref%w               = now%w
-        ref%w_equilibrium   = now%w_equilibrium
-        ref%we              = now%we
-        ref%cplx_out_aux    = now%cplx_out_aux
-
+        call copy_sparsestate(ref, now)
+        ref%dwdt            = now%dwdt
         ref%Haf             = now%Haf
-        ref%Hice            = now%Hice
-        ref%Hseawater       = now%Hseawater
-
-        ref%ssh             = now%ssh
         ref%ssh_perturb     = now%ssh_perturb
         ref%canom_load      = now%canom_load
         ref%canom_full      = now%canom_full
@@ -221,154 +237,184 @@ module isos_utils
 
     ! ===== ARRAY SIZING FUNCTIONS ==============================
 
-    subroutine extend_array(ve,v,fill_with,val)
-        ! Given an array ve with dimensions >= those of v, 
-        ! populate ve with values of v, centered in the larger array.
-        ! Fill extra cells with value of user's choice. 
+    subroutine cropdomain2output(output, domain)
+        implicit none
+        type(isos_output_class), intent(INOUT)  :: output
+        type(isos_domain_class), intent(IN)     :: domain
+        integer                                 :: i1, i2, j1, j2
+
+        i1 = domain%icrop1
+        i2 = domain%icrop2
+        j1 = domain%jcrop1
+        j2 = domain%jcrop2
+
+        output%He_lith = domain%He_lith(i1:i2, j1:j2)
+        output%D_lith = domain%D_lith(i1:i2, j1:j2)
+        output%eta_eff = domain%eta_eff(i1:i2, j1:j2)
+        output%tau = domain%tau(i1:i2, j1:j2)
+        output%kappa = domain%kappa(i1:i2, j1:j2)
+
+        output%kei = domain%kei(i1:i2, j1:j2)
+        output%GE = domain%GE(i1:i2, j1:j2)
+        output%GV = domain%GV(i1:i2, j1:j2)
+        output%GN = domain%GN(i1:i2, j1:j2)
+
+        return
+    end subroutine cropdomain2output
+
+    subroutine cropstate2output(output, now, i1, i2, j1, j2)
+        implicit none
+        type(isos_output_class), intent(INOUT)  :: output
+        type(isos_state_class), intent(IN)      :: now
+        integer, intent(IN)                     :: i1, i2, j1, j2
+
+        output%Hice = now%Hice(i1:i2, j1:j2)
+        output%rsl = now%rsl(i1:i2, j1:j2)
+        output%ssh = now%ssh(i1:i2, j1:j2)
+        output%z_bed = now%z_bed(i1:i2, j1:j2)
+        output%dwdt = now%dwdt(i1:i2, j1:j2)
+        output%w = now%w(i1:i2, j1:j2)
+        output%we = now%we(i1:i2, j1:j2)
+        output%ssh_perturb = now%ssh_perturb(i1:i2, j1:j2)
+        output%canom_full = now%canom_full(i1:i2, j1:j2)
+
+        output%maskocean = now%maskocean(i1:i2, j1:j2)
+        output%maskgrounded = now%maskgrounded(i1:i2, j1:j2)
+        output%maskcontinent = now%maskcontinent(i1:i2, j1:j2)
+        return
+    end subroutine cropstate2output
+
+    subroutine calc_cropindices(icrop1, icrop2, jcrop1, jcrop2, nx, ny)
+        implicit none
+        integer, intent(INOUT)  :: icrop1, icrop2, jcrop1, jcrop2
+        integer, intent(IN)     :: nx, ny
+        integer                 :: pad
+
+        if (nx .eq. ny) then
+            icrop1 = 1
+            icrop2 = nx
+            jcrop1 = 1
+            jcrop2 = ny
+        else if (nx < ny) then
+            if ( mod(ny - nx, 2) .eq. 0) then
+                pad = (ny - nx) / 2
+            else
+                pad = (ny - nx + 1) / 2
+            end if
+
+            icrop1 = pad
+            icrop2 = ny-pad
+            jcrop1 = 1
+            jcrop2 = ny
+        else
+            if ( mod(nx - ny, 2) .eq. 0) then
+                pad = (nx - ny) / 2
+            else
+                pad = (nx - ny + 1) / 2
+            end if
+
+            jcrop1 = pad
+            icrop1 = 1
+            icrop2 = nx
+            jcrop2 = nx-pad
+        end if
+
+        return
+    end subroutine calc_cropindices
+
+    subroutine extendice2isostasy(now, z_bed, H_ice, ssh, i1, i2, j1, j2)
+        implicit none
+        type(isos_state_class), intent(INOUT)   :: now
+        real(wp), intent(IN)                    :: z_bed(:, :)
+        real(wp), intent(IN)                    :: H_ice(:, :)
+        real(wp), intent(IN)                    :: ssh(:, :)
+        integer, intent(IN)                     :: i1, i2, j1, j2
+
+        now%z_bed = 0.0
+        now%Hice = 0.0
+        now%ssh = 0.0
+        now%z_bed(i1:i2, j1:j2) = z_bed
+        now%Hice(i1:i2, j1:j2) = H_ice
+        now%ssh(i1:i2, j1:j2) = ssh
+        return
+    end subroutine extendice2isostasy
+
+
+    ! ===== INTERPOLATION FUNCTIONS ==============================
+
+    ! Linear interpolation of scalar value over time
+    subroutine interp_0d(x, y, xout, yout)
 
         implicit none
 
-        real(wp), intent(INOUT) :: ve(:, :) 
-        real(wp), intent(IN)    :: v(:, :)
-        character(len=*), intent(IN) :: fill_with
-        real(wp), intent(IN), optional :: val
+        real(wp), dimension(:), intent(IN) :: x 
+        real(wp), dimension(:), intent(IN) :: y
+        real(wp), intent(IN) :: xout
+        real(wp), intent(OUT) :: yout
+        integer  :: j, n
+        real(wp) :: alpha
 
-        ! Local variables
-        integer  :: i, j, nx, ny, nx1, ny1
-        integer  :: i0, i1, j0, j1
-        real(wp) :: fill_value 
+        n    = size(x)
 
-        nx = size(v,1)
-        ny = size(v,2) 
-
-        nx1 = size(ve,1)
-        ny1 = size(ve,2)
-
-        ! Determine fill value to be used
-
-        select case(trim(fill_with))
-
-            case("zero","zeros")
-
-                fill_value = 0.0
-
-            case("mean")
-
-                fill_value = sum(v) / real(nx*ny,wp)
-
-            case("val")
-
-                if (.not. present(val)) then
-                    write(*,*) "extend_array:: Error: for fill_with='val', the optional &
-                    &argument val must be provided and is missing right now."
-                    stop
-                end if
-
-                fill_value = val
-
-            case("mirror")
-                ! Set fill_value to zero, it will not be used 
-
-                fill_value = 0.0 
-
-            case DEFAULT
-                write(*,*) "extend_array:: Error: choice of 'fill_with' not recognized."
-                write(*,*) "fill_with = ", trim(fill_with)
-                stop
-        
-        end select
-
-        ! Initialize extended array to correct fill value
-
-        ve = fill_value 
-
-        ! Fill in the actual values centered within the extended array
-
-        if (nx .eq. nx1) then
-            i0 = 1
+        if (xout .lt. x(1)) then
+            yout = y(1)
+        else if (xout .gt. x(n)) then
+            yout = y(n)
         else
-            i0 = floor( (nx1-nx)/2.0 )
-        end if 
-        i1 = i0+nx-1
+            do j = 1, n
+                if (x(j) .ge. xout) exit
+            end do
 
-        if (ny .eq. ny1) then
-            j0 = 1
-        else
-            j0 = floor( (ny1-ny)/2.0 )
-        end if 
-        j1 = j0+ny-1
-
-        ve(i0:i1,j0:j1) = v
-
-
-        if (trim(fill_with) .eq. "mirror") then
-            ! Populate extended array region with mirrored points 
-
-            ! Left
-            if (i0 .gt. 1) then 
-                ve(1:i0-1,j0:j1) = v(i0-1:1:-1,:)
-            end if
-            ! Right
-            if (i1 .lt. nx1) then 
-                ve(i1+1:nx1,j0:j1) = v(nx:nx-(nx1-i1)+1:-1,:)
-            end if
-            
-            ! Bottom
-            if (j0 .gt. 1) then 
-                ve(i0:i1,1:j0-1) = v(:,j0-1:1:-1)
-            end if
-            ! Top
-            if (j1 .lt. ny1) then 
-                ve(i0:i1,j1+1:ny1) = v(:,ny:ny-(ny1-j1)+1:-1)
-            end if
-            ! TODO: populate the corners too. For now ignore, and keep 
-            ! extended array values equal to fill_value=0.0. 
-        end if 
+            if (j .eq. 1) then
+                yout = y(1)
+            else if (j .eq. n+1) then
+                yout = y(n)
+            else
+                alpha = (xout - x(j-1)) / (x(j) - x(j-1))
+                yout = y(j-1) + alpha*(y(j) - y(j-1))
+             end if
+        end if
 
         return
-    end subroutine extend_array
+    end subroutine interp_0d
 
-    subroutine reduce_array(v,ve)
-        ! Given an array of dimensions >= those of v
-        ! extract centered values of ve of interest,
-        ! discarding remaining values around the borders.
+    ! Simple linear interpolation of 2D field over time
+    subroutine interp_2d(x, y, xout, yout)
 
         implicit none
 
-        real(wp), intent(INOUT) :: v(:, :)
-        real(wp), intent(IN)    :: ve(:, :) 
-        
-        ! Local variables
-        integer  :: i, j, nx, ny, nx1, ny1
-        integer  :: i0, i1, j0, j1
-        real(wp) :: fill_value 
+        real(wp), dimension(:), intent(IN) :: x 
+        real(wp), dimension(:, : ,:), intent(IN) :: y
+        real(wp), intent(IN) :: xout
+        real(wp), dimension(:, :),intent(OUT) :: yout
+        integer  :: j, n
+        real(wp) :: alpha
 
-        nx = size(v,1)
-        ny = size(v,2) 
+        n    = size(x)
 
-        nx1 = size(ve,1)
-        ny1 = size(ve,2)
-
-        ! Fill in the actual values from those centered within the extended array
-
-        if (nx .eq. nx1) then
-            i0 = 1
+        if (xout .lt. x(1)) then
+            yout = y(:, :,1)
+        else if (xout .gt. x(n)) then
+            yout = y(:, :,n)
         else
-            i0 = floor( (nx1-nx)/2.0 )
-        end if 
-        i1 = i0+nx-1
+            do j = 1, n
+                if (x(j) .ge. xout) exit
+            end do
 
-        if (ny .eq. ny1) then
-            j0 = 1
-        else
-            j0 = floor( (ny1-ny)/2.0 )
-        end if 
-        j1 = j0+ny-1
-
-        v = ve(i0:i1,j0:j1)
+            if (j .eq. 1) then
+                yout = y(:, :,1)
+            else if (j .eq. n+1) then
+                yout = y(:, :,n)
+            else
+                alpha = (xout - x(j-1)) / (x(j) - x(j-1))
+                yout = y(:, :,j-1) + alpha*(y(:, :,j) - y(:, :,j-1))
+             end if
+        end if
 
         return
-    end subroutine reduce_array
+    end subroutine interp_2d
+
+    ! ===== MASKING FUNCTIONS ==============================
 
     ! Mask the input field
     subroutine maskfield(out, in, mask, nx, ny)
@@ -625,17 +671,15 @@ module isos_utils
     end function gauss_values
 
 
-    subroutine calc_gaussian_viscosity(eta,eta_0,sign,dx,dy)
+    subroutine calc_gaussian_viscosity(eta, eta_0, sign, dx, dy)
 
         real(wp), intent(OUT) :: eta(:, :)
         real(wp), intent(IN) :: eta_0, sign, dx, dy
-        real(wp) :: Lx, Ly, L, det_eta_sigma, f
+
+        real(wp) :: Lx, Ly, f
         real(wp) :: xcntr, ycntr, xmax, xmin, ymax, ymin
-
         real(wp), allocatable :: xc(:), yc(:)
-
-        real(wp) :: eta_sigma(2,2)
-        real(wp) :: eta_sigma_m1(2,2)
+        real(wp) :: eta_sigma_m1(2, 2)
 
         integer  :: i, j, nx, ny
 
@@ -669,7 +713,8 @@ module isos_utils
 
         do i = 1, nx
            do j = 1, ny
-              f = exp(-0.5*dot_product([xc(i),yc(j)]-[xcntr,ycntr], matmul(eta_sigma_m1, [xc(i),yc(j)]-[xcntr,ycntr]) ))              
+              f = exp(-0.5*dot_product([xc(i),yc(j)]-[xcntr,ycntr], &
+                matmul(eta_sigma_m1, [xc(i),yc(j)]-[xcntr,ycntr]) ))
               eta(i,j) = eta_0 * 10**(sign * f)
            enddo
         enddo
@@ -683,14 +728,11 @@ module isos_utils
 
         real(wp), intent(IN) :: He_lith_0, He_lith_1,sign, dx, dy
         real(wp), intent(OUT) :: He_lith(:, :)
-        real(wp) :: Lx, Ly, L, det_He_lith_sigma
+
+        real(wp) :: Lx, Ly
         real(wp) :: xcntr, ycntr, xmax, xmin, ymax, ymin
-
         real(wp), allocatable :: xc(:), yc(:)
-
-        real(wp) :: He_lith_sigma(2,2)
         real(wp) :: He_lith_sigma_m1(2,2)
-
         integer  :: i, j, nx, ny
 
         nx = size(He_lith,1)
@@ -732,5 +774,17 @@ module isos_utils
         return
     end subroutine calc_gaussian_rigidity
 
+    function midindex(n) result(n2)
+        implicit none
+        integer, intent(IN) :: n
+        integer             :: n2
+
+        if (mod(n,2) .eq. 0) then
+            n2 = n/2
+        else
+            n2 = (n-1) / 2
+        end if
+
+    end function midindex
 
 end module isos_utils

@@ -1,6 +1,7 @@
 module green_functions
 
     use isostasy_defs, only : wp, pi
+    use isos_utils
 
     implicit none
 
@@ -49,7 +50,7 @@ module green_functions
         real(wp), intent(IN)  :: dy
 
         ! Local variables 
-        integer  :: i, j, i1, j1, n, n2
+        integer  :: i, j, i1, j1, nx, ny, mx, my
         real(wp) :: x, y, r
 
         real(wp), parameter, dimension(42) :: rn_vals = [ 0.0,    0.011,  0.111,  1.112,  2.224, &
@@ -66,45 +67,27 @@ module green_functions
 
 
         ! Get size of filter array and half-width
-        n  = size(filt, 1)
-        write(*,*) "n = ", n
-        n2 = (n-1) / 2 
-       
-        ! Safety check
-        if (size(filt,1) .ne. size(filt,2)) then 
-            write(*,*) "calc_ge_filt:: error: array 'filt' must be square [n,n]."
-            write(*,*) "size(filt): ", size(filt,1), size(filt,2)
-            stop
-        end if 
+        nx  = size(filt, 1)
+        ny  = size(filt, 2)
+        mx = midindex(nx)
+        my = midindex(ny)
 
-        ! Safety check
-        if (mod(n,2) .ne. 1) then 
-            write(*,*) "calc_ge_filt:: error: n can only be odd."
-            write(*,*) "n = ", n
-            stop
-        end if 
-
-
-        ! Loop over filter array in two dimensions,
-        ! calculate the distance from the center
-        ! and impose correct Green function value. 
-
+        ! Fill matrix of Green function.
         filt = 0.
-        
-        do j = -n2, n2
-        do i = -n2, n2
+        do j = -my, my
+        do i = -mx, mx
 
             x  = i*dx
             y  = j*dy
             r  = sqrt(x**2+y**2)
 
             ! Get actual index of array
-            i1 = i+1+n2
-            j1 = j+1+n2
+            i1 = i+1+mx
+            j1 = j+1+my
 
             ! Get correct GE value for this point
-            filt(i1,j1) = get_ge_value(r, rn_vals, ge_vals) * 1.e-12 *(dx*dy) /(9.81*max(r,dx))
-            ! TODO: recheck 9.81
+            filt(i1, j1) = get_ge_value(r, rn_vals, ge_vals) * 1.e-12 * (dx*dy) / &
+                (9.81*max(r, dx))
 
         end do
         end do
@@ -123,45 +106,30 @@ module green_functions
         real(wp), intent(IN)  :: dy   
 
         ! Local variables 
-        integer  :: i, j, i1, j1, n, n2
+        integer  :: i, j, i1, j1, nx, ny, mx, my
         real(wp) :: x, y, r
 
         ! Get size of filter array and half-width
-        n  = size(filt,1) 
-        n2 = (n-1)/2 
-        
-        ! Safety check
-        if (size(filt,1) .ne. size(filt,2)) then 
-            write(*,*) "calc_ge_filt:: error: array 'filt' must be square [n,n]."
-            write(*,*) "size(filt): ", size(filt,1), size(filt,2)
-            stop
-        end if 
+        nx  = size(filt, 1)
+        ny  = size(filt, 2)
+        mx = midindex(nx)
+        my = midindex(ny)
 
-        ! Safety check
-        if (mod(n,2) .ne. 1) then 
-            write(*,*) "calc_ge_filt:: error: n can only be odd."
-            write(*,*) "n = ", n
-            stop  
-        end if 
-
-        ! Loop over filter array in two dimensions,
-        ! calculate the distance from the center
-        ! and impose correct Green function value. 
+        ! Fill matrix of Green function.
         filt = 0.
-        
-        do j = -n2, n2 
-        do i = -n2, n2
+        do j = -my, my
+        do i = -mx, mx
 
-            x  = i*dx 
+            x  = i*dx
             y  = j*dy
-            r  = sqrt(x**2+y**2)  
+            r  = sqrt(x**2+y**2)
 
             ! Get actual index of array
-            i1 = i+1+n2 
-            j1 = j+1+n2 
+            i1 = i+1+mx
+            j1 = j+1+my
 
             ! Get correct GE value for this point (given by colatitude, theta)
-            filt(i1,j1) = calc_gn_value(max(dy,r),r_earth,m_earth)* (dx*dy)
+            filt(i1, j1) = calc_gn_value(max(dy,r), r_earth, m_earth)
         end do
         end do
 
@@ -209,10 +177,8 @@ module green_functions
       end function get_GE_value
 
 
-    function calc_gn_value(r,r_earth,m_earth) result(gn)
-        !Info
+    function calc_gn_value(r, r_earth, m_earth) result(gn)
         implicit none
-
         real(wp), intent(IN) :: r
         real(wp), intent(IN)  :: r_earth 
         real(wp), intent(IN)  :: m_earth 
