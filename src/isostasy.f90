@@ -493,7 +493,6 @@ module isostasy
                     isos%domain%j1, isos%domain%j2, isos%domain%offset, &
                     isos%domain%nx, isos%domain%ny, &
                     isos%domain%forward_dftplan_r2c, isos%domain%backward_dftplan_c2r)
-                call apply_zerobc_at_corners(isos%now%we, isos%domain%nx, isos%domain%ny)
             endif
 
             call calc_columnanoms_solidearth(isos)
@@ -507,8 +506,6 @@ module isostasy
                     isos%domain%j1, isos%domain%j2, isos%domain%offset, &
                     isos%domain%nx, isos%domain%ny, &
                     isos%domain%forward_dftplan_r2c, isos%domain%backward_dftplan_c2r)
-                call apply_zerobc_at_corners(isos%now%ssh_perturb, &
-                    isos%domain%nx, isos%domain%ny)
                 
                 ! write(*,*) "Updating sea-level contributions..."
                 ! call calc_sl_contribution(isos)
@@ -530,8 +527,8 @@ module isostasy
                 case(0)
                     call calc_llra_equilibrium(isos%now%w_equilibrium, &
                         isos%now%canom_load, isos%par%rho_uppermantle)
-                    isos%now%w    = isos%now%w_equilibrium
-                    isos%now%dwdt = 0.0
+                        isos%now%w    = isos%now%w_equilibrium
+                        isos%now%dwdt = 0.0
 
                 ! LLRA
                 case(1)
@@ -618,7 +615,7 @@ module isostasy
 
     subroutine isos_par_load(par, filename, group)
 
-        use nml 
+        use nml
 
         implicit none
 
