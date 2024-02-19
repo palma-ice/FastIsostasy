@@ -117,7 +117,7 @@ module isostasy
         write(*,*) "Allocating fields..."
         n = max(nx, ny)
         ocean_surface_file = "input/OceanSurfaceETOPO2022.nc"
-        nbsl = nc_size(ocean_surface_file, "z")
+        ! nbsl = nc_size(ocean_surface_file, "z")
         call allocate_isos(isos, n, n, isos%par%nl, nbsl)
 
         ! Init scalar fields of domain
@@ -127,9 +127,9 @@ module isostasy
         isos%domain%dy = dy
 
         ! Init ocean surface interpolator
-        call nc_read(ocean_surface_file, "z", isos%domain%bsl_vec, start=[1], count=[nbsl])
-        call nc_read(ocean_surface_file, "A", isos%domain%A_ocean_vec, start=[1], &
-            count=[nbsl])
+        ! call nc_read(ocean_surface_file, "z", isos%domain%bsl_vec, start=[1], count=[nbsl])
+        ! call nc_read(ocean_surface_file, "A", isos%domain%A_ocean_vec, start=[1], &
+        !     count=[nbsl])
 
         call calc_cropindices(isos%domain%icrop1, isos%domain%icrop2, &
             isos%domain%jcrop1, isos%domain%jcrop2, nx, ny)
@@ -435,7 +435,7 @@ module isostasy
         write(*,*) "    range(w_eq):    ",  minval(isos%now%w_equilibrium), maxval(isos%now%w_equilibrium)
         write(*,*) "  range(z_bed):     ",  minval(isos%now%z_bed), maxval(isos%now%z_bed)
 
-        if (minval(isos%domain%tau) .le. 0.0) then
+        if ((minval(isos%domain%tau) .le. 0.0) .and. (isos%par%method .le. 2)) then
             write(error_unit,*) "isos_init_state:: Error: tau initialized with zero values present. &
             &This will lead to the model crashing."
         end if
