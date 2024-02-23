@@ -10,3 +10,4 @@ input/ice6gd/*.nc
 src/*.mod
 output/old/
 input/test4
+gen/
