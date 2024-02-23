@@ -116,7 +116,7 @@ module isostasy
 
         write(*,*) "Allocating fields..."
         n = max(nx, ny)
-        ocean_surface_file = "IsostasyData/tools/ocean_surface/OceanSurfaceETOPO2022.nc"
+        ocean_surface_file = "isostasy_data/tools/ocean_surface/OceanSurfaceETOPO2022.nc"
         ! nbsl = nc_size(ocean_surface_file, "z")
         call allocate_isos(isos, n, n, isos%par%nl, nbsl)
 
@@ -240,7 +240,7 @@ module isostasy
                             isos%domain%He_lith, isos%par%nu)
 
                     case("laty")
-                        filename_laty = "IsostasyData/earth_structure/ANT-32KM_Latychev.nc"
+                        filename_laty = "isostasy_data/earth_structure/ANT-32KM_Latychev.nc"
                         call nc_read(filename_laty, "lithos_thck", isos%domain%He_lith, &
                             start=[1, 1], count=[isos%domain%nx, isos%domain%ny])
 
@@ -278,7 +278,7 @@ module isostasy
 
                     case("laty")
                         !# TODO: loading fields should be more general (with 2D interpolation)
-                        filename_laty = "IsostasyData/earth_structure/ANT-32KM_Latychev.nc"
+                        filename_laty = "isostasy_data/earth_structure/ANT-32KM_Latychev.nc"
                         ncz = nc_size(filename_laty,"zc")
                         allocate(z(ncz))
                         allocate(eta_raw(n, n, ncz))
@@ -301,7 +301,7 @@ module isostasy
                             isos%domain%dx, isos%domain%dy, isos%domain%boundaries)
                         
                         ! use w_equilibrium as helper to load mask since it is not used.
-                        filename_laty = "IsostasyData/tools/masks/ANT-32KM_activemask.nc"
+                        filename_laty = "isostasy_data/tools/masks/ANT-32KM_activemask.nc"
                         call nc_read(filename_laty, "M", &
                             isos%now%w_equilibrium, start=[1, 1], &
                             count=[isos%domain%nx, isos%domain%ny])

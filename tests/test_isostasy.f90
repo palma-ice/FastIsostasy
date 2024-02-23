@@ -287,7 +287,7 @@ program test_isostasy
             H_ice = 0.
 
             ! Read in H_ice
-            filename = "IsostasyData/ice_history/ICE6G_D/ANT-32KM_ICE-6G_D.nc"
+            filename = "isostasy_data/ice_history/ICE6G_D/ANT-32KM_ICE-6G_D.nc"
             nct = nc_size(filename,"time")
             ncx = nc_size(filename,"xc")
             ncy = nc_size(filename,"yc")
@@ -307,7 +307,7 @@ program test_isostasy
 
 
             ! Read z_bed
-            filename = "IsostasyData/topography/ANT-32KM_Latychev.nc"
+            filename = "isostasy_data/topography/ANT-32KM_Latychev.nc"
             ncx = nc_size(filename,"xc")
             ncy = nc_size(filename,"yc")
 
@@ -330,7 +330,7 @@ program test_isostasy
             eta = 1.e+21   ! [Pa s]
         
             write(*, *) "Reading ice .nc..."
-            filename = "IsostasyData/ice_history/sims/greenland/LGM_equilibrium_15kyr.nc"
+            filename = "isostasy_data/ice_history/sims/greenland/LGM_equilibrium_15kyr.nc"
             nct = nc_size(filename,"time")
             ncx = nc_size(filename,"xc")
             ncy = nc_size(filename,"yc")

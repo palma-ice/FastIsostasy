@@ -8,3 +8,4 @@ libisostasy/bin/*.x
 output/test-isostasy/*.nc
 input/ice6gd/
 src/*.mod
+isostasy_data
