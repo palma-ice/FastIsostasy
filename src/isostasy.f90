@@ -116,7 +116,7 @@ module isostasy
 
         write(*,*) "Allocating fields..."
         n = max(nx, ny)
-        ocean_surface_file = "input/OceanSurfaceETOPO2022.nc"
+        ocean_surface_file = "isostasy_data/tools/ocean_surface/OceanSurfaceETOPO2022.nc"
         ! nbsl = nc_size(ocean_surface_file, "z")
         call allocate_isos(isos, n, n, isos%par%nl, nbsl)
 
@@ -170,11 +170,12 @@ module isostasy
         isos%par%sec_per_year = 3600.0 * 24.0 * 365.25           ! [s/a]
         isos%par%compressibility_correction = 1.5 / (1 + isos%par%nu)
         call calc_density_correction_factor(isos%par)
+
+        isos%domain%He_lith = isos%par%boundaries(1)
         call calc_homogeneous_rigidity(D_lith_const, isos%par%E, &
             isos%par%boundaries(1), isos%par%nu)
         call calc_flexural_lengthscale(isos%par%L_w, D_lith_const, &
             isos%par%rho_uppermantle, isos%par%g)
-
         isos%domain%D_lith = D_lith_const
 
         call calc_elastic_green(isos%domain%GE, dx=isos%domain%dx, dy=isos%domain%dx)
@@ -186,6 +187,7 @@ module isostasy
             call precompute_kernel(isos%domain%forward_dftplan_r2c, isos%domain%GN, &
                 isos%domain%FGN, isos%domain%nx, isos%domain%ny)
         endif
+        isos%domain%maskactive  = .true.
 
         select case(isos%par%method)
 
@@ -214,11 +216,10 @@ module isostasy
             case(3)
                 write(*,*) "Using (laterally-variable) ELVA..."
                 call convenient_calc_kappa(isos%domain)
-                isos%domain%maskactive  = .true.
 
                 write(*,*) "Choosing rigidity field..."
                 select case(trim(isos%par%rigidity_method))
-                    ! TODO: this part of the code should be in test_isostasy.f90
+                    !# TODO: this part of the code should be in test_isostasy.f90
                     case("uniform")
                         isos%domain%D_lith   = D_lith_const
                         isos%domain%He_lith  = isos%par%boundaries(1)
@@ -240,8 +241,7 @@ module isostasy
                             isos%domain%He_lith, isos%par%nu)
 
                     case("laty")
-                        ! TODO: this should be a relative path to isostasy_data
-                        filename_laty = "input/test4/ANT-32KM_latyparams.nc"
+                        filename_laty = "isostasy_data/earth_structure/ANT-32KM_Latychev.nc"
                         call nc_read(filename_laty, "lithos_thck", isos%domain%He_lith, &
                             start=[1, 1], count=[isos%domain%nx, isos%domain%ny])
 
@@ -279,7 +279,7 @@ module isostasy
 
                     case("laty")
                         !# TODO: loading fields should be more general (with 2D interpolation)
-                        filename_laty = "input/test4/ANT-32KM_latyparams.nc"
+                        filename_laty = "isostasy_data/earth_structure/ANT-32KM_Latychev.nc"
                         ncz = nc_size(filename_laty,"zc")
                         allocate(z(ncz))
                         allocate(eta_raw(n, n, ncz))
@@ -301,12 +301,14 @@ module isostasy
                         call calc_effective_viscosity(isos%domain%eta_eff, isos%domain%eta, &
                             isos%domain%dx, isos%domain%dy, isos%domain%boundaries)
                         
-                        ! use w_equilibrium as helper to load mask since it is not used.
-                        filename_laty = "input/test4/LGMmask.nc"
-                        call nc_read(filename_laty, "M", &
-                            isos%now%w_equilibrium, start=[1, 1], &
-                            count=[isos%domain%nx, isos%domain%ny])
-                        where(isos%now%w_equilibrium .lt. 0.5) isos%domain%maskactive = .false.
+                        if (isos%par%interactive_sealevel) then
+                            ! use w_equilibrium (not used for elva) as helper to load mask.
+                            filename_laty = "isostasy_data/tools/masks/ANT-32KM_activemask.nc"
+                            call nc_read(filename_laty, "M", &
+                                isos%now%w_equilibrium, start=[1, 1], &
+                                count=[isos%domain%nx, isos%domain%ny])
+                            where(isos%now%w_equilibrium .lt. 0.5) isos%domain%maskactive = .false.
+                        endif
 
                     case DEFAULT
                         ! do nothing, eta was set above
@@ -516,7 +518,7 @@ module isostasy
                 call calc_masks(isos)
             endif
 
-            ! Need to re-compute the load after updateing the ssh
+            ! Need to re-compute the load after updating the ssh
             call calc_columnanoms_load(isos)
             call calc_columnanoms_solidearth(isos)
 
@@ -540,14 +542,20 @@ module isostasy
                 ! LV-ELRA (Coulon et al. 2021).
                 ! Gives ELRA (LeMeur and Huybrechts 1996) if tau = const.
                 case(2)
-                    
                     if (update_diagnostics) then
+                        call add_columnanom(isos%par%rho_litho, isos%now%we, &
+                            isos%ref%we, isos%now%canom_load, isos%domain%maskactive)
+
                         call precomputed_fftconvolution(isos%now%w_equilibrium, isos%domain%FGV, &
-                            isos%now%canom_load * isos%par%g * isos%domain%K ** 2.0, &
+                            -isos%now%canom_load * isos%par%g * isos%domain%K ** 2.0, &
                             isos%domain%i1, isos%domain%i2, &
                             isos%domain%j1, isos%domain%j2, isos%domain%offset, &
                             isos%domain%nx, isos%domain%ny, &
                             isos%domain%forward_dftplan_r2c, isos%domain%backward_dftplan_c2r)
+
+                        ! write(*,*) "Checksums: w_eq, FGV, canom_load", &
+                        !     sum(isos%now%w_equilibrium), sum(isos%domain%FGV), sum(isos%now%canom_load)
+
                         call apply_zerobc_at_corners(isos%now%w_equilibrium, isos%domain%nx, &
                             isos%domain%ny)
                     end if
