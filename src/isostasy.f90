@@ -300,12 +300,14 @@ module isostasy
                         call calc_effective_viscosity(isos%domain%eta_eff, isos%domain%eta, &
                             isos%domain%dx, isos%domain%dy, isos%domain%boundaries)
                         
-                        ! use w_equilibrium as helper to load mask since it is not used.
-                        filename_laty = "isostasy_data/tools/masks/ANT-32KM_activemask.nc"
-                        call nc_read(filename_laty, "M", &
-                            isos%now%w_equilibrium, start=[1, 1], &
-                            count=[isos%domain%nx, isos%domain%ny])
-                        where(isos%now%w_equilibrium .lt. 0.5) isos%domain%maskactive = .false.
+                        if (isos%par%interactive_sealevel) then
+                            ! use w_equilibrium (not used for elva) as helper to load mask.
+                            filename_laty = "isostasy_data/tools/masks/ANT-32KM_activemask.nc"
+                            call nc_read(filename_laty, "M", &
+                                isos%now%w_equilibrium, start=[1, 1], &
+                                count=[isos%domain%nx, isos%domain%ny])
+                            where(isos%now%w_equilibrium .lt. 0.5) isos%domain%maskactive = .false.
+                        endif
 
                     case DEFAULT
                         ! do nothing, eta was set above
