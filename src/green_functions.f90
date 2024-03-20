@@ -9,7 +9,7 @@ module green_functions
     
     public :: calc_viscous_green
     public :: calc_elastic_green
-    public :: calc_ssh_green
+    public :: calc_z_ss_green
     public :: get_ge_value
     public :: calc_gn_value
     
@@ -95,8 +95,8 @@ module green_functions
         return 
       end subroutine calc_elastic_green
 
-    ! Compute Green function (Coulon et al. 2021) to determine the SSH perturbation.
-    subroutine calc_ssh_green(filt, m_earth, r_earth, dx, dy) 
+    ! Compute Green function (Coulon et al. 2021) to determine the z_ss perturbation.
+    subroutine calc_z_ss_green(filt, m_earth, r_earth, dx, dy) 
         implicit none 
 
         real(wp), intent(OUT) :: filt(:, :) 
@@ -134,7 +134,7 @@ module green_functions
         end do
 
         return
-    end subroutine calc_ssh_green
+    end subroutine calc_z_ss_green
 
 
       function get_ge_value(r,rn_vals,ge_vals) result(ge)

@@ -182,7 +182,7 @@ module isostasy
         call precompute_kernel(isos%domain%forward_dftplan_r2c, isos%domain%GE, &
         isos%domain%FGE, isos%domain%nx, isos%domain%ny)
         if (isos%par%interactive_sealevel) then
-            call calc_ssh_green(isos%domain%GN, isos%par%m_earth, &
+            call calc_z_ss_green(isos%domain%GN, isos%par%m_earth, &
                 isos%par%r_earth, dx=isos%domain%dx, dy=isos%domain%dx)
             call precompute_kernel(isos%domain%forward_dftplan_r2c, isos%domain%GN, &
                 isos%domain%FGN, isos%domain%nx, isos%domain%ny)
@@ -380,8 +380,8 @@ module isostasy
         isos%now%Hice           = 0.0
 
         isos%now%rsl            = -1e6_wp
-        isos%now%ssh            = 0.0
-        isos%now%ssh_perturb    = 0.0
+        isos%now%z_ss            = 0.0
+        isos%now%z_ss_perturb    = 0.0
         isos%now%canom_load     = 0.0
         isos%now%canom_full     = 0.0
         isos%now%mass_anom      = 0.0
@@ -396,18 +396,19 @@ module isostasy
         return
     end subroutine isos_init
 
-    subroutine isos_init_state(isos, z_bed, H_ice, ssh, time)
+    subroutine isos_init_state(isos, z_bed, H_ice, z_ss, bsl, time)
 
         implicit none
 
         type(isos_class), intent(INOUT) :: isos 
         real(wp), intent(IN) :: z_bed(:, :)         ! [m] Current bedrock elevation
         real(wp), intent(IN) :: H_ice(:, :)         ! [m] Current ice thickness
-        real(wp), intent(IN) :: ssh(:, :)           ! [m] Current sea-surface height
+        real(wp), intent(IN) :: z_ss(:, :)          ! [m] Current sea-surface height
+        real(wp), intent(IN) :: bsl                 ! [a] Barystatic sea level
         real(wp), intent(IN) :: time                ! [a] Initial time 
 
         ! Store initial bedrock field
-        call extendice2isostasy(isos%now, z_bed, H_ice, ssh, &
+        call extendice2isostasy(isos%now, z_bed, H_ice, z_ss, &
             isos%domain%icrop1, isos%domain%icrop2, &
             isos%domain%jcrop1, isos%domain%jcrop2)
         ! call copy_state(isos%ref, isos%now)
@@ -420,13 +421,13 @@ module isostasy
         write(*,*) "Calling first update..."
         ! Call isos_update to diagnose rate of change
         ! (no change to z_bed will be applied since isos%par%time==time)
-        ! isos%now%ssh = isos%now%bsl + isos%ref%ssh + isos%now%ssh_perturb
-        isos%now%rsl = isos%now%ssh - isos%now%z_bed
+        ! isos%now%z_ss = isos%now%bsl + isos%ref%z_ss + isos%now%z_ss_perturb
+        isos%now%rsl = isos%now%z_ss - isos%now%z_bed
         call calc_masks(isos)
         call calc_columnanoms_load(isos)
         call calc_columnanoms_solidearth(isos)
         call copy_sparsestate(isos%ref, isos%now)
-        call isos_update(isos, H_ice, time)
+        call isos_update(isos, H_ice, bsl, time)
         call copy_state(isos%ref, isos%now)
 
         write(*,*) "isos_init_state: "
@@ -446,12 +447,13 @@ module isostasy
 
     end subroutine isos_init_state
 
-    subroutine isos_update(isos, H_ice, time, dwdt_corr) 
+    subroutine isos_update(isos, H_ice, bsl, time, dwdt_corr) 
 
         implicit none
 
         type(isos_class), intent(INOUT) :: isos 
         real(wp), intent(IN)            :: H_ice(:, :)      ! [m] Current ice thickness
+        real(wp), intent(IN)            :: bsl              ! [m] Current barystatic sea level
         real(wp), intent(IN)            :: time             ! [a] Current time
         real(wp), intent(IN), optional  :: dwdt_corr(:, :) ! [m/yr] Basal topography displacement rate (ie, to relax from low resolution to high resolution) 
 
@@ -463,6 +465,7 @@ module isostasy
         isos%now%Hice = 0.0
         isos%now%Hice(isos%domain%icrop1:isos%domain%icrop2, &
             isos%domain%jcrop1:isos%domain%jcrop2) = H_ice
+        isos%now%bsl = bsl
 
         ! Step 0: determine current timestep and number of iterations
         dt = time - isos%par%time_prognostics
@@ -501,24 +504,23 @@ module isostasy
 
             ! write(*,*) "Updating the sea-level..."
             if (update_diagnostics .and. isos%par%interactive_sealevel) then
-                ! write(*,*) "Updating the ssh perturbation..."
+                ! write(*,*) "Updating the z_ss perturbation..."
                 call calc_mass_anom(isos)
-                call precomputed_fftconvolution(isos%now%ssh_perturb, isos%domain%FGN, &
+                call precomputed_fftconvolution(isos%now%z_ss_perturb, isos%domain%FGN, &
                     isos%now%mass_anom, isos%domain%i1, isos%domain%i2, &
                     isos%domain%j1, isos%domain%j2, isos%domain%offset, &
                     isos%domain%nx, isos%domain%ny, &
                     isos%domain%forward_dftplan_r2c, isos%domain%backward_dftplan_c2r)
-                
-                ! write(*,*) "Updating sea-level contributions..."
-                ! call calc_sl_contribution(isos)
-                isos%now%ssh = isos%now%bsl + isos%ref%ssh + isos%now%ssh_perturb
-                isos%now%rsl = isos%now%ssh - isos%now%z_bed
+            else
+                isos%now%z_ss_perturb = 0.0
+            end if
 
-                ! write(*,*) "Updating masks..."
-                call calc_masks(isos)
-            endif
+            ! call calc_sl_contribution(isos)
+            isos%now%z_ss = isos%now%bsl + isos%ref%z_ss + isos%now%z_ss_perturb
+            isos%now%rsl = isos%now%z_ss - isos%now%z_bed
+            call calc_masks(isos)
 
-            ! Need to re-compute the load after updating the ssh
+            ! Need to re-compute the load after updating the z_ss
             call calc_columnanoms_load(isos)
             call calc_columnanoms_solidearth(isos)
 
@@ -603,7 +605,7 @@ module isostasy
         call cropstate2output(isos%output, isos%now, isos%domain%icrop1, isos%domain%icrop2, &
             isos%domain%jcrop1, isos%domain%jcrop2)
 
-        ! rsl = isos%output%ssh - isos%output%z_bed
+        ! rsl = isos%output%z_ss - isos%output%z_bed
 
         return
     end subroutine isos_update
@@ -722,12 +724,12 @@ module isostasy
         if (allocated(state%w_equilibrium))     deallocate(state%w_equilibrium)
         if (allocated(state%we))                deallocate(state%we)
 
-        if (allocated(state%ssh_perturb))       deallocate(state%ssh_perturb)
+        if (allocated(state%z_ss_perturb))       deallocate(state%z_ss_perturb)
         if (allocated(state%Haf))               deallocate(state%Haf)
         if (allocated(state%Hice))              deallocate(state%Hice)
 
         if (allocated(state%rsl))               deallocate(state%rsl)
-        if (allocated(state%ssh))               deallocate(state%ssh)
+        if (allocated(state%z_ss))               deallocate(state%z_ss)
         if (allocated(state%canom_load))        deallocate(state%canom_load)
         if (allocated(state%canom_full))        deallocate(state%canom_full)
         if (allocated(state%mass_anom))         deallocate(state%mass_anom)
@@ -762,8 +764,8 @@ module isostasy
         if (allocated(output%w_equilibrium))    deallocate(output%w_equilibrium)
 
         if (allocated(output%rsl))              deallocate(output%rsl)
-        if (allocated(output%ssh))              deallocate(output%ssh)
-        if (allocated(output%ssh_perturb))      deallocate(output%ssh_perturb)
+        if (allocated(output%z_ss))              deallocate(output%z_ss)
+        if (allocated(output%z_ss_perturb))      deallocate(output%z_ss_perturb)
         if (allocated(output%z_bed))            deallocate(output%z_bed)
 
         if (allocated(output%maskocean))        deallocate(output%maskocean)
@@ -818,12 +820,12 @@ module isostasy
         allocate(state%w_equilibrium(nx, ny))
         allocate(state%we(nx, ny))
 
-        allocate(state%ssh_perturb(nx, ny))
+        allocate(state%z_ss_perturb(nx, ny))
         allocate(state%Haf(nx, ny))
         allocate(state%Hice(nx, ny))
 
         allocate(state%rsl(nx, ny))
-        allocate(state%ssh(nx, ny))
+        allocate(state%z_ss(nx, ny))
         allocate(state%canom_load(nx, ny))
         allocate(state%canom_full(nx, ny))
         allocate(state%mass_anom(nx, ny))
@@ -859,8 +861,8 @@ module isostasy
         allocate(output%w_equilibrium(nx, ny))
 
         allocate(output%rsl(nx, ny))
-        allocate(output%ssh(nx, ny))
-        allocate(output%ssh_perturb(nx, ny))
+        allocate(output%z_ss(nx, ny))
+        allocate(output%z_ss_perturb(nx, ny))
         allocate(output%z_bed(nx, ny))
 
         allocate(output%maskocean(nx, ny))

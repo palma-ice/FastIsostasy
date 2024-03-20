@@ -37,7 +37,7 @@ program test_isostasy
     real(wp), allocatable :: z_bed(:, :) 
     real(wp), allocatable :: H_ice(:, :), T_ice(:, : ,:), z_bed_ice(:, : ,:)
     real(wp), allocatable :: time_ice(:), xc_ice(:), yc_ice(:)
-    real(wp), allocatable :: ssh(:, :) 
+    real(wp), allocatable :: z_ss(:, :) 
     real(wp), allocatable :: rsl(:, :)      ! Relative sea level
     
     real(wp), allocatable :: mask(:, :)
@@ -197,7 +197,7 @@ program test_isostasy
 
     allocate(z_bed(nx, ny))
     allocate(H_ice(nx, ny))
-    allocate(ssh(nx, ny))
+    allocate(z_ss(nx, ny))
     allocate(rsl(nx, ny))
     allocate(z_bed_bench(nx, ny))
     allocate(mask(nx, ny))
@@ -205,8 +205,8 @@ program test_isostasy
     ! These inits are potentially overwritten depending on the case. See `select` below.
     z_bed       = 0.0
     H_ice       = 0.0
-    ssh         = 0.0
-    rsl         = ssh - z_bed
+    z_ss         = 0.0
+    rsl         = z_ss - z_bed
     z_bed_bench = z_bed
 
     ! Initialize bedrock model (allocate fields)
@@ -276,7 +276,7 @@ program test_isostasy
             time_ice(2) = 1e-9
             T_ice(:, :, 1) = 0.0_wp
             T_ice(:, :, 2) = H_ice
-            ssh = -1e3
+            z_ss = -1e3
             
         case("test4")  ! ICE6G_D
         ! Comment on “An Assessment of the ICE-6G_C (VM5a) Glacial Isostatic Adjustment Model” by Purcell et al.
@@ -320,7 +320,7 @@ program test_isostasy
             call nc_read(filename,"b", z_bed_ice, start=[1, 1, 1], count=[ncx, ncy, 1])
             
             z_bed = z_bed_ice(:, :, 1)
-            ssh = 0.0_wp
+            z_ss = 0.0_wp
 
         case("test5")
 
@@ -350,7 +350,7 @@ program test_isostasy
 
             H_ice = T_ice(:, :, 1)
             z_bed = z_bed_ice(:, :, 1)
-            ssh = 0.0_wp
+            z_ss = 0.0_wp
 
         case DEFAULT
             write(*,*) "Error: experiment name not recognized."
@@ -360,7 +360,7 @@ program test_isostasy
     end select
 
     ! Inititalize and write state
-    call isos_init_state(isos1, z_bed, T_ice(:, :, 1), ssh, time=time_init) 
+    call isos_init_state(isos1, z_bed, T_ice(:, :, 1), z_ss, 0.0_wp, time=time_init) 
     call isos_write_init(isos1, xc, yc, file_out, time_init)
 
     ! Determine total number of iterations to run
@@ -372,7 +372,7 @@ program test_isostasy
         ! Update bedrock
         time = time_init + (n-1)*dtt
         call interp_2d(time_ice, T_ice, time, H_ice)
-        call isos_update(isos1, H_ice, time)
+        call isos_update(isos1, H_ice, 0.0_wp, time)
 
         if (mod(time-time_init, dt_out) .eq. 0.0) then  ! Write output for this timestep
 
@@ -493,7 +493,7 @@ program test_isostasy
         call nc_write(filename, "H_ice", isos%output%Hice, units="m", long_name="Ice thickness", &
               dim1="xc", dim2="yc", dim3="time", start=[1, 1, n], ncid=ncid)
 
-        call nc_write(filename, "ssh", isos%output%ssh, units="m", long_name="Sea-surface height", &
+        call nc_write(filename, "z_ss", isos%output%z_ss, units="m", long_name="Sea-surface height", &
               dim1="xc", dim2="yc", dim3="time", start=[1, 1, n], ncid=ncid)
 
         call nc_write(filename,"z_bed", isos%output%z_bed, units="m", &
@@ -512,7 +512,7 @@ program test_isostasy
             long_name="Displacement (elastic)", &
             dim1="xc", dim2="yc", dim3="time", start=[1, 1, n], ncid=ncid)
 
-        call nc_write(filename, "ssh_perturbation", isos%output%ssh_perturb, units="m", &
+        call nc_write(filename, "z_ss_perturbation", isos%output%z_ss_perturb, units="m", &
             long_name="Geoid displacement", dim1="xc", dim2="yc", dim3="time", &
             start=[1, 1, n], ncid=ncid)
 

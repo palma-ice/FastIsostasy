@@ -82,7 +82,7 @@ module isostasy_defs
         real(wp), allocatable   :: kei(:, :)   ! Kelvin function filter values
         real(wp), allocatable   :: GV(:, :)    ! Green's function values
         real(wp), allocatable   :: GE(:, :)    ! Green's function for elastic displacement (Farrell 1972)
-        real(wp), allocatable   :: GN(:, :)    ! Green's function for ssh_perturb
+        real(wp), allocatable   :: GN(:, :)    ! Green's function for z_ss_perturb
 
         complex(wp), allocatable :: FGV(:, :)    ! FFT of GV
         complex(wp), allocatable :: FGE(:, :)    ! FFT of GE
@@ -106,8 +106,8 @@ module isostasy_defs
         ! real(wp), allocatable :: Hsediment(:, :)     ! [m] Thickness of sediment column
 
         real(wp), allocatable :: rsl(:, :)           ! [m] relative sea level
-        real(wp), allocatable :: ssh(:, :)           ! [m] sea-surface height
-        real(wp), allocatable :: ssh_perturb(:, :)   ! [m] sea-surface height perturbation
+        real(wp), allocatable :: z_ss(:, :)           ! [m] sea-surface height
+        real(wp), allocatable :: z_ss_perturb(:, :)   ! [m] sea-surface height perturbation
         real(wp), allocatable :: canom_load(:, :)    ! [kg m^-2] Load column anomaly
         real(wp), allocatable :: canom_full(:, :)    ! [kg m^-2] Full column anomaly
         real(wp), allocatable :: mass_anom(:, :)     ! [kg] Mass anomaly
@@ -136,8 +136,8 @@ module isostasy_defs
         real(wp), allocatable       :: w_equilibrium(:, :)
 
         real(wp), allocatable       :: rsl(:, :)
-        real(wp), allocatable       :: ssh(:, :)
-        real(wp), allocatable       :: ssh_perturb(:, :)
+        real(wp), allocatable       :: z_ss(:, :)
+        real(wp), allocatable       :: z_ss_perturb(:, :)
         real(wp), allocatable       :: z_bed(:, :)
 
         logical, allocatable        :: maskocean(:, :)
