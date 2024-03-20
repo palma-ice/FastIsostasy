@@ -211,7 +211,7 @@ module isos_utils
 
         ref%z_bed           = now%z_bed
         ref%rsl             = now%rsl
-        ref%ssh             = now%ssh
+        ref%z_ss             = now%z_ss
 
         return
     end subroutine copy_sparsestate
@@ -224,7 +224,7 @@ module isos_utils
         call copy_sparsestate(ref, now)
         ref%dwdt            = now%dwdt
         ref%Haf             = now%Haf
-        ref%ssh_perturb     = now%ssh_perturb
+        ref%z_ss_perturb     = now%z_ss_perturb
         ref%canom_load      = now%canom_load
         ref%canom_full      = now%canom_full
         ref%mass_anom       = now%mass_anom
@@ -270,12 +270,12 @@ module isos_utils
 
         output%Hice = now%Hice(i1:i2, j1:j2)
         output%rsl = now%rsl(i1:i2, j1:j2)
-        output%ssh = now%ssh(i1:i2, j1:j2)
+        output%z_ss = now%z_ss(i1:i2, j1:j2)
         output%z_bed = now%z_bed(i1:i2, j1:j2)
         output%dwdt = now%dwdt(i1:i2, j1:j2)
         output%w = now%w(i1:i2, j1:j2)
         output%we = now%we(i1:i2, j1:j2)
-        output%ssh_perturb = now%ssh_perturb(i1:i2, j1:j2)
+        output%z_ss_perturb = now%z_ss_perturb(i1:i2, j1:j2)
         output%canom_full = now%canom_full(i1:i2, j1:j2)
 
         output%maskocean = now%maskocean(i1:i2, j1:j2)
@@ -322,20 +322,20 @@ module isos_utils
         return
     end subroutine calc_cropindices
 
-    subroutine extendice2isostasy(now, z_bed, H_ice, ssh, i1, i2, j1, j2)
+    subroutine extendice2isostasy(now, z_bed, H_ice, z_ss, i1, i2, j1, j2)
         implicit none
         type(isos_state_class), intent(INOUT)   :: now
         real(wp), intent(IN)                    :: z_bed(:, :)
         real(wp), intent(IN)                    :: H_ice(:, :)
-        real(wp), intent(IN)                    :: ssh(:, :)
+        real(wp), intent(IN)                    :: z_ss(:, :)
         integer, intent(IN)                     :: i1, i2, j1, j2
 
         now%z_bed = 0.0
         now%Hice = 0.0
-        now%ssh = 0.0
+        now%z_ss = 0.0
         now%z_bed(i1:i2, j1:j2) = z_bed
         now%Hice(i1:i2, j1:j2) = H_ice
-        now%ssh(i1:i2, j1:j2) = ssh
+        now%z_ss(i1:i2, j1:j2) = z_ss
         return
     end subroutine extendice2isostasy
 
