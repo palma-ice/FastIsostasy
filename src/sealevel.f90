@@ -28,8 +28,12 @@ module sealevel
 
         isos%now%canom_load(:, :) = 0
         call add_columnanom(isos%par%rho_ice, isos%now%Hice, isos%ref%Hice, isos%now%canom_load)
-        call add_columnanom(isos%par%rho_seawater, isos%now%rsl, isos%ref%rsl, &
-            isos%now%canom_load, isos%now%maskocean)
+
+        if (isos%par%interactive_sealevel) then
+            call add_columnanom(isos%par%rho_seawater, isos%now%rsl, isos%ref%rsl, &
+                isos%now%canom_load, isos%now%maskocean)
+        end if
+
         call maskfield(isos%now%canom_load, isos%now%canom_load, isos%domain%maskactive, &
             isos%domain%nx, isos%domain%ny)
     end subroutine calc_columnanoms_load
