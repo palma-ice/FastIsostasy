@@ -396,7 +396,7 @@ module isostasy
         return
     end subroutine isos_init
 
-    subroutine isos_init_state(isos, z_bed, H_ice, z_ss, bsl, time)
+    subroutine isos_init_state(isos, z_bed, H_ice, z_ss, bsl, time, set_ref)
 
         implicit none
 
@@ -406,6 +406,15 @@ module isostasy
         real(wp), intent(IN) :: z_ss(:, :)          ! [m] Current sea-surface height
         real(wp), intent(IN) :: bsl                 ! [a] Barystatic sea level
         real(wp), intent(IN) :: time                ! [a] Initial time 
+        logical,  intent(IN), optional :: set_ref             ! Set this state as reference state?
+        
+        ! Local variables
+        logical :: set_ref_state
+
+        ! Determine whether the reference state should also be defined here.
+        ! By default, yes.
+        set_ref_state = .TRUE. 
+        if (present(set_ref)) set_ref_state = set_ref 
 
         ! Store initial bedrock field
         call extendice2isostasy(isos%now, z_bed, H_ice, z_ss, &
@@ -428,9 +437,13 @@ module isostasy
         call calc_columnanoms_solidearth(isos)
         call copy_sparsestate(isos%ref, isos%now)
         call isos_update(isos, H_ice, bsl, time)
-        call copy_state(isos%ref, isos%now)
+
+        if (set_ref_state) then
+            call copy_state(isos%ref, isos%now)
+        end if 
 
         write(*,*) "isos_init_state: "
+        if (set_ref_state) write(*,*) "** Reference state **"
         write(*,*) "    Initial time:   ",  isos%par%time_prognostics
         write(*,*) "    range(He_lith): ",  minval(isos%domain%He_lith), maxval(isos%domain%He_lith)
         write(*,*) "    range(tau):     ",  minval(isos%domain%tau), maxval(isos%domain%tau)
