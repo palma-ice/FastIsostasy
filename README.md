@@ -28,7 +28,7 @@ Remark: LV-ELVA is a generalisation of ELVA and both therefore rely on the same 
     make test_isostasy
     ```
 
-1. (Optional) If you want to run more complex simulations (e.g. Test 4), you will need additional data (ice loading history, parameter fields, etc.), which can be downloaded via:
+4. (Optional) If you want to run more complex simulations (e.g. Test 4), you will need additional data (ice loading history, parameter fields, etc.), which can be downloaded via:
 
     ```
     git clone https://github.com/JanJereczek/isostasy_data.git
@@ -41,14 +41,13 @@ Remark: LV-ELVA is a generalisation of ELVA and both therefore rely on the same 
     ln -s path_to/isostasy_data
     ```
 
-1. Run the test program
+5. Run the test program
 
     ```
     ./libisostasy/bin/test_isostasy.x 
     ```
 
-The output directory is hard-coded to `output/test-isostasy` for now. When the program runs successfully, the model output will be saved in the file `bedtest.nc` in the output directory. To play with different parameters, modify them in the default parameter file `par/test_isostasy.nml`. 
-
+The output directory is hard-coded to `output/` for now. When the program runs successfully, the model output will be saved in the file `output/bedtest_x.nc`, with `x` the experiment number associated with the parameters `par/test_isostasy_testx.nml`. The experiment number `x` can be changed within `tests/test_isostasy.f90`.
 
 That's it!
 
