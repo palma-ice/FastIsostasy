@@ -3,7 +3,7 @@ program test_isostasy
     use ncio
     
     use isostasy_defs, only : sp, dp, wp
-    use isostasy
+    use fastisostasy
     use isostasy_benchmarks
     use isos_utils
     ! use ice
@@ -143,7 +143,7 @@ program test_isostasy
     ! output directory should be predefined: output/test-isostasy
 
     parfldr = "par/"
-    outfldr = "output/test-isostasy"
+    outfldr = "output/"
     path_par = trim(parfldr)//"/"//"test_isostasy_"//trim(experiment)//".nml"
     file_out = trim(outfldr)//"/"//"bedtest_"//trim(experiment)// ".nc"
     write(*,*) "outfldr: ",  trim(outfldr)
@@ -358,7 +358,7 @@ program test_isostasy
             stop
 
     end select
-
+    
     ! Inititalize and write state
     call isos_init_state(isos1, z_bed, T_ice(:, :, 1), z_ss, 0.0_wp, time=time_init) 
     call isos_write_init(isos1, xc, yc, file_out, time_init)
@@ -418,7 +418,7 @@ program test_isostasy
         
         ! Create the empty netcdf file
         call nc_create(filename)
-
+        
         ! Add grid axis variables to netcdf file
         call nc_write_dim(filename, "xc", x=xc*1e-3, units="km")
         call nc_write_dim(filename, "yc", x=yc*1e-3, units="km")
