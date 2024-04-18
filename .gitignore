@@ -5,7 +5,7 @@ libisostasy/include/*.o
 libisostasy/include/*.mod
 libisostasy/include/*.a
 libisostasy/bin/*.x
-output/test-isostasy/*.nc
+output/
 input/ice6gd/
 src/*.mod
 isostasy_data

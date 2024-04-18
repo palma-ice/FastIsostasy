@@ -1,6 +1,6 @@
 !# TODO: We should rename the module to something more specific. For instance:
 ! RegionalGIA
-module isostasy 
+module fastisostasy 
     ! Isostasy (Greek ísos "equal", stásis "standstill") is the state of 
     ! gravitational equilibrium between Earth's crust and mantle such that 
     ! the crust "floats" at an elevation that depends on its thickness and density.
@@ -455,6 +455,8 @@ module isostasy
             write(error_unit,*) "isos_init_state:: Error: tau initialized with zero values present. &
             &This will lead to the model crashing."
         end if
+
+        write(*,*) "isos_init_state:: complete."
         
         return
 
@@ -884,4 +886,4 @@ module isostasy
         return
     end subroutine allocate_isos_output
 
-end module isostasy
+end module fastisostasy
