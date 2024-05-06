@@ -33,6 +33,9 @@ endif
 ###############################################
 
 # 0 dependence
+$(objdir)/precision.o: $(srcdir)/precision.f90
+	$(FC) $(DFLAGS) $(FFLAGS) $(INC_NC) -c -o $@ $<
+
 $(objdir)/isostasy_defs.o: $(srcdir)/isostasy_defs.f90
 	$(FC) $(DFLAGS) $(FFLAGS) -c -o $@ $<
 
@@ -75,7 +78,8 @@ $(objdir)/fastisostasy.o: $(srcdir)/fastisostasy.f90 $(objdir)/isostasy_defs.o $
 $(objdir)/isostasy_benchmarks.o: $(srcdir)/isostasy_benchmarks.f90 $(objdir)/isostasy_defs.o
 	$(FC) $(DFLAGS) $(FFLAGS) -c -o $@ $<
 
-isostasy_libs = 		$(objdir)/isostasy_defs.o \
+isostasy_libs = 		$(objdir)/precision.o \
+						$(objdir)/isostasy_defs.o \
 						$(objdir)/isos_utils.o \
 						$(objdir)/convolutions.o \
 						$(objdir)/finite_differences.o \

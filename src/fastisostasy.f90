@@ -11,7 +11,7 @@ module fastisostasy
     use, intrinsic :: iso_fortran_env, only : input_unit, output_unit, error_unit
     use, intrinsic :: iso_c_binding
 
-    use isostasy_defs, only : wp, pi, isos_param_class, isos_state_class, &
+    use isostasy_defs, only : sp, dp, wp, pi, isos_param_class, isos_state_class, &
         isos_domain_class, isos_output_class, isos_class
     use green_functions
     use kelvin_function
@@ -80,7 +80,8 @@ module fastisostasy
         ! Local variables
         integer                 :: n, nbsl, i, j, l, ncz    ! ncz = helper to load 3D fields
         real(wp), allocatable   :: z(:)
-        real(wp), allocatable   :: helper_convo(:, :)
+        real(dp), allocatable   :: helper_convo(:, :)
+        real(dp), allocatable   :: helper_w_dp(:,:)
         real(wp), allocatable   :: eta_raw(:, :, :)
         real(wp)                :: D_lith_const
         character*256           :: filename_laty
@@ -138,10 +139,14 @@ module fastisostasy
         write(*,*) "Computing FFT plans..."
         allocate(helper_convo(2*n-1, 2*n-1))
         helper_convo = 0.0
-        isos%domain%forward_fftplan_r2r = fftw_plan_r2r_2d(n, n, isos%now%w, &
-            isos%now%w, FFTW_DHT, FFTW_DHT, FFTW_ESTIMATE)
-        isos%domain%backward_fftplan_r2r = fftw_plan_r2r_2d(n, n, isos%now%w, &
-            isos%now%w, FFTW_DHT, FFTW_DHT, FFTW_ESTIMATE)
+        allocate(helper_w_dp(nx,ny))
+        helper_w_dp = isos%now%w
+        isos%domain%forward_fftplan_r2r = fftw_plan_r2r_2d(n, n, helper_w_dp, &
+            helper_w_dp, FFTW_DHT, FFTW_DHT, FFTW_ESTIMATE)
+        isos%now%w = helper_w_dp
+        isos%domain%backward_fftplan_r2r = fftw_plan_r2r_2d(n, n, helper_w_dp, &
+            helper_w_dp, FFTW_DHT, FFTW_DHT, FFTW_ESTIMATE)
+        isos%now%w = helper_w_dp
         isos%domain%forward_dftplan_r2c = fftw_plan_dft_r2c_2d(2*n-1, 2*n-1, &
             helper_convo, isos%domain%FGE, 1)
         isos%domain%backward_dftplan_c2r = fftw_plan_dft_c2r_2d(2*n-1, 2*n-1, &

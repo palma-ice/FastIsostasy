@@ -2,7 +2,7 @@
 module lv_elva
 
     use, intrinsic :: iso_c_binding
-    use isostasy_defs, only : wp, pi, isos_domain_class, isos_param_class
+    use isostasy_defs, only : sp, dp, wp, pi, isos_domain_class, isos_param_class
     use finite_differences
     use isos_utils
 
@@ -48,9 +48,11 @@ module lv_elva
         type(c_ptr), intent(IN) :: backward_plan
 
         real(wp), allocatable :: p(:, :)
-        real(wp), allocatable :: f(:, :)
-        real(wp), allocatable :: f_hat(:, :)
-        real(wp), allocatable :: dwdt_hat(:, :)
+        real(dp), allocatable :: f(:, :)
+        real(dp), allocatable :: f_hat(:, :)
+        real(dp), allocatable :: dwdt_hat(:, :)
+
+        real(dp), allocatable :: dwdt_dp(:,:) 
 
         real(wp), allocatable :: w_x(:, :)
         real(wp), allocatable :: w_xy(:, :)
@@ -70,6 +72,8 @@ module lv_elva
         allocate(f(nx, ny))
         allocate(f_hat(nx, ny))
         allocate(dwdt_hat(nx, ny))
+
+        allocate(dwdt_dp(nx, ny))
 
         allocate(w_x(nx, ny))
         allocate(w_xy(nx, ny))
@@ -108,9 +112,10 @@ module lv_elva
         dwdt_hat = f_hat / kappa
 
         ! write(*,*) sum(dwdt_hat), sum(f_hat)
-        call calc_fft_backward_r2r(backward_plan, dwdt_hat, dwdt)
-        call apply_zerobc_at_corners(dwdt, nx, ny)
-
+        call calc_fft_backward_r2r(backward_plan, dwdt_hat, dwdt_dp)
+        call apply_zerobc_at_corners_dp(dwdt_dp, nx, ny)
+        dwdt = dwdt_dp 
+        
         ! Rate of viscous asthenosphere uplift per unit time (seconds)
         dwdt = dwdt * sec_per_year  !  [m/s] x [s/a] = [m/a]
 
