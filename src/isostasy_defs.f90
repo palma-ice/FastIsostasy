@@ -1,15 +1,16 @@
 module isostasy_defs
 
     use, intrinsic :: iso_c_binding
+    use precision
     implicit none
     include 'fftw3.f03'
 
     ! Internal constants
-    integer,  parameter :: dp  = kind(1.d0)
-    integer,  parameter :: sp  = kind(1.0)
+    ! integer,  parameter :: dp  = kind(1.d0)
+    ! integer,  parameter :: sp  = kind(1.0)
 
-    ! Choose the precision of the library (sp,dp)
-    integer,  parameter :: wp = dp
+    ! ! Choose the precision of the library (sp,dp)
+    ! integer,  parameter :: wp = dp
     real(wp), parameter :: pi = 3.14159265359
 
     type isos_param_class
@@ -84,9 +85,9 @@ module isostasy_defs
         real(wp), allocatable   :: GE(:, :)    ! Green's function for elastic displacement (Farrell 1972)
         real(wp), allocatable   :: GN(:, :)    ! Green's function for z_ss_perturb
 
-        complex(wp), allocatable :: FGV(:, :)    ! FFT of GV
-        complex(wp), allocatable :: FGE(:, :)    ! FFT of GE
-        complex(wp), allocatable :: FGN(:, :)    ! FFT of GN
+        complex(dp), allocatable :: FGV(:, :)    ! FFT of GV
+        complex(dp), allocatable :: FGE(:, :)    ! FFT of GE
+        complex(dp), allocatable :: FGN(:, :)    ! FFT of GN
 
     end type isos_domain_class
 
@@ -153,6 +154,7 @@ module isostasy_defs
         type(isos_output_class) :: output
     end type
 
+    public :: sp, dp, wp
     public :: isos_param_class
     public :: isos_domain_class
     public :: isos_state_class

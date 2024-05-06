@@ -1,7 +1,7 @@
 
 module convolutions
 
-    use isostasy_defs, only : wp, pi, isos_domain_class
+    use isostasy_defs, only : sp, dp, wp, pi, isos_domain_class
     use isos_utils
 
     use, intrinsic :: iso_c_binding
@@ -62,15 +62,15 @@ module convolutions
         implicit none
 
         real(wp),    intent(OUT)    :: out(:, :)
-        complex(wp), intent(IN)     :: kernel(:, :)
+        complex(dp), intent(IN)     :: kernel(:, :)
         real(wp), intent(IN)        :: in(:, :)
         integer, intent(IN)         :: i1, i2, j1, j2, nx, ny, offset
         type(c_ptr), intent(IN)     :: forward_plan
         type(c_ptr), intent(IN)     :: backward_plan
 
         ! Local variables
-        real(wp),    allocatable    :: helper_real(:, :)
-        complex(wp), allocatable    :: helper_cplx(:, :)
+        real(dp),    allocatable    :: helper_real(:, :)
+        complex(dp), allocatable    :: helper_cplx(:, :)
 
         ! Populate load on extended grid
         allocate(helper_real(2*nx-1, 2*ny-1))
@@ -85,7 +85,7 @@ module convolutions
         helper_cplx =  kernel * helper_cplx
         call calc_fft_backward_c2r(backward_plan, helper_cplx, helper_real)
 
-        call apply_zerobc_at_corners(helper_real, 2*nx-1, 2*ny-1)
+        call apply_zerobc_at_corners_dp(helper_real, 2*nx-1, 2*ny-1)
         out(1:nx, 1:ny) = helper_real(i1+offset:i2+offset, j1-offset:j2-offset)
         return
     end subroutine precomputed_fftconvolution
@@ -95,12 +95,12 @@ module convolutions
 
         type(c_ptr), intent(IN)     :: plan
         real(wp),    intent(IN)     :: kernel(:, :)
-        complex(wp), intent(INOUT)  :: fftkernel(:, :)
-        real(wp), allocatable       :: extended_kernel(:, :)
+        complex(dp), intent(INOUT)  :: fftkernel(:, :)
+        real(dp), allocatable       :: extended_kernel(:, :)
         integer, intent(INOUT)      :: nx, ny
 
         allocate(extended_kernel(2*nx-1, 2*ny-1))
-        extended_kernel = 0.0_wp
+        extended_kernel = 0.0_dp
         extended_kernel(1:nx, 1:ny) = kernel
         call calc_fft_forward_r2c(plan, extended_kernel, fftkernel)
 

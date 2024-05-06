@@ -1,7 +1,7 @@
 module isos_utils
 
     use, intrinsic :: iso_c_binding
-    use isostasy_defs, only : wp, pi, isos_domain_class, isos_param_class, &
+    use isostasy_defs, only : sp, dp, wp, pi, isos_domain_class, isos_param_class, &
         isos_state_class, isos_output_class
 
     implicit none
@@ -17,7 +17,8 @@ module isos_utils
     public :: calc_heterogeneous_rigidity
 
     public :: apply_zerobc_at_corners
-
+    public :: apply_zerobc_at_corners_dp 
+    
     public :: calc_fft_backward_r2r
     public :: calc_fft_forward_r2r
     public :: calc_fft_backward_c2r
@@ -101,6 +102,14 @@ module isos_utils
         return
     end subroutine apply_zerobc_at_corners
 
+    subroutine apply_zerobc_at_corners_dp(x, nx, ny)
+        real(dp), intent(INOUT) :: x(:, :)
+        integer, intent(IN)     :: nx, ny
+
+        x = x - 0.25 * (x(1,1) + x(nx,ny) + x(1,ny) + x(nx,1))
+        return
+    end subroutine apply_zerobc_at_corners_dp
+
 
     ! ===== FFT Functions ==============================
 
@@ -128,8 +137,8 @@ module isos_utils
 
         implicit none 
         type(c_ptr), intent(IN)     :: plan
-        real(wp), intent(INOUT)     :: in(:, :)
-        real(wp), intent(INOUT)     :: out(:, :)
+        real(dp), intent(INOUT)     :: in(:, :)
+        real(dp), intent(INOUT)     :: out(:, :)
 
         call fftw_execute_r2r(plan, in, out)
 
@@ -142,8 +151,8 @@ module isos_utils
         implicit none 
 
         type(c_ptr), intent(IN)     :: plan
-        real(wp), intent(INOUT)     :: in(:, :)
-        real(wp), intent(INOUT)     :: out(:, :)
+        real(dp), intent(INOUT)     :: in(:, :)
+        real(dp), intent(INOUT)     :: out(:, :)
 
         integer(kind=4)            :: nx, ny
         nx = size(in,1)
@@ -171,8 +180,8 @@ module isos_utils
         implicit none 
 
         type(c_ptr), intent(IN)     :: plan
-        real(wp), intent(INOUT)     :: in(:, :)
-        complex(wp), intent(INOUT)  :: out(:, :)
+        real(dp),    intent(INOUT)  :: in(:, :)
+        complex(dp), intent(INOUT)  :: out(:, :)
 
         call fftw_execute_dft_r2c(plan, in, out)
 
@@ -183,8 +192,8 @@ module isos_utils
         implicit none
 
         type(c_ptr), intent(IN)    :: plan
-        complex(wp), intent(INOUT) :: in(:, :)
-        real(wp), intent(INOUT)    :: out(:, :)
+        complex(dp), intent(INOUT) :: in(:, :)
+        real(dp),    intent(INOUT) :: out(:, :)
 
         integer(kind=4)            :: nx, ny
         nx = size(in,1)
