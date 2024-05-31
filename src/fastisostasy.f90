@@ -134,6 +134,10 @@ module fastisostasy
 
         call calc_cropindices(isos%domain%icrop1, isos%domain%icrop2, &
             isos%domain%jcrop1, isos%domain%jcrop2, nx, ny)
+        write(*,*) "icrop1: ", isos%domain%icrop1
+        write(*,*) "icrop2: ", isos%domain%icrop2
+        write(*,*) "jcrop1: ", isos%domain%jcrop1
+        write(*,*) "jcrop2: ", isos%domain%jcrop2
 
         ! Init plans
         write(*,*) "Computing FFT plans..."
