@@ -134,6 +134,10 @@ module fastisostasy
 
         call calc_cropindices(isos%domain%icrop1, isos%domain%icrop2, &
             isos%domain%jcrop1, isos%domain%jcrop2, nx, ny)
+        write(*,*) "icrop1: ", isos%domain%icrop1
+        write(*,*) "icrop2: ", isos%domain%icrop2
+        write(*,*) "jcrop1: ", isos%domain%jcrop1
+        write(*,*) "jcrop2: ", isos%domain%jcrop2
 
         ! Init plans
         write(*,*) "Computing FFT plans..."
@@ -594,10 +598,10 @@ module fastisostasy
                         isos%domain%forward_fftplan_r2r, isos%domain%backward_fftplan_r2r)
                 end select
 
-            if (update_diagnostics) then 
-                ! Update current time_diagnostics value
-                isos%par%time_diagnostics = isos%par%time_prognostics + dt_now
-            end if
+            ! if (update_diagnostics) then 
+            !     ! Update current time_diagnostics value
+            !     isos%par%time_diagnostics = isos%par%time_prognostics + dt_now
+            ! end if
 
             ! Step 2: update bedrock elevation and current model time
             if (dt_now .gt. 0.0) then
@@ -612,6 +616,9 @@ module fastisostasy
                 call apply_zerobc_at_corners(isos%now%w, isos%domain%nx, isos%domain%ny)
                 isos%now%z_bed = isos%ref%z_bed + isos%now%w + isos%now%we
                 isos%par%time_prognostics = isos%par%time_prognostics + dt_now
+                isos%par%time_diagnostics = isos%par%time_diagnostics + dt_now
+                write (*,*) "time_prog, time_diag, update_diag: ", &
+                    isos%par%time_prognostics, isos%par%time_diagnostics, update_diagnostics
 
             end if
 

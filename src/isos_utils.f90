@@ -304,28 +304,28 @@ module isos_utils
             icrop2 = nx
             jcrop1 = 1
             jcrop2 = ny
-        else if (nx < ny) then
+
+        else if (nx .lt. ny) then
             if ( mod(ny - nx, 2) .eq. 0) then
                 pad = (ny - nx) / 2
             else
-                pad = (ny - nx + 1) / 2
+                pad = (ny - nx - 1) / 2
             end if
-
-            icrop1 = pad
-            icrop2 = ny-pad
+            icrop1 = pad + 1
+            icrop2 = icrop1 + nx - 1
             jcrop1 = 1
             jcrop2 = ny
+
         else
             if ( mod(nx - ny, 2) .eq. 0) then
                 pad = (nx - ny) / 2
             else
-                pad = (nx - ny + 1) / 2
+                pad = (nx - ny - 1) / 2
             end if
-
-            jcrop1 = pad
             icrop1 = 1
             icrop2 = nx
-            jcrop2 = nx-pad
+            jcrop1 = pad + 1
+            jcrop2 = jcrop1 + ny - 1
         end if
 
         return
