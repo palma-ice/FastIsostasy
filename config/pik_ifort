@@ -4,8 +4,9 @@ FC  = mpiifort
 INC_NC  = -I${NETCDF_FORTRANROOT}/include
 LIB_NC  = -L${NETCDF_FORTRANROOT}/lib -lnetcdff -L${NETCDF_CROOT}/lib -lnetcdf
 
+FFTWROOT = /p/system/packages/fftw/3.3.9
 INC_FFTW = 
-LIB_FFTW = -L/p/system/packages/fftw/3.3.9/lib -lfftw3 -lm
+LIB_FFTW = -L$(FFTWROOT)/lib -lfftw3 -lm
 
 FFLAGS  = -module $(objdir) -L$(objdir)
 
