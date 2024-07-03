@@ -551,12 +551,12 @@ module fastisostasy
             ! Step 1: diagnose equilibrium displacement and rate of bedrock uplift
             select case(isos%par%method)
 
-                ! Steady-state lithosphere
+                ! Case 0 turns off vertical displacement
                 case(0)
-                    call calc_llra_equilibrium(isos%now%w_equilibrium, &
-                        isos%now%canom_load, isos%par%rho_uppermantle)
-                        isos%now%w    = isos%now%w_equilibrium
-                        isos%now%dwdt = 0.0
+                    ! call calc_llra_equilibrium(isos%now%w_equilibrium, &
+                    !     isos%now%canom_load, isos%par%rho_uppermantle)
+                    !     isos%now%w    = isos%now%w_equilibrium
+                    !     isos%now%dwdt = 0.0
 
                 ! LLRA
                 case(1)
