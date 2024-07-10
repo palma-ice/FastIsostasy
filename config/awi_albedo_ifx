@@ -1,7 +1,11 @@
-FC  = ifort
+FC = ifx
 
-INC_NC  = -I${NETCDF_FORTRANROOT}/include
-LIB_NC  = -L${NETCDF_FORTRANROOT}/lib -lnetcdff -L${NETCDF_CROOT}/lib -lnetcdf
+NETCDFC_ROOT = /albedo/soft/sw/spack-sw/netcdf-c/4.8.1-5ewdrxn
+NETCDFFI_ROOT = /albedo/soft/sw/spack-sw/netcdf-fortran/4.5.4-rujc52i
+# NetCDF
+INC_NC  = -I${NETCDFFI_ROOT}/include
+# the -rpath options ensure that the same shared libraries are found at runtime
+LIB_NC  = -L${NETCDFFI_ROOT}/lib -Wl\,-rpath=${NETCDFFI_ROOT}/lib -lnetcdff -L${NETCDFC_ROOT}/lib -Wl\,-rpath=${NETCDFC_ROOT}/lib -lnetcdf
 
 FFTWROOT = /p/system/packages/fftw/3.3.9
 INC_FFTW = 
