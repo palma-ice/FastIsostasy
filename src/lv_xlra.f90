@@ -34,7 +34,7 @@ module lv_xlra
         real(wp), intent(INOUT) :: canom_load(:, :)     ! [Pa] Lithospheric load
         real(wp), intent(IN)    :: rho_uppermantle
 
-        w_equilibrium = canom_load / rho_uppermantle
+        w_equilibrium = - canom_load / rho_uppermantle
         
         return
     end subroutine calc_llra_equilibrium
