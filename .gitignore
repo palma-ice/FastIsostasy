@@ -1,6 +1,7 @@
 .DS_Store
 .vscode
 Makefile
+fftw*
 libisostasy/include/*.o
 libisostasy/include/*.mod
 libisostasy/include/*.a
