@@ -5,6 +5,7 @@ libisostasy/include/*.o
 libisostasy/include/*.mod
 libisostasy/include/*.a
 libisostasy/bin/*.x
+exlib/
 output/
 input/ice6gd/
 src/*.mod

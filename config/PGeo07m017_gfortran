@@ -5,8 +5,9 @@ NC_FROOT = /opt/homebrew/Cellar/netcdf-fortran/4.6.1
 INC_NC  = -I${NC_FROOT}/include
 LIB_NC  = -L${NC_FROOT}/lib -lnetcdff -L${NC_CROOT}/lib -lnetcdf 
 
-INC_FFTW = 
-LIB_FFTW = -L/opt/homebrew/Cellar/fftw/3.3.10_1/lib -lfftw3 -lm
+FFTWROOT = exlib/fftw-omp
+INC_FFTW = -I${FFTWROOT}/include
+LIB_FFTW = -L${FFTWROOT}/lib -lfftw3_omp -lfftw3 #-lfftw3f_omp -lfftw3f
 
 FFLAGS  = -ffree-line-length-none -I$(objdir) -J$(objdir)
 
