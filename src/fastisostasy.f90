@@ -485,11 +485,20 @@ module fastisostasy
         real(wp) :: dt, dt_now
         integer  :: n, nstep
         logical  :: update_diagnostics
- 
+
+        real(wp), allocatable :: dwdt_corr_ext(:,:)
+
         isos%now%Hice = 0.0
         isos%now%Hice(isos%domain%icrop1:isos%domain%icrop2, &
             isos%domain%jcrop1:isos%domain%jcrop2) = H_ice
         isos%now%bsl = bsl
+
+        allocate(dwdt_corr_ext(isos%domain%nx,isos%domain%ny))
+        dwdt_corr_ext = 0.0
+        if (present(dwdt_corr)) then
+            dwdt_corr_ext(isos%domain%icrop1:isos%domain%icrop2, &
+            isos%domain%jcrop1:isos%domain%jcrop2) = dwdt_corr
+        end if
 
         ! Step 0: determine current timestep and number of iterations
         dt = time - isos%par%time_prognostics
@@ -607,10 +616,8 @@ module fastisostasy
             if (dt_now .gt. 0.0) then
 
                 !# TODO: do we need this? If yes, lines below should be adapted adequatly
-                ! Additionally apply bedrock adjustment field
-                if (present(dwdt_corr)) then 
-                    isos%now%z_bed = isos%now%z_bed + dwdt_corr*dt_now
-                end if
+                ! Additionally apply bedrock adjustment field (zero if dwdt_corr not provided as argument)
+                isos%now%z_bed = isos%now%z_bed + dwdt_corr_ext*dt_now
 
                 isos%now%w = isos%now%w + isos%now%dwdt*dt_now
                 call apply_zerobc_at_corners(isos%now%w, isos%domain%nx, isos%domain%ny)
