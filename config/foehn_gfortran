@@ -9,7 +9,7 @@ LIB_FFTW = -L$(FFTWROOT)/lib -lfftw3 -lm
 
 FFLAGS = -ffree-line-length-none -I$(objdir) -J$(objdir)
 
-ifeq ($(parallel), 1)
+ifeq ($(openmp), 1)
     # Overwrite default choices with openmp relevant choices 
     FFLAGS  = -I$(objdir) -J$(objdir) -m64 -ffree-line-length-none -fomit-frame-pointer -fopenmp
 endif

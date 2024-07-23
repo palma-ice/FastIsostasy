@@ -1,5 +1,4 @@
-FC = mpif90
-#FC = gfortran 
+FC = gfortran 
 
 NC_CROOT=/albedo/soft/sw/spack-sw/netcdf-c/4.8.1-i5n4n63
 NC_FROOT=/albedo/soft/sw/spack-sw/netcdf-fortran/4.5.4-yb7woqz
@@ -11,7 +10,7 @@ LIB_FFTW = -L/albedo/home/alrobi001/apps/fftw/fftw/lib -lfftw3 -lm
 
 FFLAGS  = -ffree-line-length-none -I$(objdir) -J$(objdir)
 
-ifeq ($(parallel), 1)
+ifeq ($(openmp), 1)
     # Overwrite default choices with openmp relevant choices 
 
     FFLAGS  = -I$(objdir) -J$(objdir) -m64 -ffree-line-length-none -fomit-frame-pointer -fopenmp 
