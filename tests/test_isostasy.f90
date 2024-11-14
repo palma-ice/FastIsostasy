@@ -16,8 +16,8 @@ program test_isostasy
     character(len=512) :: file_out 
 
     character(len=56)  :: experiment
-    character(len=56)  :: visc_method
-    character(len=56)  :: rigidity_method
+    character(len=56)  :: mantle
+    character(len=56)  :: lithosphere
 
     real(wp) :: time, time_bp, time_init, time_end 
     real(wp) :: dtt, dt_out
@@ -151,10 +151,10 @@ program test_isostasy
     write(*,*) "file_out: ", trim(file_out)
     
     write(*,*) "Initialising viscosity and rigidity fields..."
-    visc_method = "uniform"
-    write(*,*) "viscosity field method = ", trim(visc_method)
-    rigidity_method = "uniform"
-    write(*,*) "rigidity method = ", trim(rigidity_method)
+    mantle = "uniform"
+    write(*,*) "viscosity field method = ", trim(mantle)
+    lithosphere = "uniform"
+    write(*,*) "rigidity method = ", trim(lithosphere)
 
     write(*,*) "time_init = ", time_init
     write(*,*) "time_end  = ", time_end
@@ -512,7 +512,7 @@ program test_isostasy
             long_name="Displacement (elastic)", &
             dim1="xc", dim2="yc", dim3="time", start=[1, 1, n], ncid=ncid)
 
-        call nc_write(filename, "z_ss_perturbation", isos%output%z_ss_perturb, units="m", &
+        call nc_write(filename, "z_ss_perturbation", isos%output%dz_ss, units="m", &
             long_name="Geoid displacement", dim1="xc", dim2="yc", dim3="time", &
             start=[1, 1, n], ncid=ncid)
 
