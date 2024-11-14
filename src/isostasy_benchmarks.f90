@@ -114,8 +114,8 @@ contains
         
         ! Calculate some arrays that are also needed 
         call calc_analytical_viscous_disk_params(ana%kappa_mod,ana%rad,ana%lrad, &
-                                                            kappa_min,kappa_max,dk,nx,ny,dx)                                    
-
+            kappa_min,kappa_max,dk,nx,ny,dx)
+            
         ! Updating ===========
 
         call calc_analytical_viscous_disk(ana,z_bed,dx,time)  
