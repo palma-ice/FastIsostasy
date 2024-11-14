@@ -66,13 +66,13 @@ module fastisostasy
         real(wp)                :: viscosity_scaling
 
         ! First, load parameters from parameter file `filename`
-        write(*,*) "Defining params..."
+        ! write(*,*) "Defining params..."
         call isos_par_load(isos%par, filename, group)
 
         if (present(K))         isos%par%correct_distortion     = .true.
         if (present(rho_ice))   isos%par%rho_ice                = rho_ice
         
-        write(*,*) "Padding domain..."
+        ! write(*,*) "Padding domain..."
         call pad_domain(isos%domain, n, nx_ice, ny_ice, dx, dy, isos%par%min_pad)
 
         if (isos%par%variable_ocean_surface) then
@@ -100,7 +100,7 @@ module fastisostasy
         if (present(K))         isos%domain%K                   = K
         
         ! Init plans
-        write(*,*) "Computing FFT plans..."
+        ! write(*,*) "Computing FFT plans..."
         allocate(buffer_2n(2*n-1, 2*n-1))
         buffer_2n = 0.0
         allocate(buffer_n(n, n))
@@ -146,18 +146,26 @@ module fastisostasy
         ! use buffer as helper to load mask.
         buffer_n = 0.0
         isos%domain%maskactive(:, :) = .false.
-        call nc_read(isos%par%mask_file, "M", &
-            buffer_n(isos%domain%icrop1:isos%domain%icrop2, &
-            isos%domain%jcrop1:isos%domain%jcrop2), start=[1, 1], &
-            count=[isos%domain%nx_ice, isos%domain%ny_ice])
-        where(buffer_n .gt. 0.5) isos%domain%maskactive = .true.
+        if (trim(isos%par%mask_file) .eq. "None" .or. &
+            trim(isos%par%mask_file) .eq. "none" .or. &
+            trim(isos%par%mask_file) .eq. "no") then 
+            isos%domain%maskactive(:, :) = .true.
+        else 
+            call nc_read(isos%par%mask_file, "M", &
+                buffer_n(isos%domain%icrop1:isos%domain%icrop2, &
+                isos%domain%jcrop1:isos%domain%jcrop2), start=[1, 1], &
+                count=[isos%domain%nx_ice, isos%domain%ny_ice])
+            where(buffer_n .gt. 0.5) isos%domain%maskactive = .true.
+        end if
+
+
 
         select case(isos%par%method)
 
             ! LV-ELRA method is being used, which allows heterogeneous value of D_Lith(x, y)
             ! and tau(x, y). ELRA is a particular case of LV-ELRA with constant values.
             case(2)
-                write(*,*) "Using (laterally-variable) ELRA..."
+                ! write(*,*) "Using (laterally-variable) ELRA..."
 
                 ! Calculate the Kelvin function filter
                 call calc_kei_filter_2D(isos%domain%kei, L_w=isos%par%L_w, &
@@ -167,7 +175,7 @@ module fastisostasy
                 call calc_viscous_green(isos%domain%GV, isos%domain%kei, &
                     isos%par%L_w, D_lith_const, dx=isos%domain%dx, dy=isos%domain%dx)
 
-                write(*,*) "Initialising viscous Green kernel..."
+                ! write(*,*) "Initialising viscous Green kernel..."
                 call precompute_kernel(isos%domain%forward_dftplan_r2c, isos%domain%GV, &
                     isos%domain%FGV, isos%domain%nx, isos%domain%ny)
 
@@ -177,10 +185,10 @@ module fastisostasy
             ! LV-ELVA method is being used, which allows heterogeneous value of D_Lith(x, y)
             ! and eta_eff(x, y). ELVA is a particular case of LV-ELVA with constant values.
             case(3)
-                write(*,*) "Using (laterally-variable) ELVA..."
+                ! write(*,*) "Using (laterally-variable) ELVA..."
                 call convenient_calc_kappa(isos%domain)
 
-                write(*,*) "Choosing rigidity field..."
+                ! write(*,*) "Choosing rigidity field..."
                 select case(trim(isos%par%lithosphere))
                     !# TODO: this part of the code should be in test_isostasy.f90
                     case("uniform")
@@ -237,7 +245,7 @@ module fastisostasy
                     stop
                 end if
 
-                write(*,*) "Choosing viscosity field..."
+                ! write(*,*) "Choosing viscosity field..."
                 call layered_viscosity(isos%domain%eta, isos%par%viscosities)
                 select case(trim(isos%par%mantle))
                 !# TODO: this part of the code should be in test_isostasy.f90
@@ -308,32 +316,32 @@ module fastisostasy
 
                 isos%domain%eta_eff = isos%domain%eta_eff * isos%par%compressibility_correction
 
-                write(*,*) "isos_init:: summary"
-                write(*,*) "    E               : ",    isos%par%E 
-                write(*,*) "    nu              : ",    isos%par%nu
-                write(*,*) "    rho_ice         : ",    isos%par%rho_ice
-                write(*,*) "    rho_seawater    : ",    isos%par%rho_seawater
-                write(*,*) "    rho_water       : ",    isos%par%rho_water
-                write(*,*) "    rho_uppermantle : ",    isos%par%rho_uppermantle
-                write(*,*) "    rho_litho       : ",    isos%par%rho_litho
-                write(*,*) "    g               : ",    isos%par%g
-                write(*,*) "    r_earth         : ",    isos%par%r_earth
-                write(*,*) "    m_earth         : ",    isos%par%m_earth
-                write(*,*) "    A_ocean_pd      : ",    isos%par%A_ocean_pd
+                ! write(*,*) "isos_init:: summary"
+                ! write(*,*) "    E               : ",    isos%par%E 
+                ! write(*,*) "    nu              : ",    isos%par%nu
+                ! write(*,*) "    rho_ice         : ",    isos%par%rho_ice
+                ! write(*,*) "    rho_seawater    : ",    isos%par%rho_seawater
+                ! write(*,*) "    rho_water       : ",    isos%par%rho_water
+                ! write(*,*) "    rho_uppermantle : ",    isos%par%rho_uppermantle
+                ! write(*,*) "    rho_litho       : ",    isos%par%rho_litho
+                ! write(*,*) "    g               : ",    isos%par%g
+                ! write(*,*) "    r_earth         : ",    isos%par%r_earth
+                ! write(*,*) "    m_earth         : ",    isos%par%m_earth
+                ! write(*,*) "    A_ocean_pd      : ",    isos%par%A_ocean_pd
                 
-                write(*,*) "    range(eta_eff):  ", minval(isos%domain%eta_eff),    maxval(isos%domain%eta_eff) 
-                write(*,*) "    range(He_lith):  ", minval(isos%domain%He_lith),    maxval(isos%domain%He_lith)
+                ! write(*,*) "    range(eta_eff):  ", minval(isos%domain%eta_eff),    maxval(isos%domain%eta_eff) 
+                ! write(*,*) "    range(He_lith):  ", minval(isos%domain%He_lith),    maxval(isos%domain%He_lith)
                 
-                write(*,*) "    L_w (m):      ", isos%par%L_w
-                write(*,*) "    nx:           ", isos%domain%nx
-                write(*,*) "    ny:           ", isos%domain%ny
-                write(*,*) "    dx (m):       ", isos%domain%dx
-                write(*,*) "    dy (m):       ", isos%domain%dy
+                ! write(*,*) "    L_w (m):      ", isos%par%L_w
+                ! write(*,*) "    nx:           ", isos%domain%nx
+                ! write(*,*) "    ny:           ", isos%domain%ny
+                ! write(*,*) "    dx (m):       ", isos%domain%dx
+                ! write(*,*) "    dy (m):       ", isos%domain%dy
 
-                write(*,*) "    range(kei): ", minval(isos%domain%kei),     maxval(isos%domain%kei)
-                write(*,*) "    range(GV):  ", minval(isos%domain%GV),      maxval(isos%domain%GV)
-                write(*,*) "    range(GE):  ", minval(isos%domain%GE),      maxval(isos%domain%GE)
-                write(*,*) "    range(GN):  ", minval(isos%domain%GN),      maxval(isos%domain%GN)
+                ! write(*,*) "    range(kei): ", minval(isos%domain%kei),     maxval(isos%domain%kei)
+                ! write(*,*) "    range(GV):  ", minval(isos%domain%GV),      maxval(isos%domain%GV)
+                ! write(*,*) "    range(GE):  ", minval(isos%domain%GE),      maxval(isos%domain%GE)
+                ! write(*,*) "    range(GN):  ", minval(isos%domain%GN),      maxval(isos%domain%GN)
 
             case DEFAULT 
 
@@ -356,7 +364,7 @@ module fastisostasy
         isos%par%time_prognostics = 1e10
 
         call cropdomain2output(isos%output, isos%domain)
-        write(*,*) "isos_init:: complete." 
+        ! write(*,*) "isos_init:: complete." 
 
         return
     end subroutine isos_init
@@ -414,52 +422,52 @@ module fastisostasy
         ! write(*,*) "BSL ref: ", isos%ref%bsl
 
         if (isos%par%use_restart) then
-            write(*,*) "Reading restart file..."
+            ! write(*,*) "Reading restart file..."
             call nc_read(isos%par%restart, "z_bed_ref", isos%ref%z_bed, start=[1,1,1], &
                 count=[isos%domain%nx, isos%domain%ny, 1])
-            write(*,*) "Extrema z_bed_ref: ", minval(isos%ref%z_bed), maxval(isos%ref%z_bed)
+            ! write(*,*) "Extrema z_bed_ref: ", minval(isos%ref%z_bed), maxval(isos%ref%z_bed)
 
             call nc_read(isos%par%restart, "H_ice_ref", isos%ref%Hice, start=[1,1,1], &
                 count=[isos%domain%nx, isos%domain%ny, 1])
-            write(*,*) "Extrema H_ice_ref: ", minval(isos%ref%Hice), maxval(isos%ref%Hice)
+            ! write(*,*) "Extrema H_ice_ref: ", minval(isos%ref%Hice), maxval(isos%ref%Hice)
 
             call nc_read(isos%par%restart, "dz_ss_ref", isos%ref%dz_ss, start=[1,1,1], &
                 count=[isos%domain%nx, isos%domain%ny, 1])
-            write(*,*) "Extrema dz_ss_ref: ", minval(isos%ref%dz_ss), maxval(isos%ref%dz_ss)
+            ! write(*,*) "Extrema dz_ss_ref: ", minval(isos%ref%dz_ss), maxval(isos%ref%dz_ss)
 
             call nc_read(isos%par%restart, "w_ref", isos%ref%w, start=[1,1,1], &
                 count=[isos%domain%nx, isos%domain%ny, 1])
-            write(*,*) "Extrema w_ref: ", minval(isos%ref%w), maxval(isos%ref%w)
+            ! write(*,*) "Extrema w_ref: ", minval(isos%ref%w), maxval(isos%ref%w)
 
             call nc_read(isos%par%restart, "we_ref", isos%ref%we, start=[1,1,1], &
                 count=[isos%domain%nx, isos%domain%ny, 1])
-            write(*,*) "Extrema we_ref: ", minval(isos%ref%we), maxval(isos%ref%we)
+            ! write(*,*) "Extrema we_ref: ", minval(isos%ref%we), maxval(isos%ref%we)
 
             call nc_read(isos%par%restart, "bsl_ref", isos%ref%w_equilibrium, start=[1,1,1], &
                 count=[isos%domain%nx, isos%domain%ny, 1])
             isos%ref%bsl = sum(isos%ref%w_equilibrium) / (isos%domain%nx * isos%domain%ny)
-            write(*,*) "bsl_ref: ", isos%ref%bsl
+            ! write(*,*) "bsl_ref: ", isos%ref%bsl
 
             ! Read current state
             call nc_read(isos%par%restart, "z_bed", isos%now%z_bed, start=[1,1,1], &
                 count=[isos%domain%nx, isos%domain%ny, 1])
-            write(*,*) "Extrema z_bed: ", minval(isos%now%z_bed), maxval(isos%now%z_bed)
+            ! write(*,*) "Extrema z_bed: ", minval(isos%now%z_bed), maxval(isos%now%z_bed)
 
             call nc_read(isos%par%restart, "dz_ss", isos%now%dz_ss, start=[1,1,1], &
                 count=[isos%domain%nx, isos%domain%ny, 1])
-            write(*,*) "Extrema dz_ss: ", minval(isos%now%dz_ss), maxval(isos%now%dz_ss)
+            ! write(*,*) "Extrema dz_ss: ", minval(isos%now%dz_ss), maxval(isos%now%dz_ss)
 
             call nc_read(isos%par%restart, "bsl", isos%now%bsl, start=[1], &
                 count=[1])
-            write(*,*) "bsl: ", isos%now%bsl
+            ! write(*,*) "bsl: ", isos%now%bsl
 
             call nc_read(isos%par%restart, "w", isos%now%w, start=[1,1,1], &
                 count=[isos%domain%nx, isos%domain%ny, 1])
-            write(*,*) "Extrema w: ", minval(isos%now%w), maxval(isos%now%w)
+            ! write(*,*) "Extrema w: ", minval(isos%now%w), maxval(isos%now%w)
 
             call nc_read(isos%par%restart, "we", isos%now%we, start=[1,1,1], &
                 count=[isos%domain%nx, isos%domain%ny, 1])
-            write(*,*) "Extrema we: ", minval(isos%now%we), maxval(isos%now%we)
+            ! write(*,*) "Extrema we: ", minval(isos%now%we), maxval(isos%now%we)
 
         else
             isos%now%z_bed(isos%domain%icrop1:isos%domain%icrop2, &
@@ -492,27 +500,27 @@ module fastisostasy
         isos%par%time_prognostics = time
         isos%par%time_diagnostics = time
 
-        write(*,*) "Calling first mask update..."
+        ! write(*,*) "Calling first mask update..."
         ! call calc_sl_contributions(isos)
         call calc_masks(isos)
-        write(*,*) "Calling first update..."
+        ! write(*,*) "Calling first update..."
         ! call copy_sparsestate(isos%ref, isos%now)
         call isos_update(isos, H_ice, time)
 
-        write(*,*) "isos_init_state: "
-        write(*,*) "    Initial time:   ",  isos%par%time_prognostics
-        write(*,*) "    range(He_lith): ",  minval(isos%domain%He_lith), maxval(isos%domain%He_lith)
-        write(*,*) "    range(tau):     ",  minval(isos%domain%tau), maxval(isos%domain%tau)
-        write(*,*) "    range(w):       ",  minval(isos%now%w), maxval(isos%now%w)
-        write(*,*) "    range(w_eq):    ",  minval(isos%now%w_equilibrium), maxval(isos%now%w_equilibrium)
-        write(*,*) "  range(z_bed):     ",  minval(isos%now%z_bed), maxval(isos%now%z_bed)
+        ! write(*,*) "isos_init_state: "
+        ! write(*,*) "    Initial time:   ",  isos%par%time_prognostics
+        ! write(*,*) "    range(He_lith): ",  minval(isos%domain%He_lith), maxval(isos%domain%He_lith)
+        ! write(*,*) "    range(tau):     ",  minval(isos%domain%tau), maxval(isos%domain%tau)
+        ! write(*,*) "    range(w):       ",  minval(isos%now%w), maxval(isos%now%w)
+        ! write(*,*) "    range(w_eq):    ",  minval(isos%now%w_equilibrium), maxval(isos%now%w_equilibrium)
+        ! write(*,*) "  range(z_bed):     ",  minval(isos%now%z_bed), maxval(isos%now%z_bed)
 
         if ((minval(isos%domain%tau) .le. 0.0) .and. (isos%par%method .le. 2)) then
             write(error_unit,*) "isos_init_state:: Error: tau initialized with zero values present. &
             &This will lead to the model crashing."
         end if
 
-        write(*,*) "isos_init_state:: complete."
+        ! write(*,*) "isos_init_state:: complete."
         
         return
 
@@ -535,20 +543,20 @@ module fastisostasy
 
         real(wp), allocatable :: dwdt_corr_ext(:,:)
 
-        write(*,*) "isos_update:: updating ice thickness..."
+        ! write(*,*) "isos_update:: updating ice thickness..."
         isos%now%Hice = 0.0
         isos%now%Hice(isos%domain%icrop1:isos%domain%icrop2, &
             isos%domain%jcrop1:isos%domain%jcrop2) = H_ice
-        write(*,*) "Extrema of H_ice: ", minval(H_ice), maxval(H_ice)
+        ! write(*,*) "Extrema of H_ice: ", minval(H_ice), maxval(H_ice)
 
-        write(*,*) "isos_update:: updating correction..."
+        ! write(*,*) "isos_update:: updating correction..."
         allocate(dwdt_corr_ext(isos%domain%nx,isos%domain%ny))
         dwdt_corr_ext = 1.0
         if (present(dwdt_corr)) then
             dwdt_corr_ext(isos%domain%icrop1:isos%domain%icrop2, &
             isos%domain%jcrop1:isos%domain%jcrop2) = dwdt_corr
         end if
-        write(*,*) "Extrema of dwdt_corr: ", minval(dwdt_corr_ext), maxval(dwdt_corr_ext)
+        ! write(*,*) "Extrema of dwdt_corr: ", minval(dwdt_corr_ext), maxval(dwdt_corr_ext)
 
         ! Step 0: determine current timestep and number of iterations
         dt = time - isos%par%time_prognostics
@@ -563,7 +571,9 @@ module fastisostasy
             ! Get current dt (either total time or maximum allowed timestep)
             dt_now = min(time-isos%par%time_prognostics, isos%par%dt_prognostics)
 
-            write(*,*) "isos_update:: updating diagnostic bool..."
+            ! write(*,*) time
+
+            ! write(*,*) "isos_update:: updating diagnostic bool..."
             ! Only update diagnostics if enough time has passed (to save on computations)
             if ( (isos%par%time_prognostics+dt_now) - isos%par%time_diagnostics .ge. 1e-3) then
                 update_diagnostics = .TRUE.
@@ -575,60 +585,60 @@ module fastisostasy
             write (*,*) "time_prog, time_diag, update_diag: ", &
                 isos%par%time_prognostics, isos%par%time_diagnostics, update_diagnostics
 
-            write(*,*) "isos_update:: updating load anomalies..."
+            ! write(*,*) "isos_update:: updating load anomalies..."
             call calc_columnanoms_load(isos)
-            write(*,*) "Extrema of canom_load: ", minval(isos%now%canom_load), maxval(isos%now%canom_load)
+            ! write(*,*) "Extrema of canom_load: ", minval(isos%now%canom_load), maxval(isos%now%canom_load)
 
             if (update_diagnostics) then
-                write(*,*) "Updating the elastic response..."
+                ! write(*,*) "Updating the elastic response..."
                 call precomputed_fftconvolution(isos%now%we, isos%domain%FGE, &
                     isos%now%canom_load * isos%par%g * isos%domain%K ** 2.0, &
                     isos%domain%i1, isos%domain%i2, &
                     isos%domain%j1, isos%domain%j2, isos%domain%offset, &
                     isos%domain%nx, isos%domain%ny, &
                     isos%domain%forward_dftplan_r2c, isos%domain%backward_dftplan_c2r)
-                write(*,*) "Extrema of we: ", minval(isos%now%we), maxval(isos%now%we)
+                ! write(*,*) "Extrema of we: ", minval(isos%now%we), maxval(isos%now%we)
             endif
 
             call calc_columnanoms_solidearth(isos)
 
             if (update_diagnostics .and. isos%par%interactive_sealevel) then
-                write(*,*) "Updating the SSH perturbation..."
+                ! write(*,*) "Updating the SSH perturbation..."
                 call calc_mass_anom(isos)
                 call precomputed_fftconvolution(isos%now%dz_ss, isos%domain%FGN, &
                     isos%now%mass_anom, isos%domain%i1, isos%domain%i2, &
                     isos%domain%j1, isos%domain%j2, isos%domain%offset, &
                     isos%domain%nx, isos%domain%ny, &
                     isos%domain%forward_dftplan_r2c, isos%domain%backward_dftplan_c2r)
-                write(*,*) "Extrema of dz_ss: ", minval(isos%now%dz_ss), maxval(isos%now%dz_ss)
+                ! write(*,*) "Extrema of dz_ss: ", minval(isos%now%dz_ss), maxval(isos%now%dz_ss)
+
+                ! write(*,*) "Updating the SSH..."
+                call calc_z_ss(isos%now%z_ss, isos%now%bsl, isos%ref%z_ss, isos%now%dz_ss)
+                ! write(*,*) "Extrema of z_ss: ", minval(isos%now%z_ss), maxval(isos%now%z_ss)
+
+                ! write(*,*) "Updating the BSL..."
+                if (present(bsl)) then
+                    isos%now%bsl = bsl
+                else
+                    call calc_H_above_bsl(isos%now, isos%par)
+                    call calc_sl_contributions(isos)
+                    call calc_bsl_constant_Aocean(isos)
+                    ! write(*,*) "BSL: ", isos%now%bsl
+                end if
+
+                ! write(*,*) "Updating RSL..."
+                call calc_rsl(isos%now)
+                ! write(*,*) "Extrema of rsl: ", minval(isos%now%rsl), maxval(isos%now%rsl)
             end if
 
-            write(*,*) "Updating the SSH..."
-            call calc_z_ss(isos%now%z_ss, isos%now%bsl, isos%ref%z_ss, isos%now%dz_ss)
-            write(*,*) "Extrema of z_ss: ", minval(isos%now%z_ss), maxval(isos%now%z_ss)
-
-            write(*,*) "Updating the BSL..."
-            if (present(bsl)) then
-                isos%now%bsl = bsl
-            else
-                call calc_H_above_bsl(isos%now, isos%par)
-                call calc_sl_contributions(isos)
-                call calc_bsl_constant_Aocean(isos)
-                write(*,*) "BSL: ", isos%now%bsl
-            end if
-
-            write(*,*) "Updating RSL..."
-            ! call calc_rsl(isos%now)
-            write(*,*) "Extrema of rsl: ", minval(isos%now%rsl), maxval(isos%now%rsl)
-
-            write(*,*) "Updating the masks..."
+            ! write(*,*) "Updating the masks..."
             call calc_masks(isos)
 
             ! Need to re-compute the load after updating the elastic response, sea level and masks
             call calc_columnanoms_load(isos)
-            write(*,*) "Extrema of canom_load: ", minval(isos%now%canom_load), maxval(isos%now%canom_load)
+            ! write(*,*) "Extrema of canom_load: ", minval(isos%now%canom_load), maxval(isos%now%canom_load)
             call calc_columnanoms_solidearth(isos)
-            write(*,*) "Extrema of canom_full: ", minval(isos%now%canom_full), maxval(isos%now%canom_full)
+            ! write(*,*) "Extrema of canom_full: ", minval(isos%now%canom_full), maxval(isos%now%canom_full)
 
             ! Step 1: diagnose equilibrium displacement and rate of bedrock uplift
             select case(isos%par%method)
@@ -675,7 +685,7 @@ module fastisostasy
                         isos%domain%dx_matrix, isos%domain%dy_matrix, isos%par%sec_per_year, &
                         isos%domain%forward_fftplan_r2r, isos%domain%backward_fftplan_r2r)
                 end select
-                write(*,*) "Extrema of dwdt: ", minval(isos%now%dwdt), maxval(isos%now%dwdt)
+                ! write(*,*) "Extrema of dwdt: ", minval(isos%now%dwdt), maxval(isos%now%dwdt)
 
             ! if (update_diagnostics) then 
             !     ! Update current time_diagnostics value
@@ -683,6 +693,8 @@ module fastisostasy
             ! end if
 
             ! Step 2: update bedrock elevation and current model time
+            ! write(*,*) dt_now
+
             if (dt_now .gt. 0.0) then
 
                 !# TODO: do we need this? If yes, lines below should be adapted adequatly
@@ -706,7 +718,8 @@ module fastisostasy
         call cropstate2output(isos%output, isos%now, isos%domain%icrop1, isos%domain%icrop2, &
             isos%domain%jcrop1, isos%domain%jcrop2)
 
-        ! rsl = isos%output%z_ss - isos%output%z_bed
+        ! write(*,*) "extrema of w: ", minval(isos%now%w), maxval(isos%now%w)
+        ! write(*,*) "extrema of we: ", minval(isos%now%we), maxval(isos%now%we)
 
         return
     end subroutine isos_update
