@@ -38,7 +38,6 @@ program test_isostasy
     real(wp), allocatable :: H_ice(:, :), T_ice(:, : ,:), z_bed_ice(:, : ,:)
     real(wp), allocatable :: time_ice(:), xc_ice(:), yc_ice(:)
     real(wp), allocatable :: z_ss(:, :) 
-    real(wp), allocatable :: rsl(:, :)      ! Relative sea level
     
     real(wp), allocatable :: mask(:, :)
     real(wp), allocatable :: z_bed_bench(:, :)
@@ -198,7 +197,6 @@ program test_isostasy
     allocate(z_bed(nx, ny))
     allocate(H_ice(nx, ny))
     allocate(z_ss(nx, ny))
-    allocate(rsl(nx, ny))
     allocate(z_bed_bench(nx, ny))
     allocate(mask(nx, ny))
     
@@ -206,7 +204,6 @@ program test_isostasy
     z_bed       = 0.0
     H_ice       = 0.0
     z_ss         = 0.0
-    rsl         = z_ss - z_bed
     z_bed_bench = z_bed
 
     ! Initialize bedrock model (allocate fields)
@@ -252,6 +249,7 @@ program test_isostasy
             time_ice(2) = 1e-9
             T_ice(:, :, 1) = 0.0_wp
             T_ice(:, :, 2) = H_ice
+            z_bed(:, :) = 1e6_wp
             
         case("test2")   ! Spada et al. (2011)
          
@@ -276,8 +274,8 @@ program test_isostasy
             time_ice(2) = 1e-9
             T_ice(:, :, 1) = 0.0_wp
             T_ice(:, :, 2) = H_ice
-            z_ss = -1e3
-            
+            z_bed(:, :) = 1e6_wp
+
         case("test4")  ! ICE6G_D
         ! Comment on “An Assessment of the ICE-6G_C (VM5a) Glacial Isostatic Adjustment Model” by Purcell et al.
         ! W. Richard Peltier, Donald F. Argus, Rosemarie Drummond
@@ -360,7 +358,7 @@ program test_isostasy
     end select
     
     ! Inititalize and write state
-    call isos_init_state(isos1, z_bed, T_ice(:, :, 1), z_ss, 0.0_wp, time=time_init) 
+    call isos_init_state(isos1, z_bed, T_ice(:, :, 1), time)
     call isos_write_init(isos1, xc, yc, file_out, time_init)
 
     ! Determine total number of iterations to run
@@ -372,7 +370,10 @@ program test_isostasy
         ! Update bedrock
         time = time_init + (n-1)*dtt
         call interp_2d(time_ice, T_ice, time, H_ice)
-        call isos_update(isos1, H_ice, 0.0_wp, time)
+        call isos_update(isos1, H_ice, time)
+        ! write(*,*) "extrema H_ice: ", minval(isos1%now%Hice), maxval(isos1%now%Hice)
+        ! write(*,*) "count maskgrounded: ", count(isos1%now%maskgrounded)
+        ! stop
 
         if (mod(time-time_init, dt_out) .eq. 0.0) then  ! Write output for this timestep
 
@@ -539,7 +540,7 @@ program test_isostasy
             call nc_write(filename, "z_bed_bench", z_bed_bench,units="m", &
                 long_name="Benchmark bedrock elevation", &
                 dim1="xc", dim2="yc", dim3="time", start=[1, 1, n], ncid=ncid)
-            call nc_write(filename, "err_z_bed", isos%now%z_bed - z_bed_bench,units="m", &
+            call nc_write(filename, "err_z_bed", isos%now%w - z_bed_bench,units="m", &
                 long_name="Error in bedrock elevation", &
                 dim1="xc", dim2="yc", dim3="time", start=[1, 1, n], ncid=ncid)
         end if
