@@ -5,12 +5,12 @@
     method          = 3             ! 0: constant displacement; 1: LLRA; 2: LV-ELRA, 3: LV-ELVA
     dt_prognostics  = 1.0           ! [yr] Max. timestep to recalculate prognostics
     dt_diagnostics  = 10.           ! [yr] Min. timestep to recalculate diagnostics
-    visc_method     = uniform       ! Type of viscosity field for sub-lithospheric mantle
-    rigidity_method = uniform       ! Type of thickness filed for elastic lithosphere
+    mantle     = uniform       ! Type of viscosity field for sub-lithospheric mantle
+    lithosphere = uniform       ! Type of thickness filed for elastic lithosphere
 
     ! 1D reference model
     nl          = 2                 ! [1] Number of viscous layers for sub-lithospheric mantle
-    boundaries  = 88.0, 600.0       ! [km] Depth of layer boundaries. The first value is overwritten
+    zl  = 88.0, 600.0       ! [km] Depth of layer boundaries. The first value is overwritten
                                     ! if a lithospheric thickness filed is provided.
     viscosities = 1.e21, 2.e21      ! [Pa s] Layer viscosities. The values are overwritten if a 3D
                                     ! viscosity field is provided.
