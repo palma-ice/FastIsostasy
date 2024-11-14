@@ -42,7 +42,7 @@ module sealevel
         implicit none
         type(isos_class), intent(INOUT)     :: isos
 
-        isos%now%bsl = isos%ref%bsl + (isos%now%V_af + isos%now%V_den + &
+        isos%now%bsl = isos%ref%bsl - (isos%now%V_af + isos%now%V_den + &
             isos%now%V_pov) / isos%par%A_ocean_pd
         return
     end subroutine calc_bsl_constant_Aocean
@@ -172,7 +172,8 @@ module sealevel
         type(isos_class), intent(INOUT)   :: isos 
 
         isos%now%V_af = sum( (isos%now%H_above_bsl - isos%ref%H_above_bsl ) * isos%domain%A )
-        isos%now%V_den = sum((isos%now%Hice - isos%ref%Hice) * isos%par%Vden_factor * isos%domain%A)
+        isos%now%V_den = sum((isos%now%Hice - isos%ref%Hice) * isos%par%Vden_factor * &
+            isos%domain%A)
         isos%now%V_pov = 0.0 ! I think this is not needed when V_af is based on H_above_bsl
         return
     end subroutine calc_sl_contributions
