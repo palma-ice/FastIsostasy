@@ -136,14 +136,14 @@ module sealevel
         implicit none
         type(isos_class), intent(INOUT)   :: isos
 
-        write(*,*) 'Updating continent mask'
+        ! write(*,*) 'Updating continent mask'
         isos%now%maskcontinent = isos%now%rsl < 0
 
-        write(*,*) 'Updating grounded mask'
+        ! write(*,*) 'Updating grounded mask'
         isos%now%Haf = isos%now%Hice - isos%now%rsl * (isos%par%rho_seawater / isos%par%rho_ice)
         isos%now%maskgrounded = isos%now%Haf > 0
 
-        write(*,*) 'Updating ocean mask'
+        ! write(*,*) 'Updating ocean mask'
         call calc_maskocean(isos)
 
         return
