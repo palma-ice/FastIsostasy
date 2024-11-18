@@ -49,7 +49,7 @@ program test_isostasy
 
     ! === Define experiment to be run ====
 
-    experiment = "test2"
+    experiment = "test4"
     
     ! Tests are defined in Swierczek-Jereczek et al. (2024), GMD.
     ! Additional: "test5" = Lucía's Greenland ice-sheet load (since 15 ka)
@@ -357,8 +357,13 @@ program test_isostasy
 
     end select
     
+    time = time_init
+
     ! Inititalize and write state
     call isos_init_state(isos1, z_bed, T_ice(:, :, 1), time)
+    ! write(*,*) time, isos1%par%time_prognostics, isos1%par%time_diagnostics
+    ! stop
+
     call isos_write_init(isos1, xc, yc, file_out, time_init)
 
     ! Determine total number of iterations to run
@@ -371,6 +376,7 @@ program test_isostasy
         time = time_init + (n-1)*dtt
         call interp_2d(time_ice, T_ice, time, H_ice)
         call isos_update(isos1, H_ice, time)
+        ! write(*,*) "time = ", time
         ! write(*,*) "extrema H_ice: ", minval(isos1%now%Hice), maxval(isos1%now%Hice)
         ! write(*,*) "count maskgrounded: ", count(isos1%now%maskgrounded)
         ! stop
