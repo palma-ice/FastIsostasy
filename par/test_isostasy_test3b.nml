@@ -1,20 +1,21 @@
 &isostasy
     ! Options
-    interactive_sealevel = .false.  ! Sea level interacts with solid Earth deformation?
-    correct_distortion = .false.    ! Account for distortion of projection?
-    method          = 3             ! 0: constant displacement; 1: LLRA; 2: LV-ELRA, 3: LV-ELVA
-    dt_prognostics  = 1.            ! [yr] Max. timestep to recalculate prognostics
-    dt_diagnostics  = 10.           ! [yr] Min. timestep to recalculate diagnostics
-    mantle     = uniform       ! Type of viscosity field for sub-lithospheric mantle
-    lithosphere = gaussian_plus ! Type of thickness filed for elastic lithosphere
+    interactive_sealevel = .false.
+    correct_distortion = .false.
+    method          = 3
+    dt_prognostics  = 1.
+    dt_diagnostics  = 10.
+    pad         = 0.e3
 
-    ! 1D reference model
-    nl          = 1                 ! [1] Number of viscous layers for sub-lithospheric mantle
-    zl  = 150.0             ! [km] Depth of layer boundaries. The first value is overwritten
-                                    ! if a lithospheric thickness filed is provided.
-    viscosities = 1.e21             ! [Pa s] Layer viscosities. The values are overwritten if a 3D
-                                    ! viscosity field is provided.
-    tau             = 2000.0        ! [yr] Relaxation time
+    ! Rheology
+    mantle = "uniform"
+    lithosphere = "gaussian_plus"
+    viscosity_scaling_method = 0
+    layering    = "equalized"
+    nl          = 1
+    zl  = 150.
+    viscosities = 1.e21
+    tau             = 2000.0
 
     ! Physical constants
     E               = 66.0          ! [GPa] Young modulus
@@ -28,4 +29,10 @@
     r_earth         = 6.378e6       ! [m]  Earth radius, Coulon et al. (2021)
     m_earth         = 5.972e24      ! [kg] Earth mass,   Coulon et al. (2021)
     A_ocean_pd      = 3.625e14      ! [m^2] Ocean surface as in Goelzer et al. (2020)
+
+    ! Files
+    restart = "None"
+    mask_file = "None"
+    rheology_file = "None"
+    ocean_surface_file = "None"
 /
