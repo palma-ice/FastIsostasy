@@ -8,7 +8,7 @@ module sealevel
     public :: calc_z_ss
     public :: calc_rsl
     public :: calc_bsl_constant_Aocean
-    public :: calc_bsl_pwconstant_Aocean
+    public :: calc_bsl_variable_Aocean
     public :: calc_columnanoms_load
     public :: calc_columnanoms_solidearth
     public :: calc_masks
@@ -42,10 +42,38 @@ module sealevel
         implicit none
         type(isos_class), intent(INOUT)     :: isos
 
-        isos%now%bsl = isos%ref%bsl - (isos%now%V_af + isos%now%V_den + &
-            isos%now%V_pov) / isos%par%A_ocean_pd
+        call calc_bsl(isos%now%bsl, isos%ref%bsl, isos%now%V_af, isos%now%V_den, &
+            isos%now%V_pov, isos%par%A_ocean_pd)
         return
     end subroutine calc_bsl_constant_Aocean
+
+    subroutine calc_bsl_variable_Aocean(isos)
+        ! Warning: This subroutine is work in progress and should not be used yet.
+        ! We need to figure out how to compute the bsl incrementally when A_ocean is
+        ! piecewise constant.
+        implicit none
+        type(isos_class), intent(INOUT)     :: isos
+
+        call interp_0d(isos%domain%bsl_vec, isos%domain%A_ocean_vec, &
+            isos%now%bsl, isos%now%A_ocean)
+
+        call calc_bsl(isos%now%bsl, isos%ref%bsl, isos%now%V_af, isos%now%V_den, &
+            isos%now%V_pov, isos%now%A_ocean)
+        return
+    end subroutine calc_bsl_variable_Aocean
+
+    subroutine calc_bsl(bsl, bsl_ref, V_af, V_den, V_pov, A_ocean)
+        implicit none
+        real(wp), intent(OUT)   :: bsl
+        real(wp), intent(IN)    :: bsl_ref
+        real(wp), intent(IN)    :: V_af
+        real(wp), intent(IN)    :: V_den
+        real(wp), intent(IN)    :: V_pov
+        real(wp), intent(IN)    :: A_ocean
+
+        bsl = bsl_ref - (V_af + V_den + V_pov) / A_ocean
+        return
+    end subroutine calc_bsl
 
     ! Calculate the barystatic sea level using a piecewise constant A_ocean.
     ! This is work in progress and should not be used yet.
@@ -137,11 +165,11 @@ module sealevel
         type(isos_class), intent(INOUT)   :: isos
 
         ! write(*,*) 'Updating continent mask'
-        isos%now%maskcontinent = isos%now%rsl < 0
+        isos%now%maskcontinent = isos%now%z_bed > 0
 
         ! write(*,*) 'Updating grounded mask'
         isos%now%Haf = isos%now%Hice - isos%now%rsl * (isos%par%rho_seawater / isos%par%rho_ice)
-        isos%now%maskgrounded = isos%now%Haf > 0
+        isos%now%maskgrounded = (isos%now%Haf > 0) .and. (isos%now%Hice > 0)
 
         ! write(*,*) 'Updating ocean mask'
         call calc_maskocean(isos)
@@ -171,10 +199,12 @@ module sealevel
         implicit none
         type(isos_class), intent(INOUT)   :: isos 
 
-        isos%now%V_af = sum( (isos%now%H_above_bsl - isos%ref%H_above_bsl ) * isos%domain%A )
+        isos%now%V_af = sum( (isos%now%H_above_bsl - isos%ref%H_above_bsl ) * isos%domain%A ) * &
+            (isos%par%rho_ice / isos%par%rho_seawater)
         isos%now%V_den = sum((isos%now%Hice - isos%ref%Hice) * isos%par%Vden_factor * &
             isos%domain%A)
         isos%now%V_pov = 0.0 ! I think this is not needed when V_af is based on H_above_bsl
+        ! write(*,*) isos%now%V_af, isos%now%V_den, isos%now%V_pov
         return
     end subroutine calc_sl_contributions
 

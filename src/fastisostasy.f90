@@ -77,16 +77,23 @@ module fastisostasy
 
         if (isos%par%variable_ocean_surface) then
             nbsl = nc_size(isos%par%ocean_surface_file, "z")
+            write(*,*) "Variable ocean surface not supported yet in the fortran version!"
+            stop
+        else
+            nbsl = 1
         end if
 
         call allocate_isos(isos, n, n, isos%par%nl, nbsl)
         call init_dims(isos%domain%xc, isos%domain%x, n, dx)
         call init_dims(isos%domain%yc, isos%domain%y, n, dy)
 
-        ! Init ocean surface interpolator
-        ! call nc_read(ocean_surface_file, "z", isos%domain%bsl_vec, start=[1], count=[nbsl])
-        ! call nc_read(ocean_surface_file, "A", isos%domain%A_ocean_vec, start=[1], &
-        !     count=[nbsl])
+        if (isos%par%variable_ocean_surface) then
+            ! write(*,*) "Reading ocean surface file..."
+            call nc_read(isos%par%ocean_surface_file, "z", isos%domain%bsl_vec, &
+                start=[1], count=[nbsl])
+            call nc_read(isos%par%ocean_surface_file, "A", isos%domain%A_ocean_vec, &
+                start=[1], count=[nbsl])
+        end if
 
         call calc_cropindices(isos%domain%icrop1, isos%domain%icrop2, &
             isos%domain%jcrop1, isos%domain%jcrop2, isos%domain%nx, isos%domain%ny, &
@@ -562,14 +569,14 @@ module fastisostasy
         dt = time - isos%par%time_prognostics
 
         ! Get maximum number of iterations needed to reach desired time
-        nstep = ceiling( (time - isos%par%time_prognostics) / isos%par%dt_prognostics )
+        nstep = ceiling( dt / isos%par%dt_prognostics )
         nstep = max(nstep, 1)
 
         ! Loop over iterations until maximum time is reached
         do n = 1, nstep
 
             ! Get current dt (either total time or maximum allowed timestep)
-            dt_now = min(time-isos%par%time_prognostics, isos%par%dt_prognostics)
+            dt_now = min(dt, isos%par%dt_prognostics)
 
             ! write(*,*) time
 
@@ -622,14 +629,19 @@ module fastisostasy
                 else
                     call calc_H_above_bsl(isos%now, isos%par)
                     call calc_sl_contributions(isos)
-                    call calc_bsl_constant_Aocean(isos)
+
+                    if (isos%par%variable_ocean_surface) then
+                        call calc_bsl_variable_Aocean(isos)
+                    else
+                        call calc_bsl_constant_Aocean(isos)
+                    end if
                     ! write(*,*) "BSL: ", isos%now%bsl
                 end if
-
-                ! write(*,*) "Updating RSL..."
-                call calc_rsl(isos%now)
-                ! write(*,*) "Extrema of rsl: ", minval(isos%now%rsl), maxval(isos%now%rsl)
             end if
+
+            ! write(*,*) "Updating RSL..."
+            call calc_rsl(isos%now)
+            ! write(*,*) "Extrema of rsl: ", minval(isos%now%rsl), maxval(isos%now%rsl)
 
             ! write(*,*) "Updating the masks..."
             call calc_masks(isos)
@@ -773,9 +785,9 @@ module fastisostasy
         if (trim(par%ocean_surface_file) .eq. "None" .or. &
             trim(par%ocean_surface_file) .eq. "none" .or. &
             trim(par%ocean_surface_file) .eq. "no") then 
-            par%variable_ocean_surface = .FALSE. 
+            par%variable_ocean_surface = .false. 
         else 
-            par%variable_ocean_surface = .TRUE.
+            par%variable_ocean_surface = .true.
         end if
 
         call nml_read(filename,group,"restart",         par%restart)
