@@ -69,6 +69,9 @@ $(objdir)/sealevel.o: $(srcdir)/sealevel.f90 $(objdir)/isostasy_defs.o $(objdir)
 	$(FC) $(DFLAGS) $(FFLAGS) -c -o $@ $<
 
 # > 2 dependences
+$(objdir)/isostasy_io.o: $(srcdir)/isostasy_io.f90 $(objdir)/isostasy_defs.o $(objdir)/ncio.o $(objdir)/nml.o
+	$(FC) $(DFLAGS) $(FFLAGS) -c -o $@ $<
+
 $(objdir)/lv_elva.o: $(srcdir)/lv_elva.f90 $(objdir)/isostasy_defs.o $(objdir)/finite_differences.o $(objdir)/isos_utils.o
 	$(FC) $(DFLAGS) $(FFLAGS) -c -o $@ $<
 
@@ -87,6 +90,7 @@ isostasy_libs = 		$(objdir)/precision.o \
 						$(objdir)/kelvin_function.o \
 						$(objdir)/sealevel.o \
 						$(objdir)/lv_xlra.o \
+						$(objdir)/isostasy_io.o \
 						$(objdir)/lv_elva.o \
 						$(objdir)/fastisostasy.o \
 

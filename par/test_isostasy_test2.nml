@@ -5,27 +5,40 @@
     method          = 3             ! 0: constant displacement; 1: LLRA; 2: LV-ELRA, 3: LV-ELVA
     dt_prognostics  = 1.            ! [yr] Max. timestep to recalculate prognostics
     dt_diagnostics  = 10.           ! [yr] Min. timestep to recalculate diagnostics
-    visc_method     = uniform       ! Type of viscosity field for sub-lithospheric mantle
-    rigidity_method = uniform       ! Type of thickness filed for elastic lithosphere
+    pad         = 0.e3              ! [m] Padding around the domain (preferably chosen as a power
+                                    ! of 2 multiplied by the resolution)
 
-    ! 1D reference model
+    ! Rheology
+    mantle = "uniform"        ! Choose mantle viscosity field, options:
+                                    ! "uniform", "gaussian_plus", "gaussian_minus", "rheology_file"
+    lithosphere = "uniform"   ! Choose lithospheric thickness field:
+                                    ! "uniform", "gaussian_plus", "gaussian_minus", "rheology_file"
+    viscosity_scaling_method = 0    ! -1: min, 0: nominal, 1: max, else: scale by provided number
+    layering    = "equalized"       ! "parallel", "equalized" or "folded"
     nl          = 2                 ! [1] Number of viscous layers for sub-lithospheric mantle
-    boundaries  = 70.0, 600.0       ! [km] Depth of layer boundaries. The first value is overwritten
-                                    ! if a lithospheric thickness field is provided.
-    viscosities = 1.e21, 2.e21      ! [Pa s] Layer viscosities. The values are overwritten if a 3D
+    zl = 70.0, 600.0                ! [km] Depth of layer boundaries. The first value is overwritten
+                                    ! if a lithospheric thickness filed is provided.
+    viscosities = 1.e21, 2.e21      ! [Pa s] Layer viscosities. Only used if
+                                    ! mantle = "uniform" or "gaussian_plus" or "gaussian_minus".
                                     ! viscosity field is provided.
-    tau         = 2000.0            ! [yr] Relaxation time
 
     ! Physical constants
     E               = 128.0     ! [GPa] Young modulus
     nu              = 0.28      ! [-] Poisson ratio
-    rho_ice         = 931.      ! [kg/m^3]
-    rho_seawater    = 1028.0    ! [kg/m^3]
-    rho_water       = 1000.0    ! [kg/m^3]
-    rho_uppermantle = 3300.0    ! [kg/m^3]
-    rho_litho       = 2600.0    ! [kg/m^3]  If 0: decouple the elastic displacement from the viscous one
-    g               = 9.81      ! [m/s^2]
-    r_earth         = 6.378e6   ! [m]  Earth radius, Coulon et al. (2021)
-    m_earth         = 5.972e24  ! [kg] Earth mass,   Coulon et al. (2021)
-    A_ocean_pd      = 3.625e14  ! [m^2] Ocean surface as in Goelzer et al. (2020)
+    rho_ice         = 931.          ! [kg/m^3]
+    rho_seawater    = 1028.0        ! [kg/m^3]
+    rho_water       = 1000.0        ! [kg/m^3]
+    rho_uppermantle = 3300.0        ! [kg/m^3]
+    rho_litho       = 2600.0        ! [kg/m^3]  Optionally set to 0 ==> decouple the elastic
+                                    ! displacement from the viscous one
+    g               = 9.81          ! [m/s^2]
+    r_earth         = 6.378e6       ! [m]  Earth radius, Coulon et al. (2021)
+    m_earth         = 5.972e24      ! [kg] Earth mass,   Coulon et al. (2021)
+    A_ocean_pd      = 3.625e14      ! [m^2] Ocean surface as in Goelzer et al. (2020)
+
+    ! Files
+    restart = "None"
+    mask_file = "None"
+    rheology_file = "None"
+    ocean_surface_file = "None"
 /

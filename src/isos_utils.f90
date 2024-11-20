@@ -24,8 +24,10 @@ module isos_utils
     public :: calc_fft_backward_c2r
     public :: calc_fft_forward_r2c
 
+    public :: init_dims
     public :: copy_sparsestate
     public :: copy_state
+    public :: pad_domain
     public :: cropdomain2output
     public :: cropstate2output
     public :: calc_cropindices
@@ -207,6 +209,22 @@ module isos_utils
 
     ! ===== MISC ==============================
 
+    subroutine init_dims(vec, mat, n, d)
+        implicit none
+        real(wp), intent(OUT)   :: vec(:)
+        real(wp), intent(OUT)   :: mat(:, :)
+        integer, intent(IN)     :: n
+        real(wp), intent(IN)    :: d
+        integer                 :: i
+
+        do i = 1, n
+            vec(i) = (i - n/2 - 1)*d
+            mat(i, :) = (i - n/2 - 1)*d
+        end do
+
+        return
+    end subroutine init_dims
+
     subroutine copy_sparsestate(ref, now)
         implicit none
         type(isos_state_class), intent(INOUT)   :: ref
@@ -233,7 +251,7 @@ module isos_utils
         call copy_sparsestate(ref, now)
         ref%dwdt            = now%dwdt
         ref%Haf             = now%Haf
-        ref%z_ss_perturb     = now%z_ss_perturb
+        ref%dz_ss     = now%dz_ss
         ref%canom_load      = now%canom_load
         ref%canom_full      = now%canom_full
         ref%mass_anom       = now%mass_anom
@@ -245,6 +263,35 @@ module isos_utils
     end subroutine copy_state
 
     ! ===== ARRAY SIZING FUNCTIONS ==============================
+
+
+    subroutine pad_domain(domain, n, nx_ice, ny_ice, dx, dy, min_pad)
+        implicit none
+        type(isos_domain_class), intent(INOUT) :: domain
+        integer, intent(INOUT) :: n
+        integer, intent(IN) :: nx_ice
+        integer, intent(IN) :: ny_ice
+        real(wp), intent(IN) :: dx
+        real(wp), intent(IN) :: dy
+        real(wp), intent(IN) :: min_pad
+
+        ! Pad domain
+        domain%nx_ice = nx_ice
+        domain%ny_ice = ny_ice
+        domain%dx = dx
+        domain%dy = dy
+
+        if (dx .eq. dy) then
+            domain%n_pad = nint(min_pad / dx)
+            n = max(nx_ice, ny_ice) + 2 * domain%n_pad
+            domain%nx = n
+            domain%ny = n
+        else
+            print*, 'Currently, only square grids are supported.'
+            stop
+        endif
+        write(*,*) domain%nx, domain%ny, n, domain%n_pad
+    end subroutine pad_domain
 
     subroutine cropdomain2output(output, domain)
         implicit none
@@ -284,7 +331,7 @@ module isos_utils
         output%dwdt = now%dwdt(i1:i2, j1:j2)
         output%w = now%w(i1:i2, j1:j2)
         output%we = now%we(i1:i2, j1:j2)
-        output%z_ss_perturb = now%z_ss_perturb(i1:i2, j1:j2)
+        output%dz_ss = now%dz_ss(i1:i2, j1:j2)
         output%canom_full = now%canom_full(i1:i2, j1:j2)
 
         output%maskocean = now%maskocean(i1:i2, j1:j2)
@@ -293,39 +340,42 @@ module isos_utils
         return
     end subroutine cropstate2output
 
-    subroutine calc_cropindices(icrop1, icrop2, jcrop1, jcrop2, nx, ny)
+    subroutine calc_cropindices(icrop1, icrop2, jcrop1, jcrop2, nx, ny, n_pad)
         implicit none
         integer, intent(INOUT)  :: icrop1, icrop2, jcrop1, jcrop2
         integer, intent(IN)     :: nx, ny
-        integer                 :: pad
+        integer                 :: n_pad
 
         if (nx .eq. ny) then
-            icrop1 = 1
-            icrop2 = nx
-            jcrop1 = 1
-            jcrop2 = ny
-
-        else if (nx .lt. ny) then
-            if ( mod(ny - nx, 2) .eq. 0) then
-                pad = (ny - nx) / 2
-            else
-                pad = (ny - nx - 1) / 2
-            end if
-            icrop1 = pad + 1
-            icrop2 = icrop1 + nx - 1
-            jcrop1 = 1
-            jcrop2 = ny
+            icrop1 = n_pad + 1
+            icrop2 = nx - n_pad
+            jcrop1 = n_pad + 1
+            jcrop2 = ny - n_pad
 
         else
-            if ( mod(nx - ny, 2) .eq. 0) then
-                pad = (nx - ny) / 2
-            else
-                pad = (nx - ny - 1) / 2
-            end if
-            icrop1 = 1
-            icrop2 = nx
-            jcrop1 = pad + 1
-            jcrop2 = jcrop1 + ny - 1
+            write(*,*) 'Currently, only square grids are supported.'
+            stop
+        ! else if (nx .lt. ny) then
+        !     if ( mod(ny - nx, 2) .eq. 0) then
+        !         pad = (ny - nx) / 2
+        !     else
+        !         pad = (ny - nx - 1) / 2
+        !     end if
+        !     icrop1 = pad + 1
+        !     icrop2 = icrop1 + nx - 1
+        !     jcrop1 = 1
+        !     jcrop2 = ny
+
+        ! else
+        !     if ( mod(nx - ny, 2) .eq. 0) then
+        !         pad = (nx - ny) / 2
+        !     else
+        !         pad = (nx - ny - 1) / 2
+        !     end if
+        !     icrop1 = 1
+        !     icrop2 = nx
+        !     jcrop1 = pad + 1
+        !     jcrop2 = jcrop1 + ny - 1
         end if
 
         return
@@ -351,7 +401,6 @@ module isos_utils
 
     ! ===== INTERPOLATION FUNCTIONS ==============================
 
-    ! Linear interpolation of scalar value over time
     subroutine interp_0d(x, y, xout, yout)
 
         implicit none
