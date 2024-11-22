@@ -17,7 +17,7 @@ ifeq ($(openmp), 1)
 
     FFTWROOT = exlib/fftw-omp
     INC_FFTW = -I${FFTWROOT}/include
-    LIB_FFTW = -L$(FFTWROOT)/lib -lfftw3 -lm
+    LIB_FFTW = -L$(FFTWROOT)/lib -lfftw3_omp -lfftw3 -lm
 
     FFLAGS  = -module $(objdir) -L$(objdir) -qopenmp 
 
