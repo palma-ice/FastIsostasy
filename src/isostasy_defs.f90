@@ -23,7 +23,7 @@ module isostasy_defs
 
         character(len=56)       :: mantle      ! [-] Method to prescribe viscosity field
         character(len=56)       :: lithosphere  ! [-] Method to prescribe lithospheric thickness field
-        real(wp)                 :: viscosity_scaling
+        real(wp)                :: viscosity_scaling
         
         real(wp), allocatable   :: zl(:)    ! [km] Layer boundaries
         real(wp), allocatable   :: viscosities(:)   ! [Pa s] Layer viscosities
@@ -61,6 +61,9 @@ module isostasy_defs
         real(wp) :: time_diagnostics            ! [yr] Current model time of last diagnostic update
         real(wp) :: time_prognostics            ! [yr] Current model time of last prognostic update
 
+        ! Internal parameter 
+        logical :: ref_was_set
+        
     end type
 
     type isos_domain_class

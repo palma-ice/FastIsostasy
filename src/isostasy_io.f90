@@ -10,6 +10,7 @@ module isostasy_io
     
     public :: isos_grid_write
     public :: isos_restart_write
+    public :: isos_restart_read
     
     contains
 
@@ -144,5 +145,64 @@ module isostasy_io
 
     end subroutine isos_restart_write
 
+    subroutine isos_restart_read(isos,filename,time)
+
+        implicit none
+
+        type(isos_class),  intent(INOUT) :: isos
+        character(len=*),  intent(IN)    :: filename
+        real(wp),          intent(IN)    :: time
+
+        call nc_read(filename, "z_bed_ref", isos%ref%z_bed, start=[1,1,1], &
+            count=[isos%domain%nx, isos%domain%ny, 1])
+        ! write(*,*) "Extrema z_bed_ref: ", minval(isos%ref%z_bed), maxval(isos%ref%z_bed)
+
+        call nc_read(filename, "H_ice_ref", isos%ref%Hice, start=[1,1,1], &
+            count=[isos%domain%nx, isos%domain%ny, 1])
+        ! write(*,*) "Extrema H_ice_ref: ", minval(isos%ref%Hice), maxval(isos%ref%Hice)
+
+        call nc_read(filename, "dz_ss_ref", isos%ref%dz_ss, start=[1,1,1], &
+            count=[isos%domain%nx, isos%domain%ny, 1])
+        ! write(*,*) "Extrema dz_ss_ref: ", minval(isos%ref%dz_ss), maxval(isos%ref%dz_ss)
+
+        call nc_read(filename, "w_ref", isos%ref%w, start=[1,1,1], &
+            count=[isos%domain%nx, isos%domain%ny, 1])
+        ! write(*,*) "Extrema w_ref: ", minval(isos%ref%w), maxval(isos%ref%w)
+
+        call nc_read(filename, "we_ref", isos%ref%we, start=[1,1,1], &
+            count=[isos%domain%nx, isos%domain%ny, 1])
+        ! write(*,*) "Extrema we_ref: ", minval(isos%ref%we), maxval(isos%ref%we)
+
+        call nc_read(filename, "bsl_ref", isos%ref%w_equilibrium, start=[1,1,1], &
+            count=[isos%domain%nx, isos%domain%ny, 1])
+        isos%ref%bsl = sum(isos%ref%w_equilibrium) / (isos%domain%nx * isos%domain%ny)
+        ! write(*,*) "bsl_ref: ", isos%ref%bsl
+
+        ! Read current state
+        call nc_read(filename, "z_bed", isos%now%z_bed, start=[1,1,1], &
+            count=[isos%domain%nx, isos%domain%ny, 1])
+        ! write(*,*) "Extrema z_bed: ", minval(isos%now%z_bed), maxval(isos%now%z_bed)
+
+        call nc_read(filename, "dz_ss", isos%now%dz_ss, start=[1,1,1], &
+            count=[isos%domain%nx, isos%domain%ny, 1])
+        ! write(*,*) "Extrema dz_ss: ", minval(isos%now%dz_ss), maxval(isos%now%dz_ss)
+
+        call nc_read(filename, "bsl", isos%now%bsl, start=[1], &
+            count=[1])
+        ! write(*,*) "bsl: ", isos%now%bsl
+
+        call nc_read(filename, "w", isos%now%w, start=[1,1,1], &
+            count=[isos%domain%nx, isos%domain%ny, 1])
+        ! write(*,*) "Extrema w: ", minval(isos%now%w), maxval(isos%now%w)
+
+        call nc_read(filename, "we", isos%now%we, start=[1,1,1], &
+            count=[isos%domain%nx, isos%domain%ny, 1])
+        ! write(*,*) "Extrema we: ", minval(isos%now%we), maxval(isos%now%we)
+
+        write(*,*) "isos_restart_read:: read in restart file: ", trim(filename)
+
+        return
+
+    end subroutine isos_restart_read
 
 end module isostasy_io

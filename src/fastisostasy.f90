@@ -33,10 +33,12 @@ module fastisostasy
     public :: isos_domain_class
     public :: isos_class
     public :: isos_init
+    public :: isos_init_ref
     public :: isos_init_state
     public :: isos_update
     public :: isos_end
     public :: isos_restart_write
+    public :: isos_restart_read
 
     contains
     
@@ -370,6 +372,13 @@ module fastisostasy
         isos%par%time_diagnostics = 1e10 
         isos%par%time_prognostics = 1e10
 
+        ! Initialize all values to zero initially for safety
+        call zero_init_state(isos%now)
+        call zero_init_state(isos%ref)
+
+        ! Initially the reference state has not been defined
+        isos%par%ref_was_set = .FALSE. 
+
         call cropdomain2output(isos%output, isos%domain)
         ! write(*,*) "isos_init:: complete." 
 
@@ -410,6 +419,32 @@ module fastisostasy
 
     end subroutine zero_init_state
 
+    subroutine isos_init_ref(isos, z_bed, H_ice, bsl, dz_ss)
+
+        implicit none
+
+        type(isos_class), intent(INOUT) :: isos
+        real(wp), intent(IN) :: z_bed(:, :)                 ! [m] Bedrock elevation
+        real(wp), intent(IN) :: H_ice(:, :)                 ! [m] Ice thickness
+        real(wp), intent(IN), optional :: bsl               ! [a] Barystatic sea level
+        real(wp), intent(IN), optional :: dz_ss(:, :)       ! [m] Sea surface perturbation
+        
+        isos%ref%z_bed(isos%domain%icrop1:isos%domain%icrop2, &
+                       isos%domain%jcrop1:isos%domain%jcrop2) = z_bed
+        isos%ref%Hice(isos%domain%icrop1:isos%domain%icrop2, &
+                      isos%domain%jcrop1:isos%domain%jcrop2)  = H_ice
+        
+        if (present(bsl))   isos%ref%bsl   = bsl
+        if (present(dz_ss)) isos%ref%dz_ss = dz_ss
+        ! No need to set w, we, dz_ss and bsl to 0 because `zero_init_state(isos%ref)` in isos_init()
+        
+        ! Now the reference state has been defined
+        isos%par%ref_was_set = .TRUE. 
+
+        return
+
+    end subroutine isos_init_ref
+
     subroutine isos_init_state(isos, z_bed, H_ice, time, w, we, bsl, dz_ss)
 
         implicit none
@@ -424,73 +459,37 @@ module fastisostasy
         real(wp), intent(IN), optional :: w(:, :)           ! [m] Viscous displacement
         real(wp), intent(IN), optional :: we(:, :)          ! [m] Elastic displacement
 
-        call zero_init_state(isos%now)
-        call zero_init_state(isos%ref)
         ! write(*,*) "BSL ref: ", isos%ref%bsl
 
         if (isos%par%use_restart) then
             ! write(*,*) "Reading restart file..."
-            call nc_read(isos%par%restart, "z_bed_ref", isos%ref%z_bed, start=[1,1,1], &
-                count=[isos%domain%nx, isos%domain%ny, 1])
-            ! write(*,*) "Extrema z_bed_ref: ", minval(isos%ref%z_bed), maxval(isos%ref%z_bed)
+            call isos_restart_read(isos,isos%par%restart,time)
 
-            call nc_read(isos%par%restart, "H_ice_ref", isos%ref%Hice, start=[1,1,1], &
-                count=[isos%domain%nx, isos%domain%ny, 1])
-            ! write(*,*) "Extrema H_ice_ref: ", minval(isos%ref%Hice), maxval(isos%ref%Hice)
-
-            call nc_read(isos%par%restart, "dz_ss_ref", isos%ref%dz_ss, start=[1,1,1], &
-                count=[isos%domain%nx, isos%domain%ny, 1])
-            ! write(*,*) "Extrema dz_ss_ref: ", minval(isos%ref%dz_ss), maxval(isos%ref%dz_ss)
-
-            call nc_read(isos%par%restart, "w_ref", isos%ref%w, start=[1,1,1], &
-                count=[isos%domain%nx, isos%domain%ny, 1])
-            ! write(*,*) "Extrema w_ref: ", minval(isos%ref%w), maxval(isos%ref%w)
-
-            call nc_read(isos%par%restart, "we_ref", isos%ref%we, start=[1,1,1], &
-                count=[isos%domain%nx, isos%domain%ny, 1])
-            ! write(*,*) "Extrema we_ref: ", minval(isos%ref%we), maxval(isos%ref%we)
-
-            call nc_read(isos%par%restart, "bsl_ref", isos%ref%w_equilibrium, start=[1,1,1], &
-                count=[isos%domain%nx, isos%domain%ny, 1])
-            isos%ref%bsl = sum(isos%ref%w_equilibrium) / (isos%domain%nx * isos%domain%ny)
-            ! write(*,*) "bsl_ref: ", isos%ref%bsl
-
-            ! Read current state
-            call nc_read(isos%par%restart, "z_bed", isos%now%z_bed, start=[1,1,1], &
-                count=[isos%domain%nx, isos%domain%ny, 1])
-            ! write(*,*) "Extrema z_bed: ", minval(isos%now%z_bed), maxval(isos%now%z_bed)
-
-            call nc_read(isos%par%restart, "dz_ss", isos%now%dz_ss, start=[1,1,1], &
-                count=[isos%domain%nx, isos%domain%ny, 1])
-            ! write(*,*) "Extrema dz_ss: ", minval(isos%now%dz_ss), maxval(isos%now%dz_ss)
-
-            call nc_read(isos%par%restart, "bsl", isos%now%bsl, start=[1], &
-                count=[1])
-            ! write(*,*) "bsl: ", isos%now%bsl
-
-            call nc_read(isos%par%restart, "w", isos%now%w, start=[1,1,1], &
-                count=[isos%domain%nx, isos%domain%ny, 1])
-            ! write(*,*) "Extrema w: ", minval(isos%now%w), maxval(isos%now%w)
-
-            call nc_read(isos%par%restart, "we", isos%now%we, start=[1,1,1], &
-                count=[isos%domain%nx, isos%domain%ny, 1])
-            ! write(*,*) "Extrema we: ", minval(isos%now%we), maxval(isos%now%we)
+            ! Reference state has been set via the restart file
+            isos%par%ref_was_set = .TRUE. 
 
         else
             isos%now%z_bed(isos%domain%icrop1:isos%domain%icrop2, &
                 isos%domain%jcrop1:isos%domain%jcrop2) = z_bed
             isos%now%Hice(isos%domain%icrop1:isos%domain%icrop2, &
                 isos%domain%jcrop1:isos%domain%jcrop2) = H_ice
-            isos%now%bsl = 0.0
-            isos%now%dz_ss = 0.0
+            if (present(bsl)) then
+                isos%now%bsl = bsl
+            else
+                isos%now%bsl   = 0.0
+            end if
+            if (present(dz_ss)) then
+                isos%now%dz_ss(isos%domain%icrop1:isos%domain%icrop2, &
+                isos%domain%jcrop1:isos%domain%jcrop2) = dz_ss
+            else
+                isos%now%dz_ss = 0.0
+            end if
 
-            isos%ref%z_bed(isos%domain%icrop1:isos%domain%icrop2, &
-                isos%domain%jcrop1:isos%domain%jcrop2) = z_bed
-            isos%ref%Hice(isos%domain%icrop1:isos%domain%icrop2, &
-                isos%domain%jcrop1:isos%domain%jcrop2) = H_ice
-            isos%ref%bsl = isos%now%bsl
-            isos%ref%dz_ss = isos%now%dz_ss
-            ! No need to set w, we, dz_ss and bsl to 0 because `zero_init_state(isos%now)` above
+            if (.not. isos%par%ref_was_set) then
+                call isos_init_ref(isos,isos%now%z_bed,isos%now%Hice,isos%now%bsl,isos%now%dz_ss)
+                write(*,*) "isos_init_state:: reference state was set to initial state."
+            end if
+
         end if
 
         call calc_H_above_bsl(isos%ref, isos%par)
