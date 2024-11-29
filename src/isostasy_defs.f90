@@ -67,7 +67,7 @@ module isostasy_defs
     end type
 
     type isos_domain_class
-        integer                 :: nx_ice, ny_ice, pad_x, pad_y, n_pad
+        integer                 :: nx_ice, ny_ice, n_pad_x, n_pad_y, n_pad_xy
         integer                 :: i1, i2, j1, j2
         integer                 :: icrop1, icrop2, jcrop1, jcrop2
         integer                 :: offset
@@ -143,7 +143,7 @@ module isostasy_defs
         logical, allocatable :: maskcontinent(:, :)  ! [1] Continent mask
     end type isos_state_class
 
-    type isos_output_class
+    type isos_out_class
         real(wp), allocatable       :: He_lith(:, :)
         real(wp), allocatable       :: D_lith(:, :)
         real(wp), allocatable       :: eta_eff(:, :)
@@ -169,14 +169,14 @@ module isostasy_defs
         logical, allocatable        :: maskocean(:, :)
         logical, allocatable        :: maskgrounded(:, :)
         logical, allocatable        :: maskcontinent(:, :)
-    end type isos_output_class
+    end type isos_out_class
 
     type isos_class
         type(isos_param_class)  :: par
         type(isos_domain_class) :: domain
         type(isos_state_class)  :: now
         type(isos_state_class)  :: ref
-        type(isos_output_class) :: output
+        type(isos_out_class) :: out
     end type
 
     public :: sp, dp, wp

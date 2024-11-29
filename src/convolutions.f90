@@ -22,7 +22,7 @@ module convolutions
         type(isos_domain_class), intent(INOUT)  :: domain
 
         call calc_convolution_indices(domain%i1, domain%i2, domain%j1, domain%j2, &
-            domain%offset, domain%ny, domain%nx)
+            domain%offset, domain%nx, domain%ny)
         return
     end subroutine convenient_calc_convolution_indices
 

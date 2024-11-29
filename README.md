@@ -84,8 +84,8 @@ call isos_init_state(isos1, z_bed, H_ice, time)
 do time = 1, nt
     ! ...
     call isos_update(isos1, H_ice, time, dwdt_corr=dzbdt_corr)
-    z_bed = isos1%output%z_bed
-    z_sl  = isos1%output%z_ss
+    z_bed = isos1%out%z_bed
+    z_sl  = isos1%out%z_ss
     ! ...
 end do
 
