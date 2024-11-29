@@ -170,7 +170,7 @@ module fastisostasy
             trim(isos%par%mask_file) .eq. "none" .or. &
             trim(isos%par%mask_file) .eq. "no") then
             
-            if (isos%par%interactive_sealevel .eq. .false.) then
+            if (isos%par%interactive_sealevel .eqv. .false.) then
                 isos%domain%maskactive = .true.
             else if (isos%par%min_pad > 100.e3) then
                 isos%domain%maskactive(isos%domain%icrop1:isos%domain%icrop2, &
