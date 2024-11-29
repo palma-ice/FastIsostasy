@@ -2,7 +2,7 @@ module isos_utils
 
     use, intrinsic :: iso_c_binding
     use isostasy_defs, only : sp, dp, wp, pi, isos_domain_class, isos_param_class, &
-        isos_state_class, isos_output_class
+        isos_state_class, isos_out_class
 
     implicit none
     include 'fftw3.f03'
@@ -27,10 +27,12 @@ module isos_utils
     public :: init_dims
     public :: copy_sparsestate
     public :: copy_state
-    public :: pad_domain
-    public :: cropdomain2output
-    public :: cropstate2output
-    public :: calc_cropindices
+    public :: init_domain_size
+    public :: in2out
+    public :: in2out_logical
+    public :: out2in
+    public :: cropdomain2out
+    public :: cropstate2out
     public :: extendice2isostasy
 
     public :: interp_0d
@@ -264,137 +266,156 @@ module isos_utils
 
     ! ===== ARRAY SIZING FUNCTIONS ==============================
 
-
-    subroutine pad_domain(domain, n, nx_ice, ny_ice, dx, dy, min_pad)
+    subroutine init_domain_size(domain, nx_ice, ny_ice, dx, dy, min_pad)
         implicit none
         type(isos_domain_class), intent(INOUT) :: domain
-        integer, intent(INOUT) :: n
-        integer, intent(IN) :: nx_ice
-        integer, intent(IN) :: ny_ice
-        real(wp), intent(IN) :: dx
-        real(wp), intent(IN) :: dy
-        real(wp), intent(IN) :: min_pad
+        integer :: nx_tmp, ny_tmp
+        integer :: n, nx_ice, ny_ice
+        real(wp) :: dx, dy, min_pad
 
-        ! Pad domain
-        domain%nx_ice = nx_ice
-        domain%ny_ice = ny_ice
-        domain%dx = dx
-        domain%dy = dy
-
-        if (dx .eq. dy) then
-            domain%n_pad = nint(min_pad / dx)
-            n = max(nx_ice, ny_ice) + 2 * domain%n_pad
-            domain%nx = n
-            domain%ny = n
-        else
-            print*, 'Currently, only square grids are supported.'
+        if (min_pad .lt. 0.0) then
+            print*, 'Minimum padding must be positive.'
             stop
-        endif
-        write(*,*) domain%nx, domain%ny, n, domain%n_pad
-    end subroutine pad_domain
-
-    subroutine cropdomain2output(output, domain)
-        implicit none
-        type(isos_output_class), intent(INOUT)  :: output
-        type(isos_domain_class), intent(IN)     :: domain
-        integer                                 :: i1, i2, j1, j2
-
-        i1 = domain%icrop1
-        i2 = domain%icrop2
-        j1 = domain%jcrop1
-        j2 = domain%jcrop2
-
-        output%He_lith = domain%He_lith(i1:i2, j1:j2)
-        output%D_lith = domain%D_lith(i1:i2, j1:j2)
-        output%eta_eff = domain%eta_eff(i1:i2, j1:j2)
-        output%tau = domain%tau(i1:i2, j1:j2)
-        output%kappa = domain%kappa(i1:i2, j1:j2)
-
-        output%kei = domain%kei(i1:i2, j1:j2)
-        output%GE = domain%GE(i1:i2, j1:j2)
-        output%GV = domain%GV(i1:i2, j1:j2)
-        output%GN = domain%GN(i1:i2, j1:j2)
-
-        return
-    end subroutine cropdomain2output
-
-    subroutine cropstate2output(output, now, i1, i2, j1, j2)
-        implicit none
-        type(isos_output_class), intent(INOUT)  :: output
-        type(isos_state_class), intent(IN)      :: now
-        integer, intent(IN)                     :: i1, i2, j1, j2
-
-        output%Hice = now%Hice(i1:i2, j1:j2)
-        output%rsl = now%rsl(i1:i2, j1:j2)
-        output%z_ss = now%z_ss(i1:i2, j1:j2)
-        output%z_bed = now%z_bed(i1:i2, j1:j2)
-        output%dwdt = now%dwdt(i1:i2, j1:j2)
-        output%w = now%w(i1:i2, j1:j2)
-        output%we = now%we(i1:i2, j1:j2)
-        output%dz_ss = now%dz_ss(i1:i2, j1:j2)
-        output%canom_full = now%canom_full(i1:i2, j1:j2)
-
-        output%maskocean = now%maskocean(i1:i2, j1:j2)
-        output%maskgrounded = now%maskgrounded(i1:i2, j1:j2)
-        output%maskcontinent = now%maskcontinent(i1:i2, j1:j2)
-        return
-    end subroutine cropstate2output
-
-    subroutine calc_cropindices(icrop1, icrop2, jcrop1, jcrop2, nx, ny, n_pad)
-        implicit none
-        integer, intent(INOUT)  :: icrop1, icrop2, jcrop1, jcrop2
-        integer, intent(IN)     :: nx, ny
-        integer                 :: n_pad
-
-        if (nx .eq. ny) then
-            icrop1 = n_pad + 1
-            icrop2 = nx - n_pad
-            jcrop1 = n_pad + 1
-            jcrop2 = ny - n_pad
-
-        else
-            write(*,*) 'Currently, only square grids are supported.'
-            stop
-        ! else if (nx .lt. ny) then
-        !     if ( mod(ny - nx, 2) .eq. 0) then
-        !         pad = (ny - nx) / 2
-        !     else
-        !         pad = (ny - nx - 1) / 2
-        !     end if
-        !     icrop1 = pad + 1
-        !     icrop2 = icrop1 + nx - 1
-        !     jcrop1 = 1
-        !     jcrop2 = ny
-
-        ! else
-        !     if ( mod(nx - ny, 2) .eq. 0) then
-        !         pad = (nx - ny) / 2
-        !     else
-        !         pad = (nx - ny - 1) / 2
-        !     end if
-        !     icrop1 = 1
-        !     icrop2 = nx
-        !     jcrop1 = pad + 1
-        !     jcrop2 = jcrop1 + ny - 1
         end if
 
-        return
-    end subroutine calc_cropindices
+        if (dx .ne. dy) then
+            print*, 'Currently, only square grid cells are supported.'
+            stop
+        end if
 
-    subroutine extendice2isostasy(now, z_bed, H_ice, z_ss, i1, i2, j1, j2)
+        domain%dx = dx
+        domain%dy = dy
+        domain%icrop1 = 1
+        domain%jcrop1 = 1
+
+        nx_tmp = nx_ice
+        if (mod(nx_ice, 2) .ne. 0) then
+            domain%icrop1 = domain%icrop1 + 1
+            nx_tmp = nx_ice + 1
+        end if
+
+        ny_tmp = ny_ice
+        if (mod(ny_ice, 2) .ne. 0) then
+            domain%jcrop1 = domain%jcrop1 + 1
+            ny_tmp = ny_ice + 1
+        end if
+
+        write(*,*) nx_tmp, ny_tmp
+
+        domain%n_pad_xy = nint(min_pad / domain%dx)
+        domain%n_pad_x = domain%n_pad_xy
+        domain%n_pad_y = domain%n_pad_xy
+
+        write(*,*) domain%n_pad_x, domain%n_pad_y
+
+        if (nx_tmp .lt. ny_tmp) then
+            domain%n_pad_x = domain%n_pad_x + (ny_tmp - nx_tmp) / 2
+        elseif (nx_tmp .gt. ny_tmp) then
+            domain%n_pad_y = domain%n_pad_y + (nx_tmp - ny_tmp) / 2
+        end if
+
+        write(*,*) domain%n_pad_x, domain%n_pad_y
+
+        n = nx_tmp + 2 * domain%n_pad_x
+        if (n .ne. (ny_tmp + 2 * domain%n_pad_y)) then
+            print*, 'Failed to correctly pad domain.'
+            stop
+        end if
+
+        domain%nx = n
+        domain%ny = n
+        domain%offset = 0
+        
+        write(*,*) domain%nx, domain%ny
+
+        domain%icrop1 = domain%icrop1 + domain%n_pad_x
+        domain%icrop2 = domain%nx - domain%n_pad_x
+        domain%jcrop1 = domain%jcrop1 + domain%n_pad_y
+        domain%jcrop2 = domain%ny - domain%n_pad_y
+
+    end subroutine init_domain_size
+
+    subroutine in2out(X_out, X_in, domain)
+        implicit none
+        real(wp), intent(INOUT) :: X_out(:, :)
+        real(wp), intent(IN) :: X_in(:, :)
+        type(isos_domain_class), intent(IN) :: domain
+
+        X_out = X_in(domain%icrop1:domain%icrop2, domain%jcrop1:domain%jcrop2)
+        return
+    end subroutine in2out
+
+    subroutine in2out_logical(X_out, X_in, domain)
+        implicit none
+        logical, intent(INOUT) :: X_out(:, :)
+        logical, intent(IN) :: X_in(:, :)
+        type(isos_domain_class), intent(IN) :: domain
+
+        X_out = X_in(domain%icrop1:domain%icrop2, domain%jcrop1:domain%jcrop2)
+        return
+    end subroutine in2out_logical
+
+    subroutine out2in(X_in, X_out, domain)
+        implicit none
+        real(wp), intent(INOUT) :: X_in(:, :)
+        real(wp), intent(IN) :: X_out(:, :)
+        type(isos_domain_class), intent(IN) :: domain
+
+        X_in(domain%icrop1:domain%icrop2, domain%jcrop1:domain%jcrop2) = X_out
+        return
+    end subroutine out2in
+
+    subroutine cropdomain2out(out, domain)
+        implicit none
+        type(isos_out_class), intent(INOUT)     :: out
+        type(isos_domain_class), intent(IN)     :: domain
+
+        call in2out(out%He_lith, domain%He_lith, domain)
+        call in2out(out%D_lith, domain%D_lith, domain)
+        call in2out(out%eta_eff, domain%eta_eff, domain)
+        call in2out(out%tau, domain%tau, domain)
+        call in2out(out%kappa, domain%kappa, domain)
+
+        call in2out(out%kei, domain%kei, domain)
+        call in2out(out%GE, domain%GE, domain)
+        call in2out(out%GV, domain%GV, domain)
+        call in2out(out%GN, domain%GN, domain)
+
+    end subroutine cropdomain2out
+
+    subroutine cropstate2out(out, now, domain)
+        implicit none
+        type(isos_out_class), intent(INOUT)     :: out
+        type(isos_state_class), intent(IN)      :: now
+        type(isos_domain_class), intent(IN)     :: domain
+
+        call in2out(out%Hice, now%Hice, domain)
+        call in2out(out%rsl, now%rsl, domain)
+        call in2out(out%z_ss, now%z_ss, domain)
+        call in2out(out%z_bed, now%z_bed, domain)
+        call in2out(out%dwdt, now%dwdt, domain)
+        call in2out(out%w, now%w, domain)
+        call in2out(out%we, now%we, domain)
+        call in2out(out%dz_ss, now%dz_ss, domain)
+        call in2out(out%canom_full, now%canom_full, domain)
+        
+        call in2out_logical(out%maskocean, now%maskocean, domain)
+        call in2out_logical(out%maskgrounded, now%maskgrounded, domain)
+        call in2out_logical(out%maskcontinent, now%maskcontinent, domain)
+
+    end subroutine cropstate2out
+
+    subroutine extendice2isostasy(now, z_bed, H_ice, domain)
         implicit none
         type(isos_state_class), intent(INOUT)   :: now
         real(wp), intent(IN)                    :: z_bed(:, :)
         real(wp), intent(IN)                    :: H_ice(:, :)
-        real(wp), intent(IN)                    :: z_ss(:, :)
-        integer, intent(IN)                     :: i1, i2, j1, j2
+        type(isos_domain_class), intent(IN)     :: domain
 
         now%z_bed = 0.0
         now%Hice = 0.0
-        now%z_ss = 0.0
-        now%z_bed(i1:i2, j1:j2) = z_bed
-        now%Hice(i1:i2, j1:j2) = H_ice
-        now%z_ss(i1:i2, j1:j2) = z_ss
+        call out2in(now%z_bed, z_bed, domain)
+        call out2in(now%Hice, H_ice, domain)
         return
     end subroutine extendice2isostasy
 
