@@ -312,6 +312,7 @@ module fastisostasy
                         where (eta_raw < 16) eta_raw = 16
                         where (eta_raw > 23) eta_raw = 23
 
+                        isos%domain%eta = 21.0
                         do l = 1, isos%par%nl
                             do i = 1, isos%domain%nx
                             do j = 1, isos%domain%ny
