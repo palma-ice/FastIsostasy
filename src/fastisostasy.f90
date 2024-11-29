@@ -13,7 +13,7 @@ module fastisostasy
     use, intrinsic :: iso_c_binding
 
     use isostasy_defs, only : sp, dp, wp, pi, isos_param_class, isos_state_class, &
-        isos_domain_class, isos_output_class, isos_class
+        isos_domain_class, isos_out_class, isos_class
     use green_functions
     use kelvin_function
     use isos_utils
@@ -59,7 +59,7 @@ module fastisostasy
 
         ! Local variables
         logical                 :: correct_distortion
-        integer                 :: n, nbsl, i, j, l, ncz    ! ncz = helper to load 3D fields
+        integer                 :: nbsl, i, j, l, ncz    ! ncz = helper to load 3D fields
         real(wp), allocatable   :: z(:), depth(:)
         real(dp), allocatable   :: buffer_2n(:, :)
         real(dp), allocatable   :: buffer_n(:, :)
@@ -67,7 +67,6 @@ module fastisostasy
         real(wp)                :: D_lith_const
         real(wp)                :: viscosity_scaling
 
-        ! First, load parameters from parameter file `filename`
         ! write(*,*) "Defining params..."
         call isos_par_load(isos%par, filename, group)
 
@@ -75,7 +74,12 @@ module fastisostasy
         if (present(rho_ice))   isos%par%rho_ice                = rho_ice
         
         ! write(*,*) "Padding domain..."
-        call pad_domain(isos%domain, n, nx_ice, ny_ice, dx, dy, isos%par%min_pad)
+        call init_domain_size(isos%domain, nx_ice, ny_ice, dx, dy, isos%par%min_pad)
+        write(*,*) "icrop1: ", isos%domain%icrop1
+        write(*,*) "icrop2: ", isos%domain%icrop2
+        write(*,*) "jcrop1: ", isos%domain%jcrop1
+        write(*,*) "jcrop2: ", isos%domain%jcrop2
+        call convenient_calc_convolution_indices(isos%domain)
 
         if (isos%par%variable_ocean_surface) then
             nbsl = nc_size(isos%par%ocean_surface_file, "z")
@@ -85,9 +89,11 @@ module fastisostasy
             nbsl = 1
         end if
 
-        call allocate_isos(isos, n, n, isos%par%nl, nbsl)
-        call init_dims(isos%domain%xc, isos%domain%x, n, dx)
-        call init_dims(isos%domain%yc, isos%domain%y, n, dy)
+        call allocate_isos(isos, nx_ice, ny_ice, isos%par%nl, nbsl)
+        isos%domain%K(:, :) = 1
+        if (present(K))         isos%domain%K                   = K
+        call init_dims(isos%domain%xc, isos%domain%x, isos%domain%nx, dx)
+        call init_dims(isos%domain%yc, isos%domain%y, isos%domain%ny, dy)
 
         if (isos%par%variable_ocean_surface) then
             ! write(*,*) "Reading ocean surface file..."
@@ -97,44 +103,35 @@ module fastisostasy
                 start=[1], count=[nbsl])
         end if
 
-        call calc_cropindices(isos%domain%icrop1, isos%domain%icrop2, &
-            isos%domain%jcrop1, isos%domain%jcrop2, isos%domain%nx, isos%domain%ny, &
-            isos%domain%n_pad)
-        ! write(*,*) "icrop1: ", isos%domain%icrop1
-        ! write(*,*) "icrop2: ", isos%domain%icrop2
-        ! write(*,*) "jcrop1: ", isos%domain%jcrop1
-        ! write(*,*) "jcrop2: ", isos%domain%jcrop2
-
-        isos%domain%K(:, :) = 1
-        if (present(K))         isos%domain%K                   = K
-        
-        ! Init plans
-        ! write(*,*) "Computing FFT plans..."
-        allocate(buffer_2n(2*n-1, 2*n-1))
+        ! write(*,*) "Initializing FFT plans..."
+        allocate(buffer_2n(2*isos%domain%nx-1, 2*isos%domain%ny-1))
         buffer_2n = 0.0
-        allocate(buffer_n(n, n))
-        buffer_n = isos%now%w
-        isos%domain%forward_fftplan_r2r = fftw_plan_r2r_2d(n, n, buffer_n, &
-            buffer_n, FFTW_DHT, FFTW_DHT, FFTW_ESTIMATE)
-        isos%now%w = buffer_n
-        isos%domain%backward_fftplan_r2r = fftw_plan_r2r_2d(n, n, buffer_n, &
-            buffer_n, FFTW_DHT, FFTW_DHT, FFTW_ESTIMATE)
-        isos%now%w = buffer_n
-        isos%domain%forward_dftplan_r2c = fftw_plan_dft_r2c_2d(2*n-1, 2*n-1, &
-            buffer_2n, isos%domain%FGE, 1)
-        isos%domain%backward_dftplan_c2r = fftw_plan_dft_c2r_2d(2*n-1, 2*n-1, &
-            isos%domain%FGE, buffer_2n, 1)
+        allocate(buffer_n(isos%domain%nx, isos%domain%ny))
+        buffer_n = 0.0
 
+        isos%domain%forward_fftplan_r2r = fftw_plan_r2r_2d(isos%domain%nx, isos%domain%ny, &
+            buffer_n, buffer_n, FFTW_DHT, FFTW_DHT, FFTW_ESTIMATE)
+
+        isos%domain%backward_fftplan_r2r = fftw_plan_r2r_2d(isos%domain%nx, isos%domain%ny, &
+            buffer_n, buffer_n, FFTW_DHT, FFTW_DHT, FFTW_ESTIMATE)
+
+        isos%domain%forward_dftplan_r2c = fftw_plan_dft_r2c_2d(2*isos%domain%nx-1, &
+            2*isos%domain%ny-1, buffer_2n, isos%domain%FGE, 1)
+
+        isos%domain%backward_dftplan_c2r = fftw_plan_dft_c2r_2d(2*isos%domain%nx-1, &
+            2*isos%domain%ny-1, isos%domain%FGE, buffer_2n, 1)
+
+        ! write(*,*) "Initializing distorted domain..."
         isos%domain%dx_matrix = isos%domain%dx * isos%domain%K
         isos%domain%dy_matrix = isos%domain%dy * isos%domain%K
         isos%domain%A = isos%domain%dx_matrix * isos%domain%dy_matrix
-        call convenient_calc_convolution_indices(isos%domain)
 
-        ! Init parameters
+        ! write(*,*) "Initializing physical constants..."
         isos%par%sec_per_year = 3600.0 * 24.0 * 365.25           ! [s/a]
         isos%par%compressibility_correction = 1.5 / (1 + isos%par%nu)
         call calc_density_correction_factor(isos%par)
 
+        ! write(*,*) "Initializing lithosphere..."
         isos%domain%He_lith = isos%par%zl(1)
         call calc_homogeneous_rigidity(D_lith_const, isos%par%E, &
             isos%par%zl(1), isos%par%nu)
@@ -142,9 +139,12 @@ module fastisostasy
             isos%par%rho_uppermantle, isos%par%g)
         isos%domain%D_lith = D_lith_const
 
+        ! write(*,*) "Initializing elastic Green's function..."
         call calc_elastic_green(isos%domain%GE, dx=isos%domain%dx, dy=isos%domain%dx)
         call precompute_kernel(isos%domain%forward_dftplan_r2c, isos%domain%GE, &
             isos%domain%FGE, isos%domain%nx, isos%domain%ny)
+
+        ! write(*,*) "Initializing gravitational Green's function..."
         if (isos%par%interactive_sealevel) then
             call calc_z_ss_green(isos%domain%GN, isos%par%m_earth, &
                 isos%par%r_earth, dx=isos%domain%dx, dy=isos%domain%dx)
@@ -158,16 +158,15 @@ module fastisostasy
         if (trim(isos%par%mask_file) .eq. "None" .or. &
             trim(isos%par%mask_file) .eq. "none" .or. &
             trim(isos%par%mask_file) .eq. "no") then 
-            isos%domain%maskactive(:, :) = .true.
-        else 
+            isos%domain%maskactive(isos%domain%icrop1:isos%domain%icrop2, &
+                isos%domain%jcrop1:isos%domain%jcrop2) = .true.
+        else
             call nc_read(isos%par%mask_file, "M", &
                 buffer_n(isos%domain%icrop1:isos%domain%icrop2, &
                 isos%domain%jcrop1:isos%domain%jcrop2), start=[1, 1], &
                 count=[isos%domain%nx_ice, isos%domain%ny_ice])
             where(buffer_n .gt. 0.5) isos%domain%maskactive = .true.
         end if
-
-
 
         select case(isos%par%method)
 
@@ -369,26 +368,30 @@ module fastisostasy
             end select
 
         ! Set time to very large value in the future 
-        isos%par%time_diagnostics = 1e10 
+        isos%par%time_diagnostics = 1e10
         isos%par%time_prognostics = 1e10
 
         ! Initialize all values to zero initially for safety
-        call zero_init_state(isos%now)
-        call zero_init_state(isos%ref)
+        call zero_init_state(isos%now, z_bed_background=-1e6_wp)
+        call zero_init_state(isos%ref, z_bed_background=-1e6_wp)
 
         ! Initially the reference state has not been defined
-        isos%par%ref_was_set = .FALSE. 
+        isos%par%ref_was_set = .FALSE.
 
-        call cropdomain2output(isos%output, isos%domain)
+        write(*,*) "out%He_lith", size(isos%out%He_lith, 1), size(isos%out%He_lith, 2)
+        call cropdomain2out(isos%out, isos%domain)
+        write(*,*) "out%He_lith", size(isos%out%He_lith, 1), size(isos%out%He_lith, 2)
+
         ! write(*,*) "isos_init:: complete." 
 
         return
     end subroutine isos_init
 
-    subroutine zero_init_state(state)
+    subroutine zero_init_state(state, z_bed_background)
         implicit none
 
         type(isos_state_class), intent(INOUT) :: state
+        real(wp), intent(IN), optional :: z_bed_background
 
         state%bsl            = 0.0
         state%V_af           = 0.0
@@ -396,7 +399,11 @@ module fastisostasy
         state%V_pov          = 0.0
 
         ! This is then changed by isos_init_state
-        state%z_bed             = 0.0
+        if (present(z_bed_background)) then
+            state%z_bed = z_bed_background
+        else
+            state%z_bed = 0.0
+        end if
         state%dwdt              = 0.0
         state%w                 = 0.0
         state%w_equilibrium     = 0.0
@@ -429,10 +436,8 @@ module fastisostasy
         real(wp), intent(IN), optional :: bsl               ! [a] Barystatic sea level
         real(wp), intent(IN), optional :: dz_ss(:, :)       ! [m] Sea surface perturbation
         
-        isos%ref%z_bed(isos%domain%icrop1:isos%domain%icrop2, &
-                       isos%domain%jcrop1:isos%domain%jcrop2) = z_bed
-        isos%ref%Hice(isos%domain%icrop1:isos%domain%icrop2, &
-                      isos%domain%jcrop1:isos%domain%jcrop2)  = H_ice
+        isos%ref%z_bed = z_bed
+        isos%ref%Hice = H_ice
         
         if (present(bsl))   isos%ref%bsl   = bsl
         if (present(dz_ss)) isos%ref%dz_ss = dz_ss
@@ -469,24 +474,21 @@ module fastisostasy
             isos%par%ref_was_set = .TRUE. 
 
         else
-            isos%now%z_bed(isos%domain%icrop1:isos%domain%icrop2, &
-                isos%domain%jcrop1:isos%domain%jcrop2) = z_bed
-            isos%now%Hice(isos%domain%icrop1:isos%domain%icrop2, &
-                isos%domain%jcrop1:isos%domain%jcrop2) = H_ice
+            call out2in(isos%now%z_bed, z_bed, isos%domain)
+            call out2in(isos%now%Hice, H_ice, isos%domain)
             if (present(bsl)) then
                 isos%now%bsl = bsl
             else
                 isos%now%bsl   = 0.0
             end if
             if (present(dz_ss)) then
-                isos%now%dz_ss(isos%domain%icrop1:isos%domain%icrop2, &
-                isos%domain%jcrop1:isos%domain%jcrop2) = dz_ss
+                call out2in(isos%now%dz_ss, dz_ss, isos%domain)
             else
                 isos%now%dz_ss = 0.0
             end if
 
             if (.not. isos%par%ref_was_set) then
-                call isos_init_ref(isos,isos%now%z_bed,isos%now%Hice,isos%now%bsl,isos%now%dz_ss)
+                call isos_init_ref(isos, isos%now%z_bed, isos%now%Hice, isos%now%bsl, isos%now%dz_ss)
                 write(*,*) "isos_init_state:: reference state was set to initial state."
             end if
 
@@ -496,9 +498,7 @@ module fastisostasy
         call calc_rsl(isos%ref)
 
         ! Store initial bedrock field
-        call extendice2isostasy(isos%now, z_bed, H_ice, isos%now%z_ss, &
-            isos%domain%icrop1, isos%domain%icrop2, &
-            isos%domain%jcrop1, isos%domain%jcrop2)
+        call extendice2isostasy(isos%now, z_bed, H_ice, isos%domain)
         ! call copy_state(isos%ref, isos%now)
 
         ! Define initial time of isostasy model
@@ -551,16 +551,14 @@ module fastisostasy
 
         ! write(*,*) "isos_update:: updating ice thickness..."
         isos%now%Hice = 0.0
-        isos%now%Hice(isos%domain%icrop1:isos%domain%icrop2, &
-            isos%domain%jcrop1:isos%domain%jcrop2) = H_ice
+        call out2in(isos%now%Hice, H_ice, isos%domain)
         ! write(*,*) "Extrema of H_ice: ", minval(H_ice), maxval(H_ice)
 
         ! write(*,*) "isos_update:: updating correction..."
         allocate(dwdt_corr_ext(isos%domain%nx,isos%domain%ny))
         dwdt_corr_ext = 1.0
         if (present(dwdt_corr)) then
-            dwdt_corr_ext(isos%domain%icrop1:isos%domain%icrop2, &
-            isos%domain%jcrop1:isos%domain%jcrop2) = dwdt_corr
+            call out2in(dwdt_corr_ext, dwdt_corr, isos%domain)
         end if
         ! write(*,*) "Extrema of dwdt_corr: ", minval(dwdt_corr_ext), maxval(dwdt_corr_ext)
 
@@ -576,7 +574,6 @@ module fastisostasy
 
             ! Get current dt (either total time or maximum allowed timestep)
             dt_now = min(dt, isos%par%dt_prognostics)
-
             ! write(*,*) time
 
             ! write(*,*) "isos_update:: updating diagnostic bool..."
@@ -710,7 +707,7 @@ module fastisostasy
 
                 !# TODO: do we need this? If yes, lines below should be adapted adequatly
                 ! Additionally apply bedrock adjustment field (zero if dwdt_corr not provided as argument)
-                isos%now%z_bed = isos%now%z_bed + dwdt_corr_ext*dt_now
+                ! isos%now%z_bed = isos%now%z_bed + dwdt_corr_ext*dt_now
 
                 isos%now%w = isos%now%w + isos%now%dwdt*dt_now
                 call apply_zerobc_at_corners(isos%now%w, isos%domain%nx, isos%domain%ny)
@@ -726,9 +723,7 @@ module fastisostasy
             end if
         end do
 
-        call cropstate2output(isos%output, isos%now, isos%domain%icrop1, isos%domain%icrop2, &
-            isos%domain%jcrop1, isos%domain%jcrop2)
-
+        call cropstate2out(isos%out, isos%now, isos%domain)
         ! write(*,*) "extrema of w: ", minval(isos%now%w), maxval(isos%now%w)
         ! write(*,*) "extrema of we: ", minval(isos%now%we), maxval(isos%now%we)
 
@@ -743,7 +738,7 @@ module fastisostasy
         call deallocate_isos_state(isos%now)
         call deallocate_isos_state(isos%ref)
         call deallocate_isos_domain(isos%domain)
-        call deallocate_isos_output(isos%output)
+        call deallocate_isos_out(isos%out)
 
         return
     end subroutine isos_end
@@ -824,20 +819,20 @@ module fastisostasy
         return
     end subroutine isos_par_load
 
-    subroutine allocate_isos(isos, nx, ny, nl, nbsl)
+    subroutine allocate_isos(isos, nx_out, ny_out, nl, nbsl)
         implicit none
         type(isos_class), intent(INOUT) :: isos
-        integer, intent(IN)             :: nx, ny, nl, nbsl
+        integer, intent(IN)             :: nx_out, ny_out, nl, nbsl
 
         ! First ensure arrays are not allocated
         call deallocate_isos_domain(isos%domain)
         call deallocate_isos_state(isos%now)
         call deallocate_isos_state(isos%ref)
-        call deallocate_isos_output(isos%output)
-        call allocate_isos_domain(isos%domain, nx, ny, nl, nbsl)
-        call allocate_isos_state(isos%now, nx, ny)
-        call allocate_isos_state(isos%ref, nx, ny)
-        call allocate_isos_output(isos%output, nx, ny)
+        call deallocate_isos_out(isos%out)
+        call allocate_isos_domain(isos%domain, isos%domain%nx, isos%domain%ny, nl, nbsl)
+        call allocate_isos_state(isos%now, isos%domain%nx, isos%domain%ny)
+        call allocate_isos_state(isos%ref, isos%domain%nx, isos%domain%ny)
+        call allocate_isos_out(isos%out, nx_out, ny_out)
 
         return
     end subroutine allocate_isos
@@ -907,38 +902,38 @@ module fastisostasy
         return 
     end subroutine deallocate_isos_state
 
-    subroutine deallocate_isos_output(output)
+    subroutine deallocate_isos_out(out)
         implicit none 
-        type(isos_output_class), intent(INOUT) :: output
+        type(isos_out_class), intent(INOUT) :: out
 
-        if (allocated(output%He_lith))          deallocate(output%He_lith)
-        if (allocated(output%D_lith))           deallocate(output%D_lith)
-        if (allocated(output%eta_eff))          deallocate(output%eta_eff)
-        if (allocated(output%tau))              deallocate(output%tau)
-        if (allocated(output%kappa))            deallocate(output%kappa)
-        if (allocated(output%kei))              deallocate(output%kei)
-        if (allocated(output%GE))               deallocate(output%GE)
-        if (allocated(output%GV))               deallocate(output%GV)
-        if (allocated(output%GN))               deallocate(output%GN)
+        if (allocated(out%He_lith))          deallocate(out%He_lith)
+        if (allocated(out%D_lith))           deallocate(out%D_lith)
+        if (allocated(out%eta_eff))          deallocate(out%eta_eff)
+        if (allocated(out%tau))              deallocate(out%tau)
+        if (allocated(out%kappa))            deallocate(out%kappa)
+        if (allocated(out%kei))              deallocate(out%kei)
+        if (allocated(out%GE))               deallocate(out%GE)
+        if (allocated(out%GV))               deallocate(out%GV)
+        if (allocated(out%GN))               deallocate(out%GN)
 
-        if (allocated(output%Hice))             deallocate(output%Hice)
-        if (allocated(output%canom_full))       deallocate(output%canom_full)
-        if (allocated(output%dwdt))            deallocate(output%dwdt)
+        if (allocated(out%Hice))             deallocate(out%Hice)
+        if (allocated(out%canom_full))       deallocate(out%canom_full)
+        if (allocated(out%dwdt))            deallocate(out%dwdt)
 
-        if (allocated(output%w))                deallocate(output%w)
-        if (allocated(output%we))               deallocate(output%we)
-        if (allocated(output%w_equilibrium))    deallocate(output%w_equilibrium)
+        if (allocated(out%w))                deallocate(out%w)
+        if (allocated(out%we))               deallocate(out%we)
+        if (allocated(out%w_equilibrium))    deallocate(out%w_equilibrium)
 
-        if (allocated(output%rsl))              deallocate(output%rsl)
-        if (allocated(output%z_ss))              deallocate(output%z_ss)
-        if (allocated(output%dz_ss))      deallocate(output%dz_ss)
-        if (allocated(output%z_bed))            deallocate(output%z_bed)
+        if (allocated(out%rsl))              deallocate(out%rsl)
+        if (allocated(out%z_ss))              deallocate(out%z_ss)
+        if (allocated(out%dz_ss))      deallocate(out%dz_ss)
+        if (allocated(out%z_bed))            deallocate(out%z_bed)
 
-        if (allocated(output%maskocean))        deallocate(output%maskocean)
-        if (allocated(output%maskgrounded))     deallocate(output%maskgrounded)
-        if (allocated(output%maskcontinent))    deallocate(output%maskcontinent)
+        if (allocated(out%maskocean))        deallocate(out%maskocean)
+        if (allocated(out%maskgrounded))     deallocate(out%maskgrounded)
+        if (allocated(out%maskcontinent))    deallocate(out%maskcontinent)
         return
-    end subroutine deallocate_isos_output
+    end subroutine deallocate_isos_out
 
     subroutine allocate_isos_domain(domain, nx, ny, nl, nbsl)
         implicit none
@@ -1009,38 +1004,38 @@ module fastisostasy
         return
     end subroutine allocate_isos_state
 
-    subroutine allocate_isos_output(output, nx, ny)
+    subroutine allocate_isos_out(out, nx, ny)
         implicit none 
-        type(isos_output_class), intent(INOUT) :: output
+        type(isos_out_class), intent(INOUT) :: out
         integer, intent(IN) :: nx, ny
 
-        allocate(output%He_lith(nx, ny))
-        allocate(output%D_lith(nx, ny))
-        allocate(output%eta_eff(nx, ny))
-        allocate(output%tau(nx, ny))
-        allocate(output%kappa(nx, ny))
-        allocate(output%kei(nx, ny))
-        allocate(output%GE(nx, ny))
-        allocate(output%GV(nx, ny))
-        allocate(output%GN(nx, ny))
+        allocate(out%He_lith(nx, ny))
+        allocate(out%D_lith(nx, ny))
+        allocate(out%eta_eff(nx, ny))
+        allocate(out%tau(nx, ny))
+        allocate(out%kappa(nx, ny))
+        allocate(out%kei(nx, ny))
+        allocate(out%GE(nx, ny))
+        allocate(out%GV(nx, ny))
+        allocate(out%GN(nx, ny))
 
-        allocate(output%Hice(nx, ny))
-        allocate(output%canom_full(nx, ny))
-        allocate(output%dwdt(nx, ny))
+        allocate(out%Hice(nx, ny))
+        allocate(out%canom_full(nx, ny))
+        allocate(out%dwdt(nx, ny))
 
-        allocate(output%w(nx, ny))
-        allocate(output%we(nx, ny))
-        allocate(output%w_equilibrium(nx, ny))
+        allocate(out%w(nx, ny))
+        allocate(out%we(nx, ny))
+        allocate(out%w_equilibrium(nx, ny))
 
-        allocate(output%rsl(nx, ny))
-        allocate(output%z_ss(nx, ny))
-        allocate(output%dz_ss(nx, ny))
-        allocate(output%z_bed(nx, ny))
+        allocate(out%rsl(nx, ny))
+        allocate(out%z_ss(nx, ny))
+        allocate(out%dz_ss(nx, ny))
+        allocate(out%z_bed(nx, ny))
 
-        allocate(output%maskocean(nx, ny))
-        allocate(output%maskgrounded(nx, ny))
-        allocate(output%maskcontinent(nx, ny))
+        allocate(out%maskocean(nx, ny))
+        allocate(out%maskgrounded(nx, ny))
+        allocate(out%maskcontinent(nx, ny))
         return
-    end subroutine allocate_isos_output
+    end subroutine allocate_isos_out
 
 end module fastisostasy
