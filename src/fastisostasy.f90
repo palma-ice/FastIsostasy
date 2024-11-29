@@ -172,11 +172,11 @@ module fastisostasy
             
             if (isos%par%interactive_sealevel .eq. .false.) then
                 isos%domain%maskactive = .true.
-            else if (isos%domain%n_pad_xy > 10) then
+            else if (isos%par%min_pad > 100.e3) then
                 isos%domain%maskactive(isos%domain%icrop1:isos%domain%icrop2, &
                     isos%domain%jcrop1:isos%domain%jcrop2) = .true.
             else
-                write(*,*) "interactive_sealevel=.true. requires a mask file or a padded domain."
+                write(*,*) "interactive_sealevel=.true. requires a mask file or at least 100km of padding."
                 stop
             end if
         else
