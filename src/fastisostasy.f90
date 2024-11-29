@@ -66,6 +66,7 @@ module fastisostasy
         real(wp), allocatable   :: eta_raw(:, :, :)
         real(wp)                :: D_lith_const
         real(wp)                :: viscosity_scaling
+        logical, allocatable    :: mask_inner(:, :), mask_outer(:, :), mask_all(:, :)
 
         ! write(*,*) "Defining params..."
         call isos_par_load(isos%par, filename, group)
@@ -90,10 +91,20 @@ module fastisostasy
         end if
 
         call allocate_isos(isos, nx_ice, ny_ice, isos%par%nl, nbsl)
-        isos%domain%K(:, :) = 1
-        if (present(K))         isos%domain%K                   = K
         call init_dims(isos%domain%xc, isos%domain%x, isos%domain%nx, dx)
         call init_dims(isos%domain%yc, isos%domain%y, isos%domain%ny, dy)
+        isos%domain%K(:, :) = 1
+        if (present(K))         isos%domain%K                   = K
+
+        allocate(mask_inner(isos%domain%nx, isos%domain%ny))
+        allocate(mask_outer(isos%domain%nx, isos%domain%ny))
+        allocate(mask_all(isos%domain%nx, isos%domain%ny))
+        mask_inner = .false.
+        mask_outer = .false.
+        mask_all = .true.
+        mask_inner(isos%domain%icrop1:isos%domain%icrop2, &
+            isos%domain%jcrop1:isos%domain%jcrop2) = .true.
+        mask_outer = .not. mask_inner
 
         if (isos%par%variable_ocean_surface) then
             ! write(*,*) "Reading ocean surface file..."
@@ -152,7 +163,7 @@ module fastisostasy
                 isos%domain%FGN, isos%domain%nx, isos%domain%ny)
         endif
 
-        ! use buffer as helper to load mask.
+        ! write(*,*) "Initializing maskactive with the help of buffer..."
         buffer_n = 0.0
         isos%domain%maskactive(:, :) = .false.
         if (trim(isos%par%mask_file) .eq. "None" .or. &
@@ -172,7 +183,7 @@ module fastisostasy
             call nc_read(isos%par%mask_file, "M", &
                 buffer_n(isos%domain%icrop1:isos%domain%icrop2, &
                 isos%domain%jcrop1:isos%domain%jcrop2), start=[1, 1], &
-                count=[isos%domain%nx_ice, isos%domain%ny_ice])
+                count=[nx_ice, ny_ice])
             where(buffer_n .gt. 0.5) isos%domain%maskactive = .true.
         end if
 
@@ -204,7 +215,7 @@ module fastisostasy
                 ! write(*,*) "Using (laterally-variable) ELVA..."
                 call convenient_calc_kappa(isos%domain)
 
-                ! write(*,*) "Choosing rigidity field..."
+                write(*,*) "Choosing rigidity field..."
                 select case(trim(isos%par%lithosphere))
                     !# TODO: this part of the code should be in test_isostasy.f90
                     case("uniform")
@@ -231,9 +242,15 @@ module fastisostasy
                         !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
                         !!!!! This gives an error when the input file does not have padding !!!!
                         !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-                        call nc_read(isos%par%rheology_file, "litho_thickness", isos%domain%He_lith, &
-                            start=[1, 1], count=[isos%domain%nx, isos%domain%ny])
+                        isos%domain%He_lith = isos%par%zl(1) * 1e-3     ! [km]
+                        call nc_read(isos%par%rheology_file, "litho_thickness", &
+                            isos%domain%He_lith(isos%domain%icrop1:isos%domain%icrop2, &
+                            isos%domain%jcrop1:isos%domain%jcrop2), start=[1, 1], &
+                            count=[nx_ice, ny_ice])
 
+                        call smooth_gauss_2D(isos%domain%He_lith, isos%domain%dx, &
+                            4 * isos%domain%dx, mask_outer, mask_all)
+                        
                         ! rigidity computation assumes He_lith is in km...
                         call calc_heterogeneous_rigidity(isos%domain%D_lith, isos%par%E, &
                             isos%domain%He_lith, isos%par%nu)
@@ -261,7 +278,7 @@ module fastisostasy
                     stop
                 end if
 
-                ! write(*,*) "Choosing viscosity field..."
+                write(*,*) "Choosing viscosity field..."
                 call layered_viscosity(isos%domain%eta, isos%par%viscosities)
                 select case(trim(isos%par%mantle))
                 !# TODO: this part of the code should be in test_isostasy.f90
@@ -280,23 +297,18 @@ module fastisostasy
                             dx=isos%domain%dx, dy=isos%domain%dx)
 
                     case("rheology_file")
-                        !# TODO: loading fields should be more general (with 2D interpolation)
                         ncz = nc_size(isos%par%rheology_file, "zc")
-                        ! write(*,*) ncz
                         
-                        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-                        !!!!! This gives an error when the input file does not have padding !!!!
-                        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
                         allocate(z(ncz))
                         allocate(depth(ncz))
-                        allocate(eta_raw(isos%domain%nx, isos%domain%ny, ncz))
+                        allocate(eta_raw(nx_ice, ny_ice, ncz))
                         call nc_read(isos%par%rheology_file, "zc", z, start=[1], count=[ncz])
                         do i = 1, ncz
                             depth(i) = z(1) - z(i)
                         end do
 
                         call nc_read(isos%par%rheology_file, "log10_eta", eta_raw, &
-                            start=[1, 1, 1], count=[isos%domain%nx, isos%domain%ny, ncz])
+                            start=[1, 1, 1], count=[nx_ice, ny_ice, ncz])
                         where (eta_raw < 16) eta_raw = 16
                         where (eta_raw > 23) eta_raw = 23
 
@@ -313,6 +325,9 @@ module fastisostasy
 
                         call calc_effective_viscosity(isos%domain%eta_eff, isos%domain%eta, &
                             isos%domain%xc, isos%domain%yc, isos%domain%boundaries)
+
+                        call smooth_gauss_2D(isos%domain%eta_eff, isos%domain%dx, &
+                            4 * isos%domain%dx, mask_outer, mask_all)
                         
                         if (isos%par%viscosity_scaling .eq. -1) then
                             isos%domain%eta_eff(:, :) = minval(isos%domain%eta_eff)
@@ -332,7 +347,7 @@ module fastisostasy
 
                 isos%domain%eta_eff = isos%domain%eta_eff * isos%par%compressibility_correction
 
-                ! write(*,*) "isos_init:: summary"
+                write(*,*) "isos_init:: summary"
                 ! write(*,*) "    E               : ",    isos%par%E 
                 ! write(*,*) "    nu              : ",    isos%par%nu
                 ! write(*,*) "    rho_ice         : ",    isos%par%rho_ice
@@ -386,9 +401,9 @@ module fastisostasy
         ! Initially the reference state has not been defined
         isos%par%ref_was_set = .FALSE.
 
-        write(*,*) "out%He_lith", size(isos%out%He_lith, 1), size(isos%out%He_lith, 2)
+        ! write(*,*) "out%He_lith", size(isos%out%He_lith, 1), size(isos%out%He_lith, 2)
         call cropdomain2out(isos%out, isos%domain)
-        write(*,*) "out%He_lith", size(isos%out%He_lith, 1), size(isos%out%He_lith, 2)
+        ! write(*,*) "out%He_lith", size(isos%out%He_lith, 1), size(isos%out%He_lith, 2)
 
         ! write(*,*) "isos_init:: complete." 
 
