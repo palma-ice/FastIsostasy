@@ -50,7 +50,7 @@ program test_isostasy
 
     ! === Define experiment to be run ====
 
-    experiment = "test5"
+    experiment = "test4"
     
     ! Tests are defined in Swierczek-Jereczek et al. (2024), GMD.
     ! Additional: "test5" = Lucía's Greenland ice-sheet load (since 15 ka)
@@ -529,6 +529,8 @@ program test_isostasy
             !     dim1="xc", dim2="yc", start=[1, 1])
         end if
 
+        call nc_write(filename, "maskactive", isos%domain%maskactive, units="1", &
+            long_name="Active mask", dim1="xc", dim2="yc", start=[1, 1])
         return
 
     end subroutine isos_write_init_extended
@@ -686,6 +688,7 @@ program test_isostasy
         call nc_write(filename, "continent_mask", isos%now%maskcontinent, units="1", &
             long_name = "Continent mask", &
             dim1="xc", dim2="yc", dim3="time", start=[1, 1, n], ncid=ncid)
+
 
         call nc_close(ncid)     ! Close the netcdf file
 
