@@ -50,7 +50,7 @@ program test_isostasy
 
     ! === Define experiment to be run ====
 
-    experiment = "test4"
+    experiment = "test3d"
     
     ! Tests are defined in Swierczek-Jereczek et al. (2024), GMD.
     ! Additional: "test5" = Lucía's Greenland ice-sheet load (since 15 ka)
@@ -611,7 +611,7 @@ program test_isostasy
             call nc_write(filename, "z_bed_bench", z_bed_bench,units="m", &
                 long_name="Benchmark bedrock elevation", &
                 dim1="xc", dim2="yc", dim3="time", start=[1, 1, n], ncid=ncid)
-            call nc_write(filename, "err_z_bed", isos%now%w - z_bed_bench,units="m", &
+            call nc_write(filename, "err_z_bed", isos%out%w - z_bed_bench,units="m", &
                 long_name="Error in bedrock elevation", &
                 dim1="xc", dim2="yc", dim3="time", start=[1, 1, n], ncid=ncid)
         end if
