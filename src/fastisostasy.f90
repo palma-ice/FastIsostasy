@@ -585,8 +585,8 @@ module fastisostasy
                 update_diagnostics = .FALSE.
             end if
 
-            write (*,*) "time_prog, time_diag, update_diag: ", &
-                isos%par%time_prognostics, isos%par%time_diagnostics, update_diagnostics
+            ! write (*,*) "time_prog, time_diag, update_diag: ", &
+            !     isos%par%time_prognostics, isos%par%time_diagnostics, update_diagnostics
 
             ! write(*,*) "isos_update:: updating load anomalies..."
             call calc_columnanoms_load(isos)
