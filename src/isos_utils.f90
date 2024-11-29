@@ -285,6 +285,8 @@ module isos_utils
 
         domain%dx = dx
         domain%dy = dy
+        domain%nx_ice = nx_ice
+        domain%ny_ice = ny_ice
         domain%icrop1 = 1
         domain%jcrop1 = 1
 
@@ -578,7 +580,7 @@ module isos_utils
         call isos_set_field(var, var_values, mask_values, mask)
         
         ! Apply Gaussian smoothing as desired
-        call smooth_gauss_2D(var, dx,sigma)
+        call smooth_gauss_2D(var, dx, sigma)
         
         return
     end subroutine isos_set_smoothed_field
