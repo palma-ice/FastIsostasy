@@ -157,9 +157,17 @@ module fastisostasy
         isos%domain%maskactive(:, :) = .false.
         if (trim(isos%par%mask_file) .eq. "None" .or. &
             trim(isos%par%mask_file) .eq. "none" .or. &
-            trim(isos%par%mask_file) .eq. "no") then 
-            isos%domain%maskactive(isos%domain%icrop1:isos%domain%icrop2, &
-                isos%domain%jcrop1:isos%domain%jcrop2) = .true.
+            trim(isos%par%mask_file) .eq. "no") then
+            
+            if (isos%par%interactive_sealevel .eq. .false.) then
+                isos%domain%maskactive = .true.
+            else if (isos%domain%n_pad_xy > 10) then
+                isos%domain%maskactive(isos%domain%icrop1:isos%domain%icrop2, &
+                    isos%domain%jcrop1:isos%domain%jcrop2) = .true.
+            else
+                write(*,*) "interactive_sealevel=.true. requires a mask file or a padded domain."
+                stop
+            end if
         else
             call nc_read(isos%par%mask_file, "M", &
                 buffer_n(isos%domain%icrop1:isos%domain%icrop2, &
