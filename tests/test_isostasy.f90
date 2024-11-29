@@ -121,9 +121,9 @@ program test_isostasy
 
             case("test5")
                 time_init = 0.
-                time_end  = 15.e1   ! 15.e3
+                time_end  = 15.e3
                 dtt       = 1.0
-                dt_out    = 1.e1    ! 1.e3
+                dt_out    = 1.e3
                 dx = 16.e3
                 dy = dx
                 xmin = -840.e3
