@@ -450,6 +450,7 @@ module fastisostasy
     end subroutine zero_init_state
 
     subroutine isos_init_ref(isos, z_bed, H_ice, bsl, dz_ss)
+        ! Set reference state from external fields with [nxo,nyo] dimensions
 
         implicit none
 
@@ -459,9 +460,9 @@ module fastisostasy
         real(wp), intent(IN), optional :: bsl               ! [a] Barystatic sea level
         real(wp), intent(IN), optional :: dz_ss(:, :)       ! [m] Sea surface perturbation
         
-        isos%ref%z_bed = z_bed
-        isos%ref%Hice = H_ice
-        
+        call out2in(isos%ref%z_bed, z_bed, isos%domain)
+        call out2in(isos%ref%Hice,  H_ice, isos%domain)
+
         if (present(bsl))   isos%ref%bsl   = bsl
         if (present(dz_ss)) isos%ref%dz_ss = dz_ss
         ! No need to set w, we, dz_ss and bsl to 0 because `zero_init_state(isos%ref)` in isos_init()
@@ -498,7 +499,8 @@ module fastisostasy
 
         else
             call out2in(isos%now%z_bed, z_bed, isos%domain)
-            call out2in(isos%now%Hice, H_ice, isos%domain)
+            call out2in(isos%now%Hice,  H_ice, isos%domain)
+
             if (present(bsl)) then
                 isos%now%bsl = bsl
             else
@@ -511,7 +513,7 @@ module fastisostasy
             end if
 
             if (.not. isos%par%ref_was_set) then
-                call isos_init_ref(isos, isos%now%z_bed, isos%now%Hice, isos%now%bsl, isos%now%dz_ss)
+                call isos_init_ref(isos, z_bed, H_ice, isos%now%bsl, isos%now%dz_ss)
                 write(*,*) "isos_init_state:: reference state was set to initial state."
             end if
 
