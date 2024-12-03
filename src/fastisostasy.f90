@@ -460,6 +460,9 @@ module fastisostasy
         real(wp), intent(IN), optional :: bsl               ! [a] Barystatic sea level
         real(wp), intent(IN), optional :: dz_ss(:, :)       ! [m] Sea surface perturbation
         
+        isos%ref%z_bed = 0.0
+        isos%ref%Hice  = 0.0
+
         call out2in(isos%ref%z_bed, z_bed, isos%domain)
         call out2in(isos%ref%Hice,  H_ice, isos%domain)
 
