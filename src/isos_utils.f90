@@ -144,6 +144,7 @@ module isos_utils
         real(dp), intent(INOUT)     :: in(:, :)
         real(dp), intent(INOUT)     :: out(:, :)
 
+        out = (0.d0,0.d0)
         call fftw_execute_r2r(plan, in, out)
 
         return
@@ -162,6 +163,7 @@ module isos_utils
         nx = size(in,1)
         ny = size(in,2)
 
+        out = (0.d0,0.d0)
         call fftw_execute_r2r(plan, in, out)
         out = out / (nx * ny * 1.)
 
@@ -187,6 +189,7 @@ module isos_utils
         real(dp),    intent(INOUT)  :: in(:, :)
         complex(dp), intent(INOUT)  :: out(:, :)
 
+        out = (0.d0,0.d0)
         call fftw_execute_dft_r2c(plan, in, out)
 
         return
@@ -203,6 +206,7 @@ module isos_utils
         nx = size(in,1)
         ny = size(in,2)
 
+        out = (0.d0,0.d0)
         call fftw_execute_dft_c2r(plan, in, out)
         out = out / (nx * ny * 1._wp)
 
