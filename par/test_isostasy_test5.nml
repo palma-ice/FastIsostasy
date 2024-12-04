@@ -6,7 +6,7 @@
     method          = 3
     dt_prognostics  = 1.
     dt_diagnostics  = 10.
-    pad         = 512.e3
+    pad         = 512.
 
     ! Rheology
     mantle = "uniform"

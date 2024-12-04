@@ -5,7 +5,7 @@
     method          = 3             ! 0: constant displacement; 1: LLRA; 2: LV-ELRA, 3: LV-ELVA
     dt_prognostics  = 1.            ! [yr] Max. timestep to recalculate prognostics
     dt_diagnostics  = 10.           ! [yr] Min. timestep to recalculate diagnostics
-    pad         = 0.e3              ! [m] Padding around the domain (preferably chosen as a power
+    pad         = 0.                ! [km] Padding around the domain (preferably chosen as a power
                                     ! of 2 multiplied by the resolution)
 
     ! Rheology

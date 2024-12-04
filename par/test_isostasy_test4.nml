@@ -5,7 +5,7 @@
     method          = 3
     dt_prognostics  = 1.
     dt_diagnostics  = 10.
-    pad         = 0.e3
+    pad         = 0.
 
     ! Rheology
     mantle = "rheology_file"
