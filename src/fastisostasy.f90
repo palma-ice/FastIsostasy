@@ -801,7 +801,30 @@ module fastisostasy
         call nml_read(filename,group,"dt_prognostics",      par%dt_prognostics)
         call nml_read(filename,group,"pad",                 par%min_pad)
 
-        call nml_read(filename, group, "mask_file",             par%mask_file)
+        call nml_read(filename,group,"nl",          par%nl)
+        allocate(par%viscosities(par%nl))
+        allocate(par%zl(par%nl))
+        call nml_read(filename,group,"zl",          par%zl)
+
+        if (par%method .lt. 3) then     ! ELRA and LLRA
+            call nml_read(filename,group,"tau",             par%tau)
+
+        else                            ! ELVA
+            call nml_read(filename,group,"mantle",          par%mantle) 
+            call nml_read(filename,group,"lithosphere",     par%lithosphere)
+            call nml_read(filename,group,"layering",        par%layering)
+            call nml_read(filename,group,"viscosities",     par%viscosities)
+            
+            if (par%layering .eq. "parallel") then
+                call nml_read(filename,group,"dl",          par%dl)
+            end if
+
+            if ((par%mantle .eq. "rheology_file") .or. (par%lithosphere .eq. "rheology_file")) then
+                call nml_read(filename,group,"rheology_file", par%rheology_file)
+            end if
+        end if
+
+        call nml_read(filename, group, "mask_file",           par%mask_file)
 
         call nml_read(filename,group,"ocean_surface_file",    par%ocean_surface_file)
         if (trim(par%ocean_surface_file) .eq. "None" .or. &
@@ -819,29 +842,6 @@ module fastisostasy
             par%use_restart = .FALSE. 
         else 
             par%use_restart = .TRUE.
-        end if
-
-        if (par%method .lt. 3) then     ! ELRA and LLRA
-            call nml_read(filename,group,"tau",                 par%tau)
-
-        else                            ! ELVA
-            call nml_read(filename,group,"mantle",          par%mantle) 
-            call nml_read(filename,group,"lithosphere",     par%lithosphere)
-            call nml_read(filename,group,"layering",        par%layering)
-            call nml_read(filename,group,"nl",              par%nl)
-            allocate(par%viscosities(par%nl))
-            call nml_read(filename,group,"viscosities",     par%viscosities)
-            allocate(par%zl(par%nl))
-            call nml_read(filename,group,"zl",          par%zl)
-
-            if ((par%mantle .eq. "rheology_file") .or. (par%lithosphere .eq. "rheology_file")) then
-                call nml_read(filename,group,"rheology_file", par%rheology_file)
-            end if
-
-            if (par%layering .eq. "parallel") then
-                call nml_read(filename,group,"dl",                  par%dl)
-            end if
-
         end if
 
         return
