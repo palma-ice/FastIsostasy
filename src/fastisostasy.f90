@@ -11,7 +11,8 @@ module fastisostasy
     
     use, intrinsic :: iso_fortran_env, only : input_unit, output_unit, error_unit
     use, intrinsic :: iso_c_binding
-
+    use, intrinsic :: ieee_arithmetic, only : ieee_is_nan
+    
     use isostasy_defs, only : sp, dp, wp, pi, isos_param_class, isos_state_class, &
         isos_domain_class, isos_out_class, isos_class
     use green_functions
@@ -754,6 +755,14 @@ module fastisostasy
         call cropstate2out(isos%out, isos%now, isos%domain)
         ! write(*,*) "extrema of w: ", minval(isos%now%w), maxval(isos%now%w)
         ! write(*,*) "extrema of we: ", minval(isos%now%we), maxval(isos%now%we)
+
+        ! ajr, diagnostics
+        if (ieee_is_nan(maxval(isos%now%z_bed)) .or. ieee_is_nan(maxval(isos%out%z_bed))) then
+            write(error_unit,*) "isos_update:: Error: NaNs detected."
+            write(error_unit,*) "now%z_bed: ", minval(isos%now%z_bed), maxval(isos%now%z_bed)
+            write(error_unit,*) "out%z_bed: ", minval(isos%out%z_bed), maxval(isos%out%z_bed)
+            stop
+        end if 
 
         return
     end subroutine isos_update
