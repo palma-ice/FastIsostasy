@@ -5,12 +5,13 @@
     method          = 3
     dt_prognostics  = 1.
     dt_diagnostics  = 10.
-    pad         = 0.
+    pad         = 512.
 
     ! Rheology
     mantle = "rheology_file"
     lithosphere = "rheology_file"
-    viscosity_scaling_method = 0
+    viscosity_scaling_method = "scale"
+    viscosity_scaling = 1.
     layering    = "equalized"
     nl          = 3
     zl          = 260., 280., 300.

@@ -11,7 +11,8 @@
     ! Rheology
     mantle = "uniform"
     lithosphere = "uniform"
-    viscosity_scaling_method = 0
+    viscosity_scaling_method = "scale"
+    viscosity_scaling = 1.
     layering    = "equalized"
     nl          = 2
     zl          = 88., 600.
