@@ -617,9 +617,13 @@ module fastisostasy
             ! write (*,*) "time_prog, time_diag, update_diag: ", &
             !     isos%par%time_prognostics, isos%par%time_diagnostics, update_diagnostics
 
+            call nan_check(isos,1)
+            
             ! write(*,*) "isos_update:: updating load anomalies..."
             call calc_columnanoms_load(isos)
             ! write(*,*) "Extrema of canom_load: ", minval(isos%now%canom_load), maxval(isos%now%canom_load)
+
+            call nan_check(isos,2)
 
             if (update_diagnostics) then
                 ! write(*,*) "Updating the elastic response..."
@@ -632,6 +636,8 @@ module fastisostasy
                 ! write(*,*) "Extrema of we: ", minval(isos%now%we), maxval(isos%now%we)
             endif
 
+            call nan_check(isos,3)
+
             call calc_columnanoms_solidearth(isos)
 
             if (update_diagnostics .and. isos%par%interactive_sealevel) then
@@ -643,6 +649,8 @@ module fastisostasy
                     isos%domain%nx, isos%domain%ny, &
                     isos%domain%forward_dftplan_r2c, isos%domain%backward_dftplan_c2r)
                 ! write(*,*) "Extrema of dz_ss: ", minval(isos%now%dz_ss), maxval(isos%now%dz_ss)
+
+                call nan_check(isos,4)
 
                 ! write(*,*) "Updating the SSH..."
                 call calc_z_ss(isos%now%z_ss, isos%now%bsl, isos%ref%z_ss, isos%now%dz_ss)
@@ -667,6 +675,8 @@ module fastisostasy
             ! write(*,*) "Updating RSL..."
             call calc_rsl(isos%now)
             ! write(*,*) "Extrema of rsl: ", minval(isos%now%rsl), maxval(isos%now%rsl)
+
+            call nan_check(isos,5)
 
             ! write(*,*) "Updating the masks..."
             call calc_masks(isos)
@@ -732,6 +742,8 @@ module fastisostasy
             ! Step 2: update bedrock elevation and current model time
             ! write(*,*) dt_now
 
+            call nan_check(isos,6)
+
             if (dt_now .gt. 0.0) then
 
                 !# TODO: do we need this? If yes, lines below should be adapted adequatly
@@ -766,6 +778,16 @@ module fastisostasy
 
         return
     end subroutine isos_update
+
+    subroutine nan_check(isos,step)
+        implicit none
+        type(isos_class), intent(IN) :: isos
+        integer, intent(IN) :: step
+        write(error_unit,"(a12,i4,10g10.3)") "nan-check: ", step, maxval(isos%now%z_bed), &
+            maxval(isos%now%we),maxval(isos%now%canom_load * isos%par%g * isos%domain%K ** 2.0), &
+            maxval(isos%now%dz_ss), maxval(isos%now%mass_anom), maxval(isos%now%dwdt)
+        return
+    end subroutine nan_check
 
     subroutine isos_end(isos)
 
