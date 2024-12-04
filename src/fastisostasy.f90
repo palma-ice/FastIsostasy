@@ -11,7 +11,8 @@ module fastisostasy
     
     use, intrinsic :: iso_fortran_env, only : input_unit, output_unit, error_unit
     use, intrinsic :: iso_c_binding
-
+    use, intrinsic :: ieee_arithmetic, only : ieee_is_nan
+    
     use isostasy_defs, only : sp, dp, wp, pi, isos_param_class, isos_state_class, &
         isos_domain_class, isos_out_class, isos_class
     use green_functions
@@ -450,6 +451,7 @@ module fastisostasy
     end subroutine zero_init_state
 
     subroutine isos_init_ref(isos, z_bed, H_ice, bsl, dz_ss)
+        ! Set reference state from external fields with [nxo,nyo] dimensions
 
         implicit none
 
@@ -459,9 +461,12 @@ module fastisostasy
         real(wp), intent(IN), optional :: bsl               ! [a] Barystatic sea level
         real(wp), intent(IN), optional :: dz_ss(:, :)       ! [m] Sea surface perturbation
         
-        isos%ref%z_bed = z_bed
-        isos%ref%Hice = H_ice
-        
+        isos%ref%z_bed = 0.0
+        isos%ref%Hice  = 0.0
+
+        call out2in(isos%ref%z_bed, z_bed, isos%domain)
+        call out2in(isos%ref%Hice,  H_ice, isos%domain)
+
         if (present(bsl))   isos%ref%bsl   = bsl
         if (present(dz_ss)) isos%ref%dz_ss = dz_ss
         ! No need to set w, we, dz_ss and bsl to 0 because `zero_init_state(isos%ref)` in isos_init()
@@ -498,7 +503,8 @@ module fastisostasy
 
         else
             call out2in(isos%now%z_bed, z_bed, isos%domain)
-            call out2in(isos%now%Hice, H_ice, isos%domain)
+            call out2in(isos%now%Hice,  H_ice, isos%domain)
+
             if (present(bsl)) then
                 isos%now%bsl = bsl
             else
@@ -511,7 +517,7 @@ module fastisostasy
             end if
 
             if (.not. isos%par%ref_was_set) then
-                call isos_init_ref(isos, isos%now%z_bed, isos%now%Hice, isos%now%bsl, isos%now%dz_ss)
+                call isos_init_ref(isos, z_bed, H_ice, isos%now%bsl, isos%now%dz_ss)
                 write(*,*) "isos_init_state:: reference state was set to initial state."
             end if
 
@@ -611,9 +617,13 @@ module fastisostasy
             ! write (*,*) "time_prog, time_diag, update_diag: ", &
             !     isos%par%time_prognostics, isos%par%time_diagnostics, update_diagnostics
 
+            call nan_check(isos,1)
+            
             ! write(*,*) "isos_update:: updating load anomalies..."
             call calc_columnanoms_load(isos)
             ! write(*,*) "Extrema of canom_load: ", minval(isos%now%canom_load), maxval(isos%now%canom_load)
+
+            call nan_check(isos,2)
 
             if (update_diagnostics) then
                 ! write(*,*) "Updating the elastic response..."
@@ -626,6 +636,8 @@ module fastisostasy
                 ! write(*,*) "Extrema of we: ", minval(isos%now%we), maxval(isos%now%we)
             endif
 
+            call nan_check(isos,3)
+
             call calc_columnanoms_solidearth(isos)
 
             if (update_diagnostics .and. isos%par%interactive_sealevel) then
@@ -637,6 +649,8 @@ module fastisostasy
                     isos%domain%nx, isos%domain%ny, &
                     isos%domain%forward_dftplan_r2c, isos%domain%backward_dftplan_c2r)
                 ! write(*,*) "Extrema of dz_ss: ", minval(isos%now%dz_ss), maxval(isos%now%dz_ss)
+
+                call nan_check(isos,4)
 
                 ! write(*,*) "Updating the SSH..."
                 call calc_z_ss(isos%now%z_ss, isos%now%bsl, isos%ref%z_ss, isos%now%dz_ss)
@@ -661,6 +675,8 @@ module fastisostasy
             ! write(*,*) "Updating RSL..."
             call calc_rsl(isos%now)
             ! write(*,*) "Extrema of rsl: ", minval(isos%now%rsl), maxval(isos%now%rsl)
+
+            call nan_check(isos,5)
 
             ! write(*,*) "Updating the masks..."
             call calc_masks(isos)
@@ -726,6 +742,8 @@ module fastisostasy
             ! Step 2: update bedrock elevation and current model time
             ! write(*,*) dt_now
 
+            call nan_check(isos,6)
+
             if (dt_now .gt. 0.0) then
 
                 !# TODO: do we need this? If yes, lines below should be adapted adequatly
@@ -750,8 +768,26 @@ module fastisostasy
         ! write(*,*) "extrema of w: ", minval(isos%now%w), maxval(isos%now%w)
         ! write(*,*) "extrema of we: ", minval(isos%now%we), maxval(isos%now%we)
 
+        ! ajr, diagnostics
+        if (ieee_is_nan(maxval(isos%now%z_bed)) .or. ieee_is_nan(maxval(isos%out%z_bed))) then
+            write(error_unit,*) "isos_update:: Error: NaNs detected."
+            write(error_unit,*) "now%z_bed: ", minval(isos%now%z_bed), maxval(isos%now%z_bed)
+            write(error_unit,*) "out%z_bed: ", minval(isos%out%z_bed), maxval(isos%out%z_bed)
+            stop
+        end if 
+
         return
     end subroutine isos_update
+
+    subroutine nan_check(isos,step)
+        implicit none
+        type(isos_class), intent(IN) :: isos
+        integer, intent(IN) :: step
+        write(error_unit,"(a12,i4,10g10.3)") "nan-check: ", step, maxval(isos%now%z_bed), &
+            maxval(isos%now%we),maxval(isos%now%canom_load * isos%par%g * isos%domain%K ** 2.0), &
+            maxval(isos%now%dz_ss), maxval(isos%now%mass_anom), maxval(isos%now%dwdt)
+        return
+    end subroutine nan_check
 
     subroutine isos_end(isos)
 
@@ -796,7 +832,30 @@ module fastisostasy
         call nml_read(filename,group,"dt_prognostics",      par%dt_prognostics)
         call nml_read(filename,group,"pad",                 par%min_pad)
 
-        call nml_read(filename, group, "mask_file",             par%mask_file)
+        call nml_read(filename,group,"nl",          par%nl)
+        allocate(par%viscosities(par%nl))
+        allocate(par%zl(par%nl))
+        call nml_read(filename,group,"zl",          par%zl)
+
+        if (par%method .lt. 3) then     ! ELRA and LLRA
+            call nml_read(filename,group,"tau",             par%tau)
+
+        else                            ! ELVA
+            call nml_read(filename,group,"mantle",          par%mantle) 
+            call nml_read(filename,group,"lithosphere",     par%lithosphere)
+            call nml_read(filename,group,"layering",        par%layering)
+            call nml_read(filename,group,"viscosities",     par%viscosities)
+            
+            if (par%layering .eq. "parallel") then
+                call nml_read(filename,group,"dl",          par%dl)
+            end if
+
+            if ((par%mantle .eq. "rheology_file") .or. (par%lithosphere .eq. "rheology_file")) then
+                call nml_read(filename,group,"rheology_file", par%rheology_file)
+            end if
+        end if
+
+        call nml_read(filename, group, "mask_file",           par%mask_file)
 
         call nml_read(filename,group,"ocean_surface_file",    par%ocean_surface_file)
         if (trim(par%ocean_surface_file) .eq. "None" .or. &
@@ -814,29 +873,6 @@ module fastisostasy
             par%use_restart = .FALSE. 
         else 
             par%use_restart = .TRUE.
-        end if
-
-        if (par%method .lt. 3) then     ! ELRA and LLRA
-            call nml_read(filename,group,"tau",                 par%tau)
-
-        else                            ! ELVA
-            call nml_read(filename,group,"mantle",          par%mantle) 
-            call nml_read(filename,group,"lithosphere",     par%lithosphere)
-            call nml_read(filename,group,"layering",        par%layering)
-            call nml_read(filename,group,"nl",              par%nl)
-            allocate(par%viscosities(par%nl))
-            call nml_read(filename,group,"viscosities",     par%viscosities)
-            allocate(par%zl(par%nl))
-            call nml_read(filename,group,"zl",          par%zl)
-
-            if ((par%mantle .eq. "rheology_file") .or. (par%lithosphere .eq. "rheology_file")) then
-                call nml_read(filename,group,"rheology_file", par%rheology_file)
-            end if
-
-            if (par%layering .eq. "parallel") then
-                call nml_read(filename,group,"dl",                  par%dl)
-            end if
-
         end if
 
         return
