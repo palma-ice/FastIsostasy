@@ -1,7 +1,10 @@
 module sealevel
 
+    use, intrinsic :: iso_fortran_env, only : input_unit, output_unit, error_unit
+
     use isostasy_defs, only : wp, isos_class, isos_state_class, isos_domain_class, isos_param_class
     use isos_utils
+    use ncio 
 
     implicit none
 
@@ -14,6 +17,8 @@ module sealevel
     public :: calc_masks
     public :: calc_sl_contributions
     public :: calc_H_above_bsl
+    public :: load_bsl_external_ts
+    public :: calc_bsl_external_ts
 
     contains
 
@@ -207,5 +212,225 @@ module sealevel
         ! write(*,*) isos%now%V_af, isos%now%V_den, isos%now%V_pov
         return
     end subroutine calc_sl_contributions
+
+
+    ! === Routines for handling external bsl contributions (i.e. from ice sheets not treated within the domain) ===
+
+    subroutine calc_bsl_external_ts(bsl_ext,ts_bsl,ts_time,time)
+        ! Determine the current bsl_external value for the current time from a time seris of values.
+        ! This is done by linear interpolation, where the time series is already available and
+        ! passed as arguments [ts_bsl,ts_time].
+        ! For paleo sea-level time series, time is usually given in units of years before present. 
+
+        implicit none
+        
+        real(wp), intent(OUT) :: bsl_ext
+        real(wp), intent(IN)  :: ts_bsl(:)
+        real(wp), intent(IN)  :: ts_time(:)
+        real(wp), intent(IN)  :: time 
+        
+        ! Interpolate series object to current time
+        bsl_ext = interp_linear(ts_time,ts_bsl,xout=time)
+
+        return
+
+    end subroutine calc_bsl_external_ts
+
+    subroutine load_bsl_external_ts(bsl,time,filename,nc_varname,conv_time_units)
+
+        implicit none
+
+        real(wp), intent(OUT), allocatable :: bsl(:)
+        real(wp), intent(OUT), allocatable :: time(:)
+        character(len=*), intent(IN) :: filename
+        character(len=*), intent(IN), optional :: nc_varname
+        real(wp), intent(IN), optional :: conv_time_units 
+
+        ! Local variables
+        integer :: n
+        logical :: use_nc 
+
+        n = len_trim(filename)
+        if (filename(n-1:n) .eq. "nc") then
+            use_nc = .TRUE.
+        else
+            use_nc = .FALSE.
+        end if
+
+        if (use_nc) then 
+
+            if (.not. present(nc_varname)) then
+                write(error_unit,*) "load_bsl_external_ts:: Error: No variable name provided to be loaded from a NetCDF input file. &
+                &Provide the correct nc_varname as an argument to load_bsl_external_ts()."
+                write(error_unit,*) "filename: ", trim(filename)
+                stop
+            end if
+
+            ! Read the time series from netcdf file 
+            call read_series_nc(bsl,time,filename,nc_varname)
+
+        else
+
+            ! Read the time series from ascii file
+            call read_series(bsl,time,filename)
+
+        end if 
+        
+        ! Convert time units
+        if (present(conv_time_units)) then
+            ! Convert time units (e.g. kiloyears to years)
+            time = time*conv_time_units 
+        end if 
+
+        return
+
+    end subroutine load_bsl_external_ts
+
+    function interp_linear(x,y,xout) result(yout)
+        ! Simple linear interpolation of a point
+
+        implicit none 
+ 
+        real(wp), dimension(:), intent(IN) :: x, y
+        real(wp), intent(IN) :: xout
+        real(wp) :: yout 
+        integer  :: i, j, n, nout 
+        real(wp) :: alph
+
+        n    = size(x) 
+
+        if (xout .lt. x(1)) then
+            yout = y(1)
+        else if (xout .gt. x(n)) then
+            yout = y(n)
+        else
+            do j = 1, n 
+                if (x(j) .ge. xout) exit 
+            end do
+
+            if (j .eq. 1) then 
+                yout = y(1) 
+            else if (j .eq. n+1) then 
+                yout = y(n)
+            else 
+                alph = (xout - x(j-1)) / (x(j) - x(j-1))
+                yout = y(j-1) + alph*(y(j) - y(j-1))
+            end if 
+        end if 
+
+        return 
+
+    end function interp_linear
+    
+    subroutine read_series(var,time,filename)
+        ! This subroutine will read a time series of
+        ! two columns [time,var] from an ascii file.
+        ! Header should be commented by "#" or "!"
+        implicit none 
+
+        real(wp), intent(INOUT), allocatable :: var(:)
+        real(wp), intent(INOUT), allocatable :: time(:)
+        character(len=*), intent(IN) :: filename 
+
+        ! Local variables
+        integer, parameter :: nmax = 10000
+        integer :: i, stat, nt, io_unit
+        character(len=256) :: str, str1 
+        real(wp) :: x(nmax), y(nmax) 
+
+        ! Open file for reading 
+        open(newunit=io_unit,file=filename,status="old")
+
+        ! Read the header in the first line: 
+        read(io_unit,*,IOSTAT=stat) str
+
+        do i = 1, nmax 
+            read(io_unit,'(a100)',IOSTAT=stat) str 
+
+            ! Exit loop if the end-of-file is reached 
+            if(IS_IOSTAT_END(stat)) exit 
+
+            str1 = adjustl(trim(str))
+!            str1=str
+            if ( len(trim(str1)) .gt. 0 ) then 
+                if ( .not. (str1(1:1) == "!" .or. &
+                            str1(1:1) == "#") ) then 
+                    read(str1,*) x(i), y(i) 
+                end if
+            end if  
+        end do 
+
+
+        ! Close the file
+        close(io_unit) 
+
+        if (i .eq. nmax) then 
+            write(*,*) "read_series:: warning: "// &
+                       "Maximum length of time series reached, ", nmax
+            write(*,*) "Time series in the file may be longer: ", trim(filename)
+        end if 
+
+        ! Allocate the time series object and store output data
+        nt = i-1 
+        
+        if (allocated(time))  deallocate(time)
+        if (allocated(var))   deallocate(var)
+
+        allocate(time(nt))
+        allocate(var(nt))
+        
+        ! Initialize variables to zero
+        time  = 0.0
+        var   = 0.0
+
+        ! Store data
+        time = x(1:nt) 
+        var  = y(1:nt) 
+
+        write(*,*) "read_series:: Time series read from file: "//trim(filename)
+        write(*,*) "    range time: ",minval(time), maxval(time)
+        write(*,*) "    range var : ",minval(var),  maxval(var)
+        
+        return 
+
+    end subroutine read_series
+
+    subroutine read_series_nc(var,time,filename,varname)
+        ! This subroutine will read a time series of
+        ! sea level from a netcdf file.
+
+        implicit none 
+
+        real(wp), intent(INOUT), allocatable :: var(:)
+        real(wp), intent(INOUT), allocatable :: time(:)
+        character(len=*)  :: filename 
+        character(len=*)  :: varname 
+
+        integer :: nt 
+
+        ! Allocate the time series object and store output data
+        nt = nc_size(filename,"time")
+
+        if (allocated(time))  deallocate(time)
+        if (allocated(var))   deallocate(var)
+
+        allocate(time(nt))
+        allocate(var(nt))
+        
+        ! Initialize variables to zero
+        time  = 0.0
+        var   = 0.0
+
+        ! Load data from file
+        call nc_read(filename,"time",time)
+        call nc_read(filename,varname,var)
+
+        write(*,*) "read_series:: Time series read from file: "//trim(filename)
+        write(*,*) "    range time: ",minval(time), maxval(time)
+        write(*,*) "    range var : ",minval(var),  maxval(var)
+        
+        return 
+
+    end subroutine read_series_nc
 
 end module sealevel

@@ -65,7 +65,7 @@ $(objdir)/convolutions.o: $(srcdir)/convolutions.f90 $(objdir)/isostasy_defs.o $
 $(objdir)/lv_xlra.o: $(srcdir)/lv_xlra.f90 $(objdir)/isostasy_defs.o $(objdir)/convolutions.o
 	$(FC) $(DFLAGS) $(FFLAGS) -c -o $@ $<
 
-$(objdir)/sealevel.o: $(srcdir)/sealevel.f90 $(objdir)/isostasy_defs.o $(objdir)/isos_utils.o
+$(objdir)/sealevel.o: $(srcdir)/sealevel.f90 $(objdir)/isostasy_defs.o $(objdir)/isos_utils.o $(objdir)/ncio.o
 	$(FC) $(DFLAGS) $(FFLAGS) -c -o $@ $<
 
 # > 2 dependences

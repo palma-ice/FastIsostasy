@@ -18,6 +18,11 @@
     zl          = 88., 600.
     viscosities = 1e21, 2e21
 
+    ! Barystatic sea level
+    bsl_ext_method = "const"            ! "zero", "const", "external"
+    bsl_ext_const  = -120.0             ! [m] Constant value to impose for external barystatic sea level
+    bsl_ext_file   = "isostasy_data/barystatic_sea_level/sl_deglaciation.dat"
+
     ! Physical constants
     E               = 66.0          ! [GPa] Young modulus
     nu              = 0.28          ! [-] Poisson ratio

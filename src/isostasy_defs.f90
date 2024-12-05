@@ -62,6 +62,10 @@ module isostasy_defs
         real(wp) :: time_diagnostics            ! [yr] Current model time of last diagnostic update
         real(wp) :: time_prognostics            ! [yr] Current model time of last prognostic update
 
+        real(wp), allocatable :: bsl_ext_ts_time(:)
+        real(wp), allocatable :: bsl_ext_ts_var(:)
+        
+
         ! Internal parameter 
         logical :: ref_was_set
         
@@ -116,6 +120,7 @@ module isostasy_defs
     type isos_state_class
         real(wp)              :: t                  ! [yr] Time
         real(wp)              :: bsl                ! [m] Barystatic sea level
+        real(wp)              :: bsl_ext            ! [m] External barystatic sea level contribution
         real(wp)              :: A_ocean            ! [m] Ocean surface (depends on bsl)
         real(wp)              :: V_af               ! [m^3] Volume contribution of ice above floatation
         real(wp)              :: V_pov              ! [m^3] Potential ocean volume contribution
