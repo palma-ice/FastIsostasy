@@ -401,7 +401,26 @@ module fastisostasy
                 isos%domain%tau         = isos%par%tau          ! [yr]
                 isos%domain%maskactive  = .true.
 
-            end select
+        end select
+
+        ! External barystatic sea level 
+        select case(trim(isos%par%bsl_ext_method))
+
+            case("zero","const")
+                ! Do nothing, value will be assigned during update.
+            
+            case("timeseries")
+                ! Load the external file with barystatic sea-level time series
+                ! Incude nc_varname argument if loading from a NetCDF file (eventually this should not be hardcoded...)
+                call load_bsl_external_ts(isos%par%bsl_ext_ts_var,isos%par%bsl_ext_ts_time,isos%par%bsl_ext_ts_file,conv_time_units=1e-3_wp)
+
+            case DEFAULT
+
+                write(error_unit,*) "isos_init:: Error: bsl_ext_method not recognized."
+                write(error_unit,*) "bsl_ext_method = ", trim(isos%par%bsl_ext_method)
+                stop 
+
+        end select
 
         ! Set time to very large value in the future 
         isos%par%time_diagnostics = 1e10
@@ -430,6 +449,7 @@ module fastisostasy
         real(wp), intent(IN), optional :: z_bed_background
 
         state%bsl            = 0.0
+        state%bsl_ext        = 0.0
         state%V_af           = 0.0
         state%V_den          = 0.0
         state%V_pov          = 0.0
@@ -490,7 +510,7 @@ module fastisostasy
 
     end subroutine isos_init_ref
 
-    subroutine isos_init_state(isos, z_bed, H_ice, time, w, we, bsl, dz_ss)
+    subroutine isos_init_state(isos, z_bed, H_ice, time, w, we, bsl_ext, dz_ss, time_bp)
 
         implicit none
         
@@ -499,10 +519,11 @@ module fastisostasy
         real(wp), intent(IN) :: z_bed(:, :)                 ! [m] Current bedrock elevation
         real(wp), intent(IN) :: H_ice(:, :)                 ! [m] Current ice thickness
 
-        real(wp), intent(IN), optional :: bsl               ! [a] Barystatic sea level
+        real(wp), intent(IN), optional :: bsl_ext           ! [m] External barystatic sea level value
         real(wp), intent(IN), optional :: dz_ss(:, :)       ! [m] Sea surface perturbation
         real(wp), intent(IN), optional :: w(:, :)           ! [m] Viscous displacement
         real(wp), intent(IN), optional :: we(:, :)          ! [m] Elastic displacement
+        real(wp), intent(IN), optional :: time_bp           ! [yr] time before present
 
         ! write(*,*) "BSL ref: ", isos%ref%bsl
 
@@ -517,11 +538,12 @@ module fastisostasy
             call out2in(isos%now%z_bed, z_bed, isos%domain)
             call out2in(isos%now%Hice,  H_ice, isos%domain)
 
-            if (present(bsl)) then
-                isos%now%bsl = bsl
-            else
-                isos%now%bsl   = 0.0
-            end if
+            ! Update bsl_ext based on choices/inputs
+            call set_bsl_ext(isos,time,bsl_ext,time_bp)
+
+            ! For now set bsl equal to the externally prescribed value
+            isos%now%bsl   = isos%now%bsl_ext 
+
             if (present(dz_ss)) then
                 call out2in(isos%now%dz_ss, dz_ss, isos%domain)
             else
@@ -573,15 +595,16 @@ module fastisostasy
 
     end subroutine isos_init_state
 
-    subroutine isos_update(isos, H_ice, time, bsl, dwdt_corr) 
+    subroutine isos_update(isos, H_ice, time, bsl_ext, dwdt_corr, time_bp) 
 
         implicit none
 
         type(isos_class), intent(INOUT) :: isos 
         real(wp), intent(IN)            :: H_ice(:, :)      ! [m] Current ice thickness
         real(wp), intent(IN)            :: time             ! [a] Current time
-        real(wp), intent(IN), optional  :: bsl              ! [m] Barystatic sea level forcing
+        real(wp), intent(IN), optional  :: bsl_ext          ! [m] Barystatic sea level forcing
         real(wp), intent(IN), optional  :: dwdt_corr(:, :) ! [m/yr] Basal topography displacement rate (ie, to relax from low resolution to high resolution)
+        real(wp), intent(IN), optional  :: time_bp           ! [yr] time before present
 
         ! Local variables
         real(wp) :: dt, dt_now
@@ -602,6 +625,9 @@ module fastisostasy
             call out2in(dwdt_corr_ext, dwdt_corr, isos%domain)
         end if
         ! write(*,*) "Extrema of dwdt_corr: ", minval(dwdt_corr_ext), maxval(dwdt_corr_ext)
+
+        ! write(*,*) "isos_update:: updating bsl_ext..."
+        call set_bsl_ext(isos,time,bsl_ext,time_bp)
 
         ! Step 0: determine current timestep and number of iterations
         dt = time - isos%par%time_prognostics
@@ -668,9 +694,14 @@ module fastisostasy
                 call calc_z_ss(isos%now%z_ss, isos%now%bsl, isos%ref%z_ss, isos%now%dz_ss)
                 ! write(*,*) "Extrema of z_ss: ", minval(isos%now%z_ss), maxval(isos%now%z_ss)
 
+
+! =====================================================================================
+! Jan: here is where we need to combine both bsl and bsl_ext based on user choice
+! Also, I see isos%now%bsl used in the call above, not sure if that needs potentially to be part of this?
+
                 ! write(*,*) "Updating the BSL..."
-                if (present(bsl)) then
-                    isos%now%bsl = bsl
+                if (present(bsl_ext)) then
+                    isos%now%bsl = bsl_ext
                 else
                     call calc_H_above_bsl(isos%now, isos%par)
                     call calc_sl_contributions(isos)
@@ -683,6 +714,9 @@ module fastisostasy
                     ! write(*,*) "BSL: ", isos%now%bsl
                 end if
             end if
+
+! =====================================================================================
+
 
             ! write(*,*) "Updating RSL..."
             call calc_rsl(isos%now)
@@ -791,6 +825,46 @@ module fastisostasy
         return
     end subroutine isos_update
 
+    subroutine set_bsl_ext(isos,time,bsl_ext,time_bp)
+
+        implicit none
+
+        type(isos_class), intent(INOUT) :: isos
+        real(wp), intent(IN)            :: time
+        real(wp), intent(IN), optional  :: bsl_ext 
+        real(wp), intent(IN), optional  :: time_bp 
+
+        ! Local variables
+        real(wp) :: time_before_present
+
+        if (present(bsl_ext)) then
+            ! Use provided value directly as external bsl value
+            isos%now%bsl_ext = bsl_ext
+        else
+            ! Use bsl_ext parameters to decide value of bsl_ext
+
+            select case(trim(isos%par%bsl_ext_method))
+
+                case("zero")
+                    isos%now%bsl_ext = 0.0
+                case("const")
+                    isos%now%bsl_ext = isos%par%bsl_ext_const
+                case("timeseries")
+                    ! Note that the time here should be time_bp
+                    if (present(time_bp)) then
+                        time_before_present = time_bp
+                    else 
+                        time_before_present = time
+                    end if
+                    call calc_bsl_external_ts(isos%now%bsl_ext,isos%par%bsl_ext_ts_var,isos%par%bsl_ext_ts_time,time_before_present)
+            
+            end select
+        end if
+
+        return
+
+    end subroutine set_bsl_ext
+
     subroutine nan_check(isos,step)
         implicit none
         type(isos_class), intent(IN) :: isos
@@ -871,9 +945,14 @@ module fastisostasy
             end if
         end if
 
-        call nml_read(filename, group, "mask_file",           par%mask_file)
+        ! bsl_ext parameters
+        call nml_read(filename, group, "bsl_ext_method",    par%bsl_ext_method)
+        call nml_read(filename, group, "bsl_ext_const",     par%bsl_ext_const)
+        call nml_read(filename, group, "bsl_ext_ts_file",   par%bsl_ext_ts_file)
 
-        call nml_read(filename,group,"ocean_surface_file",    par%ocean_surface_file)
+        call nml_read(filename, group, "mask_file",         par%mask_file)
+
+        call nml_read(filename,group,"ocean_surface_file",  par%ocean_surface_file)
         if (trim(par%ocean_surface_file) .eq. "None" .or. &
             trim(par%ocean_surface_file) .eq. "none" .or. &
             trim(par%ocean_surface_file) .eq. "no") then 

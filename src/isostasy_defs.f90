@@ -50,6 +50,10 @@ module isostasy_defs
         real(wp) :: m_earth
         real(wp) :: A_ocean_pd
 
+        character(len=64)        :: bsl_ext_method
+        real(wp)                 :: bsl_ext_const 
+        character(len=1024)      :: bsl_ext_ts_file 
+
         character(len=64)        :: layering
         character(len=256)       :: restart
         character(len=256)       :: mask_file
@@ -57,6 +61,8 @@ module isostasy_defs
         character(len=256)       :: ocean_surface_file
         logical                  :: use_restart
         logical                  :: variable_ocean_surface
+
+        ! Internal parameters
 
         real(wp) :: L_w                         ! [m] Lithosphere flexural length scale (for method=2)
         real(wp) :: time_diagnostics            ! [yr] Current model time of last diagnostic update
