@@ -552,7 +552,7 @@ module fastisostasy
         call calc_masks(isos)
         ! write(*,*) "Calling first update..."
         ! call copy_sparsestate(isos%ref, isos%now)
-        call isos_update(isos, H_ice, time, force_update_diagnostics=.TRUE.)
+        call isos_update(isos, H_ice, time, bsl=bsl)
 
         ! write(*,*) "isos_init_state: "
         ! write(*,*) "    Initial time:   ",  isos%par%time_prognostics
@@ -573,7 +573,7 @@ module fastisostasy
 
     end subroutine isos_init_state
 
-    subroutine isos_update(isos, H_ice, time, bsl, dwdt_corr, force_update_diagnostics) 
+    subroutine isos_update(isos, H_ice, time, bsl, dwdt_corr) 
 
         implicit none
 
@@ -582,7 +582,6 @@ module fastisostasy
         real(wp), intent(IN)            :: time             ! [a] Current time
         real(wp), intent(IN), optional  :: bsl              ! [m] Barystatic sea level forcing
         real(wp), intent(IN), optional  :: dwdt_corr(:, :) ! [m/yr] Basal topography displacement rate (ie, to relax from low resolution to high resolution)
-        logical,  intent(IN), optional  :: force_update_diagnostics ! Internal switch to force update
 
         ! Local variables
         real(wp) :: dt, dt_now
@@ -623,8 +622,6 @@ module fastisostasy
             if ( (isos%par%time_prognostics+dt_now) - isos%par%time_diagnostics .ge. 1e-3) then
                 update_diagnostics = .TRUE.
                 isos%par%time_diagnostics = isos%par%time_diagnostics + isos%par%dt_diagnostics
-            else if (present(force_update_diagnostics)) then
-                update_diagnostics = .TRUE.
             else
                 update_diagnostics = .FALSE.
             end if

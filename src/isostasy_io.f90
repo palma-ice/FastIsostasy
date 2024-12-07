@@ -112,6 +112,8 @@ module isostasy_io
 
         call nc_write(filename, "z_bed", isos%now%z_bed, units="m", dim1="xc", dim2="yc", &
             dim3="time", ncid=ncid, start=[1,1,n], count=[nx,ny,1])
+        call nc_write(filename,"z_ss", isos%now%z_ss, units="m", &
+            dim1="xc", dim2="yc", dim3="time", ncid=ncid,start=[1,1,n], count=[nx,ny,1])
         call nc_write(filename,"dz_ss", isos%now%dz_ss, units="m", &
             dim1="xc", dim2="yc", dim3="time", ncid=ncid,start=[1,1,n], count=[nx,ny,1])
         call nc_write(filename,"w", isos%now%w, units="m", dim1="xc", dim2="yc", &
@@ -182,6 +184,10 @@ module isostasy_io
         call nc_read(filename, "z_bed", isos%now%z_bed, start=[1,1,1], &
             count=[isos%domain%nx, isos%domain%ny, 1])
         ! write(*,*) "Extrema z_bed: ", minval(isos%now%z_bed), maxval(isos%now%z_bed)
+
+        call nc_read(filename, "z_ss", isos%now%z_ss, start=[1,1,1], &
+            count=[isos%domain%nx, isos%domain%ny, 1])
+        ! write(*,*) "Extrema z_ss: ", minval(isos%now%z_ss), maxval(isos%now%z_ss)
 
         call nc_read(filename, "dz_ss", isos%now%dz_ss, start=[1,1,1], &
             count=[isos%domain%nx, isos%domain%ny, 1])
