@@ -23,6 +23,7 @@ module isostasy_defs
 
         character(len=56)       :: mantle      ! [-] Method to prescribe viscosity field
         character(len=56)       :: lithosphere  ! [-] Method to prescribe lithospheric thickness field
+        character(len=56)       :: viscosity_scaling_method
         real(wp)                :: viscosity_scaling
         
         real(wp), allocatable   :: zl(:)    ! [km] Layer boundaries

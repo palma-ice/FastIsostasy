@@ -5,12 +5,13 @@
     method          = 3
     dt_prognostics  = 1.
     dt_diagnostics  = 10.
-    pad         = 0.e3
+    pad         = 0.
 
     ! Rheology
     mantle = "gaussian_plus"
     lithosphere = "uniform"
-    viscosity_scaling_method = 0
+    viscosity_scaling_method = "scale"
+    viscosity_scaling = 1.
     layering    = "equalized"
     nl          = 1
     zl  = 150.

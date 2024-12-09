@@ -41,9 +41,11 @@ module isos_utils
     public :: maskfield
     public :: isos_set_field
     public :: isos_set_smoothed_field
+    public :: flat_extension
     public :: smooth_gauss_2D
+    public :: smooth_gauss_2D_masked
     public :: gauss_values
-    public :: calc_gaussian_rigidity
+    public :: calc_gaussian_thickness
     public :: calc_gaussian_viscosity
     
     contains
@@ -144,6 +146,7 @@ module isos_utils
         real(dp), intent(INOUT)     :: in(:, :)
         real(dp), intent(INOUT)     :: out(:, :)
 
+        out = (0.d0,0.d0)
         call fftw_execute_r2r(plan, in, out)
 
         return
@@ -162,6 +165,7 @@ module isos_utils
         nx = size(in,1)
         ny = size(in,2)
 
+        out = (0.d0,0.d0)
         call fftw_execute_r2r(plan, in, out)
         out = out / (nx * ny * 1.)
 
@@ -187,6 +191,7 @@ module isos_utils
         real(dp),    intent(INOUT)  :: in(:, :)
         complex(dp), intent(INOUT)  :: out(:, :)
 
+        out = (0.d0,0.d0)
         call fftw_execute_dft_r2c(plan, in, out)
 
         return
@@ -203,6 +208,7 @@ module isos_utils
         nx = size(in,1)
         ny = size(in,2)
 
+        out = (0.d0,0.d0)
         call fftw_execute_dft_c2r(plan, in, out)
         out = out / (nx * ny * 1._wp)
 
@@ -414,7 +420,6 @@ module isos_utils
         real(wp), intent(IN)                    :: H_ice(:, :)
         type(isos_domain_class), intent(IN)     :: domain
 
-        now%z_bed = 0.0
         now%Hice = 0.0
         call out2in(now%z_bed, z_bed, domain)
         call out2in(now%Hice, H_ice, domain)
@@ -585,6 +590,35 @@ module isos_utils
         return
     end subroutine isos_set_smoothed_field
 
+    subroutine flat_extension(var, icrop1, icrop2, jcrop1, jcrop2)
+        implicit none
+
+        real(wp), intent(INOUT) :: var(:, :)
+        integer, intent(IN)     :: icrop1, icrop2, jcrop1, jcrop2
+
+        integer :: i, j, nx, ny
+
+        nx = size(var,1)
+        ny = size(var,2)
+
+        do i = 1, nx
+            if (i .lt. icrop1) then
+                var(i,:) = var(icrop1,:)
+            else if (i .gt. icrop2) then
+                var(i,:) = var(icrop2,:)
+            end if
+        end do
+
+        do j = 1, ny
+            if (j .lt. jcrop1) then
+                var(:,j) = var(:,jcrop1)
+            else if (j .gt. jcrop2) then
+                var(:,j) = var(:,jcrop2)
+            end if
+        end do
+
+    end subroutine flat_extension
+
     subroutine smooth_gauss_2D(var, dx, sigma, mask_apply, mask_use)
         ! Smooth out a field to avoid noise 
         ! mask_apply designates where smoothing should be applied 
@@ -710,6 +744,103 @@ module isos_utils
         return
     end subroutine smooth_gauss_2D
 
+    subroutine smooth_gauss_2D_masked(var, dx, sigma, mask_apply, mask_use)
+        ! Smooth out a field to avoid noise 
+        ! mask_apply designates where smoothing should be applied 
+        ! mask_use   designates which points can be considered in the smoothing filter 
+
+        implicit none
+
+        real(wp),   intent(INOUT)   :: var(:, :)      ! [nx,ny] 2D variable
+        real(wp),   intent(IN)      :: dx 
+        real(wp),   intent(IN)      :: sigma  
+        logical,    intent(IN)      :: mask_apply(:, :) 
+        logical,    intent(IN)      :: mask_use(:, :) 
+
+        ! Local variables
+        integer  :: i, j, nx, ny, n, n2, k 
+        real(wp), allocatable :: filter0(:, :), filter(:, :) 
+        real(wp), allocatable :: var_old(:, :) 
+
+        real(wp), allocatable :: var_ext(:, :), var_ref_ext(:, :) 
+
+        nx    = size(var,1)
+        ny    = size(var,2)
+
+        ! Determine half-width of filter as 2-sigma
+        n2 = ceiling(2.0_wp*sigma / dx)
+
+        ! Get total number of points for filter window in each direction
+        n = 2*n2+1
+        
+        allocate(var_old(nx,ny))
+        allocate(filter0(n,n))
+        allocate(filter(n,n))
+
+        allocate(var_ext(-n2:nx+n2,-n2:ny+n2))
+        allocate(var_ref_ext(-n2:nx+n2,-n2:ny+n2))
+
+        ! Calculate default 2D Gaussian smoothing kernel
+        filter0 = gauss_values(dx, dx, sigma=sigma, n=n)
+
+        var_old = var 
+
+        var_ref_ext = -9999.0 
+
+        var_ref_ext(1:nx,1:ny) = var 
+        do i = 0, -n2, -1
+            k = -i+1
+            var_ref_ext(i,:) = var_ref_ext(k,:) 
+        end do 
+        do i = nx+1, nx+n2 
+            k = nx + ((nx+1)-i)
+            var_ref_ext(i,:) = var_ref_ext(k,:) 
+        end do 
+
+        do j = 0, -n2, -1
+            k = -j+1
+            var_ref_ext(:,j) = var_ref_ext(:,k) 
+        end do 
+        do j = ny+1, ny+n2 
+            k = ny + ((ny+1)-j)
+            var_ref_ext(:,j) = var_ref_ext(:,k) 
+        end do 
+
+        if (count(var_ref_ext .eq. -9999.0) .gt. 0) then 
+            write(*,*) "Missing points!"
+            stop 
+        end if 
+
+        do j = 1, ny
+        do i = 1, nx
+
+
+            if (mask_apply(i,j)) then
+                ! Apply smoothing to this point 
+
+                ! Limit filter input to neighbors of interest
+                filter = filter0 
+                where(.not. mask_use(i-n2:i+n2,j-n2:j+n2) ) filter = 0.0
+
+                ! If neighbors are available, normalize and perform smoothing  
+                if (sum(filter) .gt. 0.0) then 
+                    filter = filter/sum(filter)
+                    var_ext(i,j) = sum(var_ref_ext(i-n2:i+n2,j-n2:j+n2)*filter) 
+                end if
+
+            else
+                var_ext(i,j) = var_ref_ext(i,j)
+            end if
+
+        end do 
+        end do 
+
+        ! Get variable on normal grid 
+        var = var_ext(1:nx,1:ny)
+
+        return
+    end subroutine smooth_gauss_2D_masked
+
     function gauss_values(dx,dy,sigma,n) result(filt)
         ! Calculate 2D Gaussian smoothing kernel
         ! https://en.wikipedia.org/wiki/Gaussian_blur
@@ -805,7 +936,7 @@ module isos_utils
         return
     end subroutine calc_gaussian_viscosity
 
-    subroutine calc_gaussian_rigidity(He_lith,He_lith_0, He_lith_1,sign,dx,dy)
+    subroutine calc_gaussian_thickness(He_lith,He_lith_0, He_lith_1,sign,dx,dy)
 
         real(wp), intent(IN) :: He_lith_0, He_lith_1,sign, dx, dy
         real(wp), intent(OUT) :: He_lith(:, :)
@@ -853,7 +984,7 @@ module isos_utils
         enddo
         
         return
-    end subroutine calc_gaussian_rigidity
+    end subroutine calc_gaussian_thickness
 
     function midindex(n) result(n2)
         implicit none

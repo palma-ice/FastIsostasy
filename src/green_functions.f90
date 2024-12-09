@@ -74,26 +74,21 @@ module green_functions
 
         ! Fill matrix of Green function.
         filt = 0.
-        do j = -my, my
-        do i = -mx, mx
+        do j = 1, ny
+        do i = 1, nx
 
-            x  = i*dx
-            y  = j*dy
+            x  = (i-1-mx)*dx
+            y  = (j-1-mx)*dy
             r  = sqrt(x**2+y**2)
 
-            ! Get actual index of array
-            i1 = i+1+mx
-            j1 = j+1+my
-
             ! Get correct GE value for this point
-            filt(i1, j1) = get_ge_value(r, rn_vals, ge_vals) * 1.e-12 * (dx*dy) / &
+            filt(i, j) = get_ge_value(r, rn_vals, ge_vals) * 1.e-12 * (dx*dy) / &
                 (9.81*max(r, dx))
-
         end do
         end do
 
         return 
-      end subroutine calc_elastic_green
+    end subroutine calc_elastic_green
 
     ! Compute Green function (Coulon et al. 2021) to determine the z_ss perturbation.
     subroutine calc_z_ss_green(filt, m_earth, r_earth, dx, dy) 
@@ -117,19 +112,15 @@ module green_functions
 
         ! Fill matrix of Green function.
         filt = 0.
-        do j = -my, my
-        do i = -mx, mx
+        do j = 1, ny
+        do i = 1, nx
 
-            x  = i*dx
-            y  = j*dy
+            x  = (i-1-mx)*dx
+            y  = (j-1-mx)*dy
             r  = sqrt(x**2+y**2)
 
-            ! Get actual index of array
-            i1 = i+1+mx
-            j1 = j+1+my
-
             ! Get correct GE value for this point (given by colatitude, theta)
-            filt(i1, j1) = calc_gn_value(max(dy,r), r_earth, m_earth)
+            filt(i, j) = calc_gn_value(max(dy,r), r_earth, m_earth)
         end do
         end do
 
@@ -137,7 +128,7 @@ module green_functions
     end subroutine calc_z_ss_green
 
 
-      function get_ge_value(r,rn_vals,ge_vals) result(ge)
+    function get_ge_value(r,rn_vals,ge_vals) result(ge)
 
         implicit none
 

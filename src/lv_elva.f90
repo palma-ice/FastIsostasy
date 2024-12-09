@@ -126,6 +126,7 @@ module lv_elva
     
 
     subroutine calc_parallel_layerboundaries(layer_boundaries, He_lith, nl, dl)
+        ! Everything related to layer boundaries is computed in km!
         implicit none
         real(wp), intent(INOUT) :: layer_boundaries(:, :, :)
         real(wp), intent(IN)    :: He_lith(:, :)
@@ -133,7 +134,7 @@ module lv_elva
         real(wp), intent(IN)    :: dl
         integer                 :: k
 
-        layer_boundaries(:, :, 1) = He_lith + 1e3
+        layer_boundaries(:, :, 1) = He_lith
 
         do k = 2, nl
             layer_boundaries(:, :, k) = layer_boundaries(:, :, k-1) + dl
@@ -142,6 +143,7 @@ module lv_elva
     end subroutine calc_parallel_layerboundaries
 
     subroutine calc_equalized_layerboundaries(layer_boundaries, He_lith, nl, zl)
+        ! Everything related to layer boundaries is computed in km!
         implicit none
         real(wp), intent(INOUT) :: layer_boundaries(:, :, :)
         real(wp), intent(IN)    :: He_lith(:, :)
@@ -149,7 +151,7 @@ module lv_elva
         real(wp), intent(IN)    :: zl(:)
         integer                 :: k
 
-        layer_boundaries(:, :, 1) = He_lith + 1e3
+        layer_boundaries(:, :, 1) = He_lith
 
         do k = 2, nl
             layer_boundaries(:, :, k) = zl(k)
@@ -158,6 +160,7 @@ module lv_elva
     end subroutine calc_equalized_layerboundaries
 
     subroutine calc_folded_layerboundaries(layer_boundaries, He_lith, nl, zl)
+        ! Everything related to layer boundaries is computed in km!
         implicit none
         real(wp), intent(INOUT) :: layer_boundaries(:, :, :)
         real(wp), intent(IN)    :: He_lith(:, :)
@@ -165,7 +168,7 @@ module lv_elva
         real(wp), intent(IN)    :: zl(:)
         integer                 :: k
 
-        layer_boundaries(:, :, 1) = He_lith + 1e3
+        layer_boundaries(:, :, 1) = He_lith
         write(*,*) "folded layer boundaries not implemented yet."
         stop
         return
@@ -238,9 +241,11 @@ module lv_elva
             write(*,*) "Value range of effective viscosity: ", minval(eta_eff), maxval(eta_eff)
 
             do k = nl, 2, -1
-                dz = layer_boundaries(:, :, k) - layer_boundaries(:, :, k-1)
 
-                write(*,*) k, minval(dz), maxval(dz), minval(layer_boundaries(:, :, k)), maxval(layer_boundaries(:, :, k)), minval(layer_boundaries(:, :, k-1)), maxval(layer_boundaries(:, :, k-1))
+                ! convert to meters for consistence with W, Wx, Wy
+                dz = (layer_boundaries(:, :, k) - layer_boundaries(:, :, k-1)) * 1e3
+
+                ! write(*,*) k, minval(dz), maxval(dz), minval(layer_boundaries(:, :, k)), maxval(layer_boundaries(:, :, k)), minval(layer_boundaries(:, :, k-1)), maxval(layer_boundaries(:, :, k-1))
 
                 eta_c = eta(:, :, k-1)
                 eta_ratio = eta_c / eta_eff
@@ -261,13 +266,14 @@ module lv_elva
                 end do
 
                 eta_eff = R * eta_eff
-                write(*,*) "Value range of effective viscosity: ", minval(eta_eff), maxval(eta_eff)
 
             end do
         else
             print*,'Number of levels is wrong: nl = ', nl
             stop
         endif
+
+        write(*,*) "Value range of effective viscosity: ", minval(eta_eff), maxval(eta_eff)
 
         return
     end subroutine calc_effective_viscosity

@@ -6,7 +6,7 @@ LIB_NC  = -L${NETCDFFI_ROOT}/lib -Wl\,-rpath=${NETCDFFI_ROOT}/lib -lnetcdff -L${
 
 FFTWROOT = exlib/fftw-serial
 INC_FFTW = -I${FFTWROOT}/include
-LIB_FFTW = -L${FFTWROOT}/lib -lfftw3 -lm
+LIB_FFTW = -L${FFTWROOT}/lib -lfftw3
 
 FFLAGS  = -module $(objdir) -L$(objdir)
 
