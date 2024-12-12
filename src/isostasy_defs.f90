@@ -5,23 +5,18 @@ module isostasy_defs
     implicit none
     include 'fftw3.f03'
 
-    ! Internal constants
-    ! integer,  parameter :: dp  = kind(1.d0)
-    ! integer,  parameter :: sp  = kind(1.0)
-
-    ! ! Choose the precision of the library (sp,dp)
-    ! integer,  parameter :: wp = dp
     real(wp), parameter :: pi = 3.14159265359
 
     type isos_param_class
-        logical            :: interactive_sealevel
-        logical            :: correct_distortion
-        integer            :: method                ! Computation method for viscous displacement
-        real(wp)           :: dt_prognostics        ! [yr] Timestep to recalculate equilibrium lithospheric displacement
-        real(wp)           :: dt_diagnostics        ! [yr] Timestep to recalculate bedrock uplift and rate
-        real(wp)           :: min_pad
+        logical     :: heterogeneous_ssh    ! Sea level varies spatially?
+        logical     :: interactive_sealevel ! Sea level interacts with solid Earth deformation?
+        logical     :: correct_distortion   ! Account for distortion of projection?
+        integer     :: method               ! Computation method for viscous displacement
+        real(wp)    :: dt_prognostics       ! [yr] Timestep to recalculate prognostics
+        real(wp)    :: dt_diagnostics       ! [yr] Timestep to recalculate diagnostics
+        real(wp)    :: min_pad              ! [km] Padding around domain
 
-        character(len=56)       :: mantle      ! [-] Method to prescribe viscosity field
+        character(len=56)       :: mantle       ! [-] Method to prescribe viscosity field
         character(len=56)       :: lithosphere  ! [-] Method to prescribe lithospheric thickness field
         character(len=56)       :: viscosity_scaling_method
         real(wp)                :: viscosity_scaling
@@ -48,21 +43,18 @@ module isostasy_defs
         real(wp) :: g
         real(wp) :: r_earth
         real(wp) :: m_earth
-        real(wp) :: A_ocean_pd
 
         character(len=64)        :: layering
         character(len=256)       :: restart
         character(len=256)       :: mask_file
         character(len=256)       :: rheology_file
-        character(len=256)       :: ocean_surface_file
         logical                  :: use_restart
-        logical                  :: variable_ocean_surface
 
         real(wp) :: L_w                         ! [m] Lithosphere flexural length scale (for method=2)
         real(wp) :: time_diagnostics            ! [yr] Current model time of last diagnostic update
         real(wp) :: time_prognostics            ! [yr] Current model time of last prognostic update
 
-        ! Internal parameter 
+        ! Internal parameter
         logical :: ref_was_set
         
     end type
@@ -79,9 +71,6 @@ module isostasy_defs
         real(wp), allocatable   :: yc(:)            ! [m]
         real(wp), allocatable   :: x(:, :)          ! [m]
         real(wp), allocatable   :: y(:, :)          ! [m]
-
-        real(wp), allocatable   :: bsl_vec(:)       ! [m]
-        real(wp), allocatable   :: A_ocean_vec(:)   ! [m^2]
 
         real(wp), allocatable   :: dx_matrix(:, :)  ! [m] K * dx
         real(wp), allocatable   :: dy_matrix(:, :)  ! [m] K * dy
@@ -114,12 +103,12 @@ module isostasy_defs
     end type isos_domain_class
 
     type isos_state_class
-        real(wp)              :: t                  ! [yr] Time
-        real(wp)              :: bsl                ! [m] Barystatic sea level
-        real(wp)              :: A_ocean            ! [m] Ocean surface (depends on bsl)
-        real(wp)              :: V_af               ! [m^3] Volume contribution of ice above floatation
-        real(wp)              :: V_pov              ! [m^3] Potential ocean volume contribution
-        real(wp)              :: V_den              ! [m^3] Density-driven ocean volume contribution
+        real(wp)              :: t              ! [yr] Time
+        real(wp)              :: bsl            ! [m] BSL
+        real(wp)              :: V_af           ! [m^3] Volume contribution of ice above floatation
+        real(wp)              :: V_pov          ! [m^3] Potential ocean volume contribution
+        real(wp)              :: V_den          ! [m^3] Density-driven ocean volume contribution
+        real(wp)              :: deltaV_bsl     ! [m^3] BSL contribution from domain wrt previous time step
 
         real(wp), allocatable :: z_bed(:, :)          ! Bedrock elevation         [m]
         real(wp), allocatable :: dwdt(:, :)           ! Rate of bedrock uplift    [m/a]
@@ -145,16 +134,6 @@ module isostasy_defs
     end type isos_state_class
 
     type isos_out_class
-        real(wp), allocatable       :: He_lith(:, :)
-        real(wp), allocatable       :: D_lith(:, :)
-        real(wp), allocatable       :: eta_eff(:, :)
-        real(wp), allocatable       :: tau(:, :)
-        real(wp), allocatable       :: kappa(:, :)
-        real(wp), allocatable       :: kei(:, :)
-        real(wp), allocatable       :: GE(:, :)
-        real(wp), allocatable       :: GN(:, :)
-        real(wp), allocatable       :: GV(:, :)
-        
         real(wp), allocatable       :: Hice(:, :)
         real(wp), allocatable       :: canom_full(:, :)
         real(wp), allocatable       :: dwdt(:, :)
@@ -177,7 +156,7 @@ module isostasy_defs
         type(isos_domain_class) :: domain
         type(isos_state_class)  :: now
         type(isos_state_class)  :: ref
-        type(isos_out_class) :: out
+        type(isos_out_class)    :: out
     end type
 
     public :: sp, dp, wp

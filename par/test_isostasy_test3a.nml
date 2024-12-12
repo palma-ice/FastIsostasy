@@ -1,10 +1,11 @@
 &isostasy
     ! Options
-    interactive_sealevel = .false.
-    correct_distortion = .false.
-    method          = 3
-    dt_prognostics  = 1.
-    dt_diagnostics  = 10.
+    heterogeneous_ssh = .false.     ! Sea level varies spatially?
+    interactive_sealevel = .false.  ! Sea level interacts with solid Earth deformation?
+    correct_distortion = .false.    ! Account for distortion of projection?
+    method          = 3             ! 0: constant displacement; 1: LLRA; 2: LV-ELRA, 3: LV-ELVA
+    dt_prognostics  = 1.            ! [yr] Max. timestep to recalculate prognostics
+    dt_diagnostics  = 10.           ! [yr] Min. timestep to recalculate diagnostics
     pad         = 0.
 
     ! Rheology
@@ -14,7 +15,7 @@
     viscosity_scaling = 1.
     layering    = "equalized"
     nl          = 1
-    zl  = 150.
+    zl          = 150.
     viscosities = 1.e21
     tau             = 2000.0
 
@@ -29,11 +30,20 @@
     g               = 9.81          ! [m/s^2]
     r_earth         = 6.378e6       ! [m]  Earth radius, Coulon et al. (2021)
     m_earth         = 5.972e24      ! [kg] Earth mass,   Coulon et al. (2021)
-    A_ocean_pd      = 3.625e14      ! [m^2] Ocean surface as in Goelzer et al. (2020)
 
     ! Files
     restart = "None"
     mask_file = "None"
     rheology_file = "None"
-    ocean_surface_file = "None"
+/
+
+&barysealevel
+    method      = "const"   ! "const": BSL = bsl_init throughout sim
+                            ! "file": BSL = time series provided from sl_path
+                            ! "fastiso": BSL = sum of contributions from fastiso domains
+    bsl_init    = 0.0       ! [m] BSL relative to present day
+    sl_path     = "input/sl_deglaciation.dat"   ! Input time series filename
+    sl_name     = "none"    ! Variable name in netcdf file, if relevant
+    A_ocean_pd  = 3.625e14  ! [m^2] Ocean surface as in Goelzer et al. (2020)
+    A_ocean_path = "None"   ! Path to ocean surface file
 /
