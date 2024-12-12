@@ -8,7 +8,7 @@ libisostasy/include/*.mod
 libisostasy/include/*.a
 libisostasy/bin/*.x
 exlib
-output/
+output/*
 input/ice6gd/
 src/*.mod
 isostasy_data
