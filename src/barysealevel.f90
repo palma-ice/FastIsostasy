@@ -31,6 +31,10 @@ module barysealevel
     public :: bsl_class
     public :: bsl_init
     public :: bsl_update
+    public :: bsl_restart_write
+    public :: bsl_restart_read
+    public :: bsl_write_init
+    public :: bsl_write_step
 
 contains
 
@@ -38,8 +42,8 @@ contains
 
         implicit none
 
-        type(bsl_class),    intent(INOUT) :: bsl
-        character(len=*),   intent(IN)  :: filename
+        type(bsl_class),  intent(INOUT) :: bsl
+        character(len=*), intent(IN)    :: filename
 
         ! Local variables
         character(len=56) :: varname
@@ -339,5 +343,91 @@ contains
         return 
 
     end subroutine series_allocate
+
+    subroutine bsl_restart_write(bsl, filename, time, init)
+
+        implicit none 
+        type(bsl_class),  intent(IN)  :: bsl
+        character(len=*),  intent(IN) :: filename
+        real(wp),          intent(IN) :: time
+        logical, optional, intent(IN) :: init
+
+        ! Local variables
+        integer  :: ncid
+
+        call nc_create(filename)
+        call nc_write_dim(filename, "time", x=time, dx=1.0_wp, nx=1, &
+            units="year", unlimited=.TRUE.)
+    
+        call nc_open(filename, ncid, writable=.TRUE.)
+
+        call nc_write(filename,"time", time, dim1="time", start=[1], count=[1], ncid=ncid)
+        call nc_write(filename, "bsl", bsl%bsl_now, units="m", dim1="time", &
+            ncid=ncid, start=[1], count=[1])
+        call nc_write(filename, "A_ocean", bsl%A_ocean_now, units="m^2", dim1="time", &
+            ncid=ncid, start=[1], count=[1])
+        
+        call nc_close(ncid)
+
+    end subroutine bsl_restart_write
+
+    subroutine bsl_restart_read(bsl, filename, time)
+
+        implicit none
+        type(bsl_class),   intent(INOUT) :: bsl
+        character(len=*),  intent(IN)    :: filename
+        real(wp),          intent(IN)    :: time
+
+        call nc_read(filename, "bsl", bsl%bsl_now, start=[1], count=[1])
+        call nc_read(filename, "A_ocean", bsl%A_ocean_now, start=[1], count=[1])
+        
+        return
+
+    end subroutine bsl_restart_read
+
+    subroutine bsl_write_init(bsl, filename, time_init)
+
+        implicit none
+        type(bsl_class), intent(IN) :: bsl
+        character(len=*), intent(IN) :: filename
+        real(wp),         intent(IN) :: time_init
+        
+        ! Create the empty netcdf file
+        call nc_create(filename)
+        call nc_write_dim(filename, "time", x=time_init, dx=1.0_wp, nx=1, &
+            units="year", unlimited=.TRUE.)
+        return
+    end subroutine bsl_write_init
+
+    ! Write results to file
+    subroutine bsl_write_step(bsl, filename, time)
+
+        implicit none 
+        
+        type(bsl_class), intent(IN) :: bsl
+        character(len=*), intent(IN) :: filename
+        real(wp),         intent(IN) :: time
+
+        ! Local variables
+        integer  :: ncid, n
+        real(wp) :: time_prev 
+
+        call nc_open(filename, ncid, writable=.TRUE.)
+
+        n = nc_size(filename, "time", ncid)
+        call nc_read(filename, "time", time_prev, start=[n], count=[1], ncid=ncid)
+        if (abs(time-time_prev) .gt. 1e-5) n = n+1
+
+        ! Update the time step
+        call nc_write(filename,"time", time, dim1="time", start=[n], count=[1], ncid=ncid)
+        call nc_write(filename,"bsl", bsl%bsl_now, dim1="time", start=[n], &
+            count=[1], ncid=ncid)
+        call nc_write(filename,"A_ocean", bsl%A_ocean_now, dim1="time", start=[n], &
+            count=[1], ncid=ncid)
+
+        call nc_close(ncid)     ! Close the netcdf file
+
+        return 
+    end subroutine bsl_write_step
 
 end module barysealevel
