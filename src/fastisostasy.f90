@@ -41,9 +41,15 @@ module fastisostasy
     public :: isos_end
     public :: isos_restart_write
     public :: isos_restart_read
+    public :: isos_write_init
+    public :: isos_write_init_extended
+    public :: isos_write_step
+    public :: isos_write_step_extended
     public :: bsl_class
     public :: bsl_init
     public :: bsl_update
+    public :: bsl_restart_write
+    public :: bsl_restart_read
 
 contains
     
@@ -105,16 +111,7 @@ contains
         mask_all = .true.
         mask_inner(icrop1:icrop2, jcrop1:jcrop2) = .true.
         mask_outer = .not. mask_inner
-
         ! write(*,*) sum(mask_inner * 1), sum(mask_outer * 1), sum(mask_all * 1)
-
-        if (isos%par%variable_ocean_surface) then
-            ! write(*,*) "Reading ocean surface file..."
-            call nc_read(isos%par%ocean_surface_file, "z", isos%domain%bsl_vec, &
-                start=[1], count=[nbsl])
-            call nc_read(isos%par%ocean_surface_file, "A", isos%domain%A_ocean_vec, &
-                start=[1], count=[nbsl])
-        end if
 
         ! write(*,*) "Initializing FFT plans..."
         allocate(buffer_2n(2*isos%domain%nx-1, 2*isos%domain%ny-1))
@@ -158,12 +155,10 @@ contains
             isos%domain%FGE, isos%domain%nx, isos%domain%ny)
 
         ! write(*,*) "Initializing gravitational Green's function..."
-        if (isos%par%interactive_sealevel) then
-            call calc_z_ss_green(isos%domain%GN, isos%par%m_earth, &
-                isos%par%r_earth, dx=isos%domain%dx, dy=isos%domain%dx)
-            call precompute_kernel(isos%domain%forward_dftplan_r2c, isos%domain%GN, &
-                isos%domain%FGN, isos%domain%nx, isos%domain%ny)
-        endif
+        call calc_z_ss_green(isos%domain%GN, isos%par%m_earth, &
+            isos%par%r_earth, dx=isos%domain%dx, dy=isos%domain%dx)
+        call precompute_kernel(isos%domain%forward_dftplan_r2c, isos%domain%GN, &
+            isos%domain%FGN, isos%domain%nx, isos%domain%ny)
 
         ! write(*,*) "Initializing maskactive with the help of buffer..."
         buffer_n = 0.0
@@ -385,7 +380,6 @@ contains
         isos%par%ref_was_set = .FALSE.
 
         ! write(*,*) "out%He_lith", size(isos%out%He_lith, 1), size(isos%out%He_lith, 2)
-        call cropdomain2out(isos%out, isos%domain)
         ! write(*,*) "out%He_lith", size(isos%out%He_lith, 1), size(isos%out%He_lith, 2)
 
         ! write(*,*) "isos_init:: complete." 
@@ -408,7 +402,6 @@ contains
         write(*,*) "    g               : ",    isos%par%g
         write(*,*) "    r_earth         : ",    isos%par%r_earth
         write(*,*) "    m_earth         : ",    isos%par%m_earth
-        write(*,*) "    A_ocean_pd      : ",    isos%par%A_ocean_pd
         
         write(*,*) "    range(eta_eff):  ", minval(isos%domain%eta_eff),    maxval(isos%domain%eta_eff) 
         write(*,*) "    range(He_lith):  ", minval(isos%domain%He_lith),    maxval(isos%domain%He_lith)
@@ -650,7 +643,7 @@ contains
 
             call calc_columnanoms_solidearth(isos)
 
-            if (update_diagnostics .and. isos%par%interactive_sealevel) then
+            if (update_diagnostics .and. isos%par%heterogeneous_ssh) then
                 ! write(*,*) "Updating the SSH perturbation..."
                 call calc_mass_anom(isos)
                 call precomputed_fftconvolution(isos%now%dz_ss, isos%domain%FGN, &
@@ -822,6 +815,7 @@ contains
         call nml_read(filename,group,"r_earth",         par%r_earth)
         call nml_read(filename,group,"m_earth",         par%m_earth)
 
+        call nml_read(filename,group,"heterogeneous_ssh",   par%heterogeneous_ssh)
         call nml_read(filename,group,"interactive_sealevel",par%interactive_sealevel)
         call nml_read(filename,group,"correct_distortion",  par%correct_distortion)
         call nml_read(filename,group,"method",              par%method)
@@ -833,15 +827,15 @@ contains
         call nml_read(filename,group,"viscosity_scaling_method", par%viscosity_scaling_method)
         call nml_read(filename,group,"viscosity_scaling", par%viscosity_scaling)
 
-        call nml_read(filename,group,"nl",          par%nl)
-        allocate(par%viscosities(par%nl))
-        allocate(par%zl(par%nl))
-        call nml_read(filename,group,"zl",          par%zl)
-
         if ((par%method .eq. 1) .or. (par%method .eq. 2)) then     ! ELRA and LLRA
             call nml_read(filename,group,"tau",             par%tau)
 
         elseif (par%method .eq. 3) then                            ! ELVA
+            call nml_read(filename,group,"nl",          par%nl)
+            allocate(par%viscosities(par%nl))
+            allocate(par%zl(par%nl))
+            call nml_read(filename,group,"zl",          par%zl)
+
             call nml_read(filename,group,"mantle",          par%mantle) 
             call nml_read(filename,group,"lithosphere",     par%lithosphere)
             call nml_read(filename,group,"layering",        par%layering)
@@ -891,9 +885,6 @@ contains
     subroutine deallocate_isos_domain(domain)
         implicit none 
         type(isos_domain_class), intent(INOUT) :: domain
-
-        if (allocated(domain%bsl_vec))      deallocate(domain%bsl_vec)
-        if (allocated(domain%A_ocean_vec))  deallocate(domain%A_ocean_vec)
 
         if (allocated(domain%xc))           deallocate(domain%xc)
         if (allocated(domain%yc))           deallocate(domain%yc)
@@ -957,32 +948,22 @@ contains
         implicit none 
         type(isos_out_class), intent(INOUT) :: out
 
-        if (allocated(out%He_lith))          deallocate(out%He_lith)
-        if (allocated(out%D_lith))           deallocate(out%D_lith)
-        if (allocated(out%eta_eff))          deallocate(out%eta_eff)
-        if (allocated(out%tau))              deallocate(out%tau)
-        if (allocated(out%kappa))            deallocate(out%kappa)
-        if (allocated(out%kei))              deallocate(out%kei)
-        if (allocated(out%GE))               deallocate(out%GE)
-        if (allocated(out%GV))               deallocate(out%GV)
-        if (allocated(out%GN))               deallocate(out%GN)
-
-        if (allocated(out%Hice))             deallocate(out%Hice)
-        if (allocated(out%canom_full))       deallocate(out%canom_full)
+        if (allocated(out%Hice))            deallocate(out%Hice)
+        if (allocated(out%canom_full))      deallocate(out%canom_full)
         if (allocated(out%dwdt))            deallocate(out%dwdt)
 
-        if (allocated(out%w))                deallocate(out%w)
-        if (allocated(out%we))               deallocate(out%we)
-        if (allocated(out%w_equilibrium))    deallocate(out%w_equilibrium)
+        if (allocated(out%w))               deallocate(out%w)
+        if (allocated(out%we))              deallocate(out%we)
+        if (allocated(out%w_equilibrium))   deallocate(out%w_equilibrium)
 
-        if (allocated(out%rsl))              deallocate(out%rsl)
-        if (allocated(out%z_ss))              deallocate(out%z_ss)
-        if (allocated(out%dz_ss))      deallocate(out%dz_ss)
-        if (allocated(out%z_bed))            deallocate(out%z_bed)
+        if (allocated(out%rsl))             deallocate(out%rsl)
+        if (allocated(out%z_ss))            deallocate(out%z_ss)
+        if (allocated(out%dz_ss))           deallocate(out%dz_ss)
+        if (allocated(out%z_bed))           deallocate(out%z_bed)
 
-        if (allocated(out%maskocean))        deallocate(out%maskocean)
-        if (allocated(out%maskgrounded))     deallocate(out%maskgrounded)
-        if (allocated(out%maskcontinent))    deallocate(out%maskcontinent)
+        if (allocated(out%maskocean))       deallocate(out%maskocean)
+        if (allocated(out%maskgrounded))    deallocate(out%maskgrounded)
+        if (allocated(out%maskcontinent))   deallocate(out%maskcontinent)
         return
     end subroutine deallocate_isos_out
 
@@ -1056,16 +1037,6 @@ contains
         implicit none 
         type(isos_out_class), intent(INOUT) :: out
         integer, intent(IN) :: nx, ny
-
-        allocate(out%He_lith(nx, ny))
-        allocate(out%D_lith(nx, ny))
-        allocate(out%eta_eff(nx, ny))
-        allocate(out%tau(nx, ny))
-        allocate(out%kappa(nx, ny))
-        allocate(out%kei(nx, ny))
-        allocate(out%GE(nx, ny))
-        allocate(out%GV(nx, ny))
-        allocate(out%GN(nx, ny))
 
         allocate(out%Hice(nx, ny))
         allocate(out%canom_full(nx, ny))

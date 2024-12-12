@@ -31,7 +31,6 @@ module isos_utils
     public :: in2out
     public :: in2out_logical
     public :: out2in
-    public :: cropdomain2out
     public :: cropstate2out
     public :: extendice2isostasy
 
@@ -372,24 +371,6 @@ module isos_utils
         X_in(domain%icrop1:domain%icrop2, domain%jcrop1:domain%jcrop2) = X_out
         return
     end subroutine out2in
-
-    subroutine cropdomain2out(out, domain)
-        implicit none
-        type(isos_out_class), intent(INOUT)     :: out
-        type(isos_domain_class), intent(IN)     :: domain
-
-        call in2out(out%He_lith, domain%He_lith, domain)
-        call in2out(out%D_lith, domain%D_lith, domain)
-        call in2out(out%eta_eff, domain%eta_eff, domain)
-        call in2out(out%tau, domain%tau, domain)
-        call in2out(out%kappa, domain%kappa, domain)
-
-        call in2out(out%kei, domain%kei, domain)
-        call in2out(out%GE, domain%GE, domain)
-        call in2out(out%GV, domain%GV, domain)
-        call in2out(out%GN, domain%GN, domain)
-
-    end subroutine cropdomain2out
 
     subroutine cropstate2out(out, now, domain)
         implicit none
