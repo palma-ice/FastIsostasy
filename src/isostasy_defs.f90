@@ -115,11 +115,12 @@ module isostasy_defs
 
     type isos_state_class
         real(wp)              :: t                  ! [yr] Time
-        real(wp)              :: bsl                ! [m] Barystatic sea level
+        real(wp)              :: bsl                ! [m] Barystatic sea level (potentially includes contributions from other domains)
         real(wp)              :: A_ocean            ! [m] Ocean surface (depends on bsl)
         real(wp)              :: V_af               ! [m^3] Volume contribution of ice above floatation
         real(wp)              :: V_pov              ! [m^3] Potential ocean volume contribution
         real(wp)              :: V_den              ! [m^3] Density-driven ocean volume contribution
+        real(wp)              :: deltaV_bsl   ! [m^3] BSL contribution
 
         real(wp), allocatable :: z_bed(:, :)          ! Bedrock elevation         [m]
         real(wp), allocatable :: dwdt(:, :)           ! Rate of bedrock uplift    [m/a]

@@ -6,6 +6,7 @@ program test_isostasy
     use fastisostasy
     use isostasy_benchmarks
     use isos_utils
+    use barysealevel
     ! use ice
     
     implicit none
@@ -46,12 +47,13 @@ program test_isostasy
     character(len=256)  :: fldr_path, filename
 
     type(isos_class)    :: isos1
+    type(bsl_class)     :: bsl
     ! type(ice_class)     :: ice
 
     ! === Define experiment to be run ====
 
-    experiment = "test3d"
-    
+    experiment = "test4"
+
     ! Tests are defined in Swierczek-Jereczek et al. (2024), GMD.
     ! Additional: "test5" = Lucía's Greenland ice-sheet load (since 15 ka)
     
@@ -211,6 +213,7 @@ program test_isostasy
 
     ! Initialize bedrock model (allocate fields)
     call isos_init(isos1, path_par, "isostasy", nx, ny, dx, dy)
+    call bsl_init(bsl, path_par)
 
     ! Define ice thickness field based on experiment being run...
     select case(trim(experiment))
@@ -363,7 +366,7 @@ program test_isostasy
     time = time_init
 
     ! Inititalize and write state
-    call isos_init_state(isos1, z_bed, T_ice(:, :, 1), time)
+    call isos_init_state(isos1, z_bed, T_ice(:, :, 1), time, bsl)
     ! write(*,*) time, isos1%par%time_prognostics, isos1%par%time_diagnostics
     ! stop
 
@@ -379,7 +382,9 @@ program test_isostasy
         ! Update bedrock
         time = time_init + (n-1)*dtt
         call interp_2d(time_ice, T_ice, time, H_ice)
-        call isos_update(isos1, H_ice, time)
+        call isos_update(isos1, H_ice, time, bsl)
+        call bsl_update(bsl, time)
+
         ! write(*,*) "time = ", time
         ! write(*,*) "extrema H_ice: ", minval(isos1%now%Hice), maxval(isos1%now%Hice)
         ! write(*,*) "count maskgrounded: ", count(isos1%now%maskgrounded)
@@ -396,11 +401,11 @@ program test_isostasy
                         isos1%domain%D_lith(1,1), isos1%par%rho_ice, isos1%par%rho_uppermantle, &
                         isos1%par%g,time)
 
-                    call isos_write_step(isos1, file_out, time, H_ice, z_bed_bench)
+                    call isos_write_step(isos1, bsl, file_out, time, H_ice, z_bed_bench)
 
                 case DEFAULT
                     z_bed_bench = 0.0
-                    call isos_write_step(isos1, file_out, time, H_ice)
+                    call isos_write_step(isos1, bsl, file_out, time, H_ice)
                     call isos_write_step_extended(isos1, file_out_extended, time)
 
             end select
@@ -536,11 +541,12 @@ program test_isostasy
     end subroutine isos_write_init_extended
 
     ! Write results to file
-    subroutine isos_write_step(isos, filename, time, H_ice, z_bed_bench)
+    subroutine isos_write_step(isos, bsl, filename, time, H_ice, z_bed_bench)
 
         implicit none 
         
         type(isos_class), intent(IN) :: isos
+        type(bsl_class),  intent(IN) :: bsl
         character(len=*), intent(IN) :: filename
         real(wp),         intent(IN) :: time
         real(wp),         intent(IN) :: H_ice(:, :)
@@ -560,7 +566,11 @@ program test_isostasy
 
         ! Update the time step
         call nc_write(filename,"time", time, dim1="time", start=[n], count=[1], ncid=ncid)
-        
+        call nc_write(filename, "bsl", isos%now%bsl, units="m", long_name="Barystatic sea level", &
+            dim1="time", start=[n], count=[1], ncid=ncid)
+        call nc_write(filename, "A_ocean", bsl%A_ocean_now, units="m^2", long_name="Ocean area", &
+            dim1="time", start=[n], count=[1], ncid=ncid)
+
         ! Write variables
         call nc_write(filename, "H_ice", isos%out%Hice, units="m", long_name="Ice thickness", &
               dim1="xc", dim2="yc", dim3="time", start=[1, 1, n], ncid=ncid)
