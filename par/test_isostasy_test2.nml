@@ -5,7 +5,7 @@
     method          = 3             ! 0: constant displacement; 1: LLRA; 2: LV-ELRA, 3: LV-ELVA
     dt_prognostics  = 1.            ! [yr] Max. timestep to recalculate prognostics
     dt_diagnostics  = 10.           ! [yr] Min. timestep to recalculate diagnostics
-    pad         = 512.e3              ! [m] Padding around the domain (preferably chosen as a power
+    pad         = 512.              ! [km] Padding around the domain (preferably chosen as a power
                                     ! of 2 multiplied by the resolution)
 
     ! Rheology
@@ -13,10 +13,11 @@
                                     ! "uniform", "gaussian_plus", "gaussian_minus", "rheology_file"
     lithosphere = "uniform"   ! Choose lithospheric thickness field:
                                     ! "uniform", "gaussian_plus", "gaussian_minus", "rheology_file"
-    viscosity_scaling_method = 0    ! -1: min, 0: nominal, 1: max, else: scale by provided number
+    viscosity_scaling_method = "scale"  ! "scale" or "min" or "max"
+    viscosity_scaling = 1.              ! Only used if viscosity_scaling_method = "scale"
     layering    = "equalized"       ! "parallel", "equalized" or "folded"
     nl          = 2                 ! [1] Number of viscous layers for sub-lithospheric mantle
-    zl = 70.0, 600.0                ! [km] Depth of layer boundaries. The first value is overwritten
+    zl = 70., 600.                  ! [km] Depth of layer boundaries. The first value is overwritten
                                     ! if a lithospheric thickness filed is provided.
     viscosities = 1.e21, 2.e21      ! [Pa s] Layer viscosities. Only used if
                                     ! mantle = "uniform" or "gaussian_plus" or "gaussian_minus".
