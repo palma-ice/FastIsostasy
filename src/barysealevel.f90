@@ -50,7 +50,7 @@ contains
         ! Local variables
         character(len=56) :: varname
         character(len=256):: A_ocean_path
-        logical           :: use_nc
+        logical           :: use_nc, use_restart
         integer           :: n, n_bsl_vec
         real(wp)          :: A_ocean_pd_biased
 
@@ -58,12 +58,28 @@ contains
 
         write(*,*) "bsl_init:: reading method..."
         call nml_read(filename, "barysealevel", "method", bsl%method)
-        
+        call nml_read(filename, "barysealevel", "restart", bsl%restart_file)
+
+        if ((trim(bsl%restart_file) .eq. "None") .or. &
+            (trim(bsl%restart_file) .eq. "none") .or. &
+            (trim(bsl%restart_file) .eq. "no") ) then
+            write(*,*) "bsl_init:: No restart file specified."
+            use_restart = .false.
+        else
+            write(*,*) "bsl_init:: Restart file specified: ", bsl%restart_file
+            use_restart = .true.
+        end if
+
         select case(trim(bsl%method))
 
         case("const")
             write(*,*) "bsl_init:: using constant BSL."
-            call nml_read(filename, "barysealevel", "bsl_init", bsl%bsl_init)
+
+            if (use_restart) then
+                call nc_read(bsl%restart_file, "bsl", bsl%bsl_init, start=[1], count=[1])
+            else
+                call nml_read(filename, "barysealevel", "bsl_init", bsl%bsl_init)
+            end if
 
         case("file")
             write(*,*) "bsl_init:: using BSL time series from file."
@@ -88,7 +104,15 @@ contains
                 call read_series(bsl%series, bsl%series%filename)
             end if
 
-            bsl%bsl_init  = series_interp(bsl%series, year_bp)
+            bsl%bsl_now  = series_interp(bsl%series, year_bp)
+            call nml_read(filename, "barysealevel", "bsl_init", bsl%bsl_init)
+            
+            if (bsl%bsl_now .ne. bsl%bsl_init) then
+                write(*,*) "bsl_init:: bsl_init and restart values differ."
+                stop
+            end if
+
+            bsl%bsl_init = bsl%bsl_now
 
         case("fastiso")
 
@@ -111,11 +135,16 @@ contains
                 allocate(bsl%A_ocean_vec(n_bsl_vec))
                 call nc_read(A_ocean_path, "z", bsl%bsl_vec)
                 call nc_read(A_ocean_path, "A", bsl%A_ocean_vec)
+
+                ! Correct pd bias of ocean surface file
+                call interp_0d(bsl%bsl_vec, bsl%A_ocean_vec, bsl%bsl_init, A_ocean_pd_biased)
+                bsl%A_ocean_vec = bsl%A_ocean_vec * bsl%A_ocean_pd / A_ocean_pd_biased
+
+                ! Use corrected ocean surface area
+                call interp_0d(bsl%bsl_vec, bsl%A_ocean_vec, bsl%bsl_init, bsl%A_ocean_now)
             end if
 
-            write(*,*) "bsl_init:: You are using the cumulated BSL contributions of FastIsostasy domains."
-
-        case DEFAULT 
+        case DEFAULT
 
             write(error_unit,*) ""
             write(error_unit,*) "bsl_init:: Error: method not recognized."
@@ -125,34 +154,7 @@ contains
         end select
 
         bsl%bsl_now = bsl%bsl_init
-        call nml_read(filename, "barysealevel", "restart", bsl%restart_file)
-
-        if ((trim(bsl%restart_file) .eq. "None") .or. &
-            (trim(bsl%restart_file) .eq. "none") .or. &
-            (trim(bsl%restart_file) .eq. "no") ) then
-            write(*,*) "bsl_init:: No restart file specified."
-        else
-            write(*,*) "bsl_init:: Restart file specified: ", bsl%restart_file
-            call nc_read(bsl%restart_file, "bsl", bsl%bsl_init, start=[1], count=[1])
-            call nc_read(bsl%restart_file, "A_ocean", bsl%A_ocean_now, start=[1], count=[1])
-
-            select case(trim(bsl%method))
-            case("file")
-                if (bsl%bsl_now .ne. bsl%bsl_init) then
-                    write(*,*) "bsl_init:: bsl_init and restart values differ."
-                    stop
-                end if
-            case("fastiso")
-                ! Correct pd bias of ocean surface file
-                call interp_0d(bsl%bsl_vec, bsl%A_ocean_vec, bsl%bsl_init, A_ocean_pd_biased)
-                bsl%A_ocean_vec = bsl%A_ocean_vec * bsl%A_ocean_pd / A_ocean_pd_biased
-
-                ! Use corrected ocean surface area
-                call interp_0d(bsl%bsl_vec, bsl%A_ocean_vec, bsl%bsl_init, bsl%A_ocean_now)
-            end select
-
-            bsl%bsl_now = bsl%bsl_init
-        end if
+        write(*,*) "bsl_init:: BSL initialized to ", bsl%bsl_init, " m."
 
         return
 
