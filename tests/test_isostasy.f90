@@ -217,23 +217,8 @@ program test_isostasy
     z_ss         = 0.0
     z_bed_bench = z_bed
 
-    ! Initialize bedrock model (allocate fields)
-    call isos_init(isos1, path_par, "isostasy", nx, ny, dx, dy)
-    call bsl_init(bsl, path_par, time)
-
     ! Define ice thickness field based on experiment being run...
     select case(trim(experiment))
-
-        case("variable_tau") ! Constant ice thickness everywhere, with a spatially variable tau
-            H_ice = 1000.0
-
-            ! Define a mask with three different regions, which will
-            ! correspond to different values of tau
-            mask(1:int(nx/3.0),:) = 0.0 
-            mask(int(nx/3.0)+1:2*int(nx/3.0),:) = 1.0 
-            mask(2*int(nx/3.0)+1:nx,:) = 2.0 
-            call isos_set_smoothed_field(isos1%domain%tau, [1.e2_wp,1.e3_wp,3.e3_wp], &
-                [0.0_wp,1.0_wp,2.0_wp], mask, dx, 150.e3_wp)
 
         case("point_load")  ! Define ice thickness only in central grid point 
             H_ice = 0.0 
@@ -371,11 +356,11 @@ program test_isostasy
     
     time = time_init
 
-    ! Inititalize and write state
+    ! Initialize fastisostasy
+    call bsl_init(bsl, path_par, time)
+    call isos_init(isos1, path_par, "isostasy", nx, ny, dx, dy)
     call isos_init_state(isos1, z_bed, T_ice(:, :, 1), time, bsl)
-    ! write(*,*) time, isos1%par%time_prognostics, isos1%par%time_diagnostics
-    ! stop
-
+    
     call isos_write_init(isos1, xc, yc, file_out, time_init)
     call isos_write_init_extended(isos1, file_out_extended, time_init)
     call bsl_write_init(bsl, file_out_bsl, time_init)
@@ -389,8 +374,9 @@ program test_isostasy
         ! Update bedrock
         time = time_init + (n-1)*dtt
         call interp_2d(time_ice, T_ice, time, H_ice)
-        call isos_update(isos1, H_ice, time, bsl)
+
         call bsl_update(bsl, time)
+        call isos_update(isos1, H_ice, time, bsl)
 
         ! write(*,*) "time = ", time
         ! write(*,*) "extrema H_ice: ", minval(isos1%now%Hice), maxval(isos1%now%Hice)
@@ -420,7 +406,7 @@ program test_isostasy
         end if
 
         if (mod(n, 100) .eq. 1) then
-            write(*,*) "time = ", time
+            write(*,*) "time = ", time, "dbsl = ", isos1%now%deltaV_bsl / bsl%A_ocean_now
         endif
 
     end do
