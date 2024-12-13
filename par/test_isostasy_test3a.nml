@@ -46,4 +46,5 @@
     sl_name     = "none"    ! Variable name in netcdf file, if relevant
     A_ocean_pd  = 3.625e14  ! [m^2] Ocean surface as in Goelzer et al. (2020)
     A_ocean_path = "None"   ! Path to ocean surface file
+    restart     = "None"    ! Path to restart file
 /
