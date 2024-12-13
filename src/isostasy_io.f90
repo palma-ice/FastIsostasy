@@ -397,6 +397,10 @@ module isostasy_io
         call nc_write(filename, "z_ss", isos%now%z_ss, units="m", long_name="Sea-surface height", &
               dim1="xc", dim2="yc", dim3="time", start=[1, 1, n], ncid=ncid)
 
+        call nc_write(filename, "dz_ss", isos%now%dz_ss, units="m", &
+            long_name="Sea-surface height change", dim1="xc", dim2="yc", dim3="time", &
+            start=[1, 1, n], ncid=ncid)
+
         call nc_write(filename,"z_bed", isos%now%z_bed, units="m", &
             long_name="Bedrock elevation", dim1="xc", dim2="yc", dim3="time", &
             start=[1, 1, n], ncid=ncid)
@@ -412,10 +416,6 @@ module isostasy_io
         call nc_write(filename, "w_elastic", isos%now%we, units="m", &
             long_name="Displacement (elastic)", &
             dim1="xc", dim2="yc", dim3="time", start=[1, 1, n], ncid=ncid)
-
-        call nc_write(filename, "z_ss_perturbation", isos%now%dz_ss, units="m", &
-            long_name="Geoid displacement", dim1="xc", dim2="yc", dim3="time", &
-            start=[1, 1, n], ncid=ncid)
 
         call nc_write(filename, "column_anomaly", isos%now%canom_full, units="N m^-2", &
             long_name = "Anomaly in column pressure", &
