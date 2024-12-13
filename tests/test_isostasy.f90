@@ -219,7 +219,7 @@ program test_isostasy
 
     ! Initialize bedrock model (allocate fields)
     call isos_init(isos1, path_par, "isostasy", nx, ny, dx, dy)
-    call bsl_init(bsl, path_par)
+    call bsl_init(bsl, path_par, time)
 
     ! Define ice thickness field based on experiment being run...
     select case(trim(experiment))

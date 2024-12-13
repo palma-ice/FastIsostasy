@@ -35,6 +35,7 @@
     restart = "None"
     mask_file = "None"
     rheology_file = "None"
+    restart     = "None"    ! Path to restart file
 /
 
 &barysealevel
