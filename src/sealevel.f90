@@ -113,7 +113,7 @@ module sealevel
         type(isos_state_class), intent(INOUT)   :: state
         type(isos_param_class), intent(IN)      :: par
 
-        state%H_above_bsl = state%Hice - state%bsl * (par%rho_seawater / par%rho_ice)
+        state%H_above_bsl = state%Hice - (state%bsl - state%z_bed) * (par%rho_seawater / par%rho_ice)
         return
     end subroutine calc_H_above_bsl
 

@@ -663,14 +663,6 @@ contains
 
             ! write(*,*) "Updating the BSL contribution..."
             call calc_H_above_bsl(isos%now, isos%par)
-            call calc_sl_contributions(isos)
-
-            if (trim(bsl%method) .eq. "fastiso") then
-                ! minus sign because what goes into ice sheet goes out of ocean.
-                bsl%bsl_now = bsl%bsl_now - isos%now%deltaV_bsl / bsl%A_ocean_now
-            end if
-
-            ! write(*,*) "BSL contribution: ", isos%now%deltaV_bsl
 
             ! write(*,*) "Updating RSL..."
             call calc_rsl(isos%now)
@@ -756,6 +748,13 @@ contains
             end if
         end do
 
+        call calc_sl_contributions(isos)
+        if (trim(bsl%method) .eq. "fastiso") then
+            ! minus sign because what goes into ice sheet goes out of ocean.
+            bsl%bsl_now = bsl%bsl_now - isos%now%deltaV_bsl / bsl%A_ocean_now
+        end if
+        ! write(*,*) "BSL contribution: ", isos%now%deltaV_bsl
+        
         call cropstate2out(isos%out, isos%now, isos%domain)
         ! write(*,*) "extrema of w: ", minval(isos%now%w), maxval(isos%now%w)
         ! write(*,*) "extrema of we: ", minval(isos%now%we), maxval(isos%now%we)
