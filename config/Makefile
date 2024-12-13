@@ -81,7 +81,7 @@ $(objdir)/lv_elva.o: $(srcdir)/lv_elva.f90 $(objdir)/isostasy_defs.o $(objdir)/f
 $(objdir)/fastisostasy.o: $(srcdir)/fastisostasy.f90 $(objdir)/isostasy_defs.o $(objdir)/isos_utils.o \
 						$(objdir)/isostasy_io.o $(objdir)/lv_elva.o $(objdir)/nml.o $(objdir)/ncio.o \
 						$(objdir)/green_functions.o $(objdir)/kelvin_function.o $(objdir)/sealevel.o \
-						$(objdir)/lv_xlra.o
+						$(objdir)/lv_xlra.o $(objdir)/barysealevel.o
 	$(FC) $(DFLAGS) $(FFLAGS) -c -o $@ $<
 
 $(objdir)/isostasy_benchmarks.o: $(srcdir)/isostasy_benchmarks.f90 $(objdir)/isostasy_defs.o
