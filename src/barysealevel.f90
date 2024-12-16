@@ -59,6 +59,8 @@ contains
         write(*,*) "bsl_init:: reading method..."
         call nml_read(filename, "barysealevel", "method", bsl%method)
         call nml_read(filename, "barysealevel", "restart", bsl%restart_file)
+        call nml_read(filename, "barysealevel", "A_ocean_pd", bsl%A_ocean_pd)
+        bsl%A_ocean_now = bsl%A_ocean_pd    ! possibly overwritten later
 
         if ((trim(bsl%restart_file) .eq. "None") .or. &
             (trim(bsl%restart_file) .eq. "none") .or. &
@@ -80,7 +82,7 @@ contains
             else
                 call nml_read(filename, "barysealevel", "bsl_init", bsl%bsl_init)
             end if
-
+            
         case("file")
             write(*,*) "bsl_init:: using BSL time series from file."
 
@@ -120,7 +122,6 @@ contains
 
             ! Load the ocean surface area from parameter file
             call nml_read(filename, "barysealevel", "bsl_init", bsl%bsl_init)
-            call nml_read(filename, "barysealevel", "A_ocean_pd", bsl%A_ocean_pd)
             call nml_read(filename, "barysealevel", "A_ocean_path", A_ocean_path)
 
             if ((A_ocean_path .eq. "None") .or. &
@@ -128,6 +129,7 @@ contains
                 (A_ocean_path .eq. "no")) then
                 bsl%constant_ocean_surface = .true.
                 bsl%A_ocean_now = bsl%A_ocean_pd
+                write(*,*) "A_ocean", bsl%A_ocean_now
             else
                 bsl%constant_ocean_surface = .false.
                 n_bsl_vec = nc_size(A_ocean_path, "z")
