@@ -35,14 +35,6 @@ module sealevel
         return
     end subroutine calc_rsl
 
-    ! Calculate the barystatic sea level using a piecewise constant A_ocean.
-    ! This is work in progress and should not be used yet.
-    subroutine calc_bsl_pwconstant_Aocean(isos)
-        implicit none
-        type(isos_class), intent(INOUT)     :: isos
-
-    end subroutine calc_bsl_pwconstant_Aocean
-
     subroutine calc_columnanoms_load(isos)
         implicit none
         type(isos_class), intent(INOUT)     :: isos 
