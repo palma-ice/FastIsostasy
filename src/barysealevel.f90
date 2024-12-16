@@ -428,14 +428,12 @@ contains
 
         ! Local variables
         integer  :: ncid, n
-        real(wp) :: time_prev 
 
         call nc_open(filename, ncid, writable=.TRUE.)
 
-        n = nc_size(filename, "time", ncid)
-        call nc_read(filename, "time", time_prev, start=[n], count=[1], ncid=ncid)
-        if (abs(time-time_prev) .gt. 1e-5) n = n+1
-
+        ! Determine current writing time step 
+        n = nc_time_index(filename,"time",time,ncid)
+        
         ! Update the time step
         call nc_write(filename,"time", time, dim1="time", start=[n], count=[1], ncid=ncid)
         call nc_write(filename,"bsl", bsl%bsl_now, dim1="time", start=[n], &

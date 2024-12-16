@@ -64,7 +64,6 @@ module isostasy_io
         ! Local variables
         integer  :: ncid, n, nx, ny
         logical  :: initialize_file
-        real(wp) :: time_prev
         character(len=2) :: xnm, ynm 
 
         initialize_file = .TRUE. 
@@ -95,10 +94,8 @@ module isostasy_io
             n = 1 
         else 
             ! Determine current writing time step 
-            n = nc_size(filename,"time",ncid)
-            call nc_read(filename,"time",time_prev,start=[n],count=[1],ncid=ncid) 
-            if (abs(time-time_prev).gt.1e-5) n = n+1 
-
+            n = nc_time_index(filename,"time",time,ncid)
+            
             ! Update the time step
             call nc_write(filename,"time",time,dim1="time",start=[n],count=[1],ncid=ncid)
         end if
@@ -291,16 +288,13 @@ module isostasy_io
         real(wp),         intent(IN), optional :: z_bed_bench(:, :)
 
         ! Local variables
-        integer  :: ncid, n
-        real(wp) :: time_prev 
+        integer  :: ncid, n 
 
         ! Open the file for writing
         call nc_open(filename, ncid, writable=.TRUE.)
 
-        ! Determine current writing time step
-        n = nc_size(filename, "time", ncid)
-        call nc_read(filename, "time", time_prev, start=[n], count=[1], ncid=ncid)
-        if (abs(time-time_prev) .gt. 1e-5) n = n+1
+        ! Determine current writing time step 
+        n = nc_time_index(filename,"time",time,ncid)
 
         ! Update the time step
         call nc_write(filename,"time", time, dim1="time", start=[n], count=[1], ncid=ncid)
@@ -377,15 +371,12 @@ module isostasy_io
 
         ! Local variables
         integer  :: ncid, n
-        real(wp) :: time_prev 
 
         ! Open the file for writing
         call nc_open(filename, ncid, writable=.TRUE.)
 
-        ! Determine current writing time step
-        n = nc_size(filename, "time", ncid)
-        call nc_read(filename, "time", time_prev, start=[n], count=[1], ncid=ncid)
-        if (abs(time-time_prev) .gt. 1e-5) n = n+1
+        ! Determine current writing time step 
+        n = nc_time_index(filename,"time",time,ncid)
 
         ! Update the time step
         call nc_write(filename,"time", time, dim1="time", start=[n], count=[1], ncid=ncid)
