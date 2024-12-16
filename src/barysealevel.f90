@@ -59,6 +59,8 @@ contains
         write(*,*) "bsl_init:: reading method..."
         call nml_read(filename, "barysealevel", "method", bsl%method)
         call nml_read(filename, "barysealevel", "restart", bsl%restart_file)
+        call nml_read(filename, "barysealevel", "A_ocean_pd", bsl%A_ocean_pd)
+        bsl%A_ocean_now = bsl%A_ocean_pd    ! possibly overwritten later
 
         if ((trim(bsl%restart_file) .eq. "None") .or. &
             (trim(bsl%restart_file) .eq. "none") .or. &
@@ -80,7 +82,7 @@ contains
             else
                 call nml_read(filename, "barysealevel", "bsl_init", bsl%bsl_init)
             end if
-
+            
         case("file")
             write(*,*) "bsl_init:: using BSL time series from file."
 
@@ -120,7 +122,6 @@ contains
 
             ! Load the ocean surface area from parameter file
             call nml_read(filename, "barysealevel", "bsl_init", bsl%bsl_init)
-            call nml_read(filename, "barysealevel", "A_ocean_pd", bsl%A_ocean_pd)
             call nml_read(filename, "barysealevel", "A_ocean_path", A_ocean_path)
 
             if ((A_ocean_path .eq. "None") .or. &
@@ -128,6 +129,7 @@ contains
                 (A_ocean_path .eq. "no")) then
                 bsl%constant_ocean_surface = .true.
                 bsl%A_ocean_now = bsl%A_ocean_pd
+                write(*,*) "A_ocean", bsl%A_ocean_now
             else
                 bsl%constant_ocean_surface = .false.
                 n_bsl_vec = nc_size(A_ocean_path, "z")
@@ -426,14 +428,12 @@ contains
 
         ! Local variables
         integer  :: ncid, n
-        real(wp) :: time_prev 
 
         call nc_open(filename, ncid, writable=.TRUE.)
 
-        n = nc_size(filename, "time", ncid)
-        call nc_read(filename, "time", time_prev, start=[n], count=[1], ncid=ncid)
-        if (abs(time-time_prev) .gt. 1e-5) n = n+1
-
+        ! Determine current writing time step 
+        n = nc_time_index(filename,"time",time,ncid)
+        
         ! Update the time step
         call nc_write(filename,"time", time, dim1="time", start=[n], count=[1], ncid=ncid)
         call nc_write(filename,"bsl", bsl%bsl_now, dim1="time", start=[n], &
