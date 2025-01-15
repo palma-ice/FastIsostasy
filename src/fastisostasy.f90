@@ -239,11 +239,8 @@ contains
                     buffer_n(icrop1:icrop2, jcrop1:jcrop2), start=[1, 1], &
                     count=[nx_ice, ny_ice])
 
-                isos%domain%He_lith = sum(buffer_n(icrop1:icrop2, jcrop1:jcrop2)) / &
-                    (isos%domain%nx_ice * isos%domain%ny_ice)
-
                 isos%domain%He_lith(icrop1:icrop2, jcrop1:jcrop2) = buffer_n( &
-                    icrop1:icrop2, jcrop1:jcrop2)
+                    icrop1:icrop2, jcrop1:jcrop2) * 1e-3_wp
 
                 call flat_extension(isos%domain%He_lith, icrop1, icrop2, jcrop1, jcrop2)
 
@@ -290,6 +287,8 @@ contains
                     isos%par%viscosities(1), -1._wp, dx=isos%domain%dx, dy=isos%domain%dx)
 
             case("rheology_file")
+                write(*,*) "Reading rheology file..."
+                
                 ncz = nc_size(isos%par%rheology_file, "zc")
                 
                 allocate(z(ncz))
@@ -298,6 +297,7 @@ contains
                 allocate(eta_ext(isos%domain%nx, isos%domain%ny, ncz))
                 call nc_read(isos%par%rheology_file, "zc", z, start=[1], &
                     count=[ncz])
+                z = z * 1e-3_wp
                 
                 do i = 1, ncz
                     depth(i) = z(1) - z(i)
@@ -308,9 +308,14 @@ contains
                 where (eta_raw < 16) eta_raw = 16
                 where (eta_raw > 23) eta_raw = 23
                 eta_ext = 21
+                eta_ext(icrop1:icrop2, jcrop1:jcrop2, :) = eta_raw(:, :, :)
+
+                ! write(*,*) "extrema of depth: ", minval(depth), maxval(depth)
+                ! write(*,*) "extrema of boundaries: ", minval(isos%domain%boundaries), maxval(isos%domain%boundaries)
+                ! write(*,*) "extrema of log10 eta raw: ", minval(eta_raw), maxval(eta_raw)
+
 
                 do l = 1, isos%par%nl
-                    eta_ext(icrop1:icrop2, jcrop1:jcrop2, l) = eta_raw(:, :, l)
                     do i = 1, isos%domain%nx
                     do j = 1, isos%domain%ny
                         ! Everything related to layer boundaries is computed in km!
@@ -327,7 +332,8 @@ contains
                 call calc_effective_viscosity( &
                     isos%domain%eta_eff, isos%domain%eta, &
                     isos%domain%xc, isos%domain%yc, isos%domain%boundaries)
-                
+                write(*,*) "extrema of eta_eff: ", minval(isos%domain%eta_eff), maxval(isos%domain%eta_eff)
+
                 call flat_extension(isos%domain%eta_eff, icrop1, icrop2, jcrop1, jcrop2)
 
             case DEFAULT
@@ -350,6 +356,8 @@ contains
 
             isos%domain%eta_eff = isos%domain%eta_eff * &
                 isos%par%compressibility_correction
+
+            isos%domain%eta_eff = exp(log10(1e21 / isos%domain%eta_eff)) * isos%domain%eta_eff
 
         case DEFAULT
 
