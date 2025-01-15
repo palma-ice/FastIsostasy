@@ -233,7 +233,8 @@ module lv_elva
         else if (nl .ge. 1) then
             Wx = maxval(xc)
             Wy = maxval(yc)
-            W = (Wx + Wy) / 2.0
+            ! W = (Wx + Wy) / 2.0
+            W = 2e6
             kappa = pi/W
 
             ! Start with n-th layer: viscous half space
