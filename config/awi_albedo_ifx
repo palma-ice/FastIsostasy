@@ -6,7 +6,7 @@ INC_NC  = -I${NETCDFFI_ROOT}/include
 LIB_NC  = -L${NETCDFFI_ROOT}/lib -Wl\,-rpath=${NETCDFFI_ROOT}/lib -lnetcdff -L${NETCDFC_ROOT}/lib -Wl\,-rpath=${NETCDFC_ROOT}/lib -lnetcdf
 # the -rpath options ensure that the same shared libraries are found at runtime
 
-FFTWROOT = exlib/fftw-serial
+FFTWROOT = fesm-utils/fftw-serial
 INC_FFTW = -I${FFTWROOT}/include
 LIB_FFTW = -L${FFTWROOT}/lib -lfftw3 -lm
 
@@ -15,7 +15,7 @@ FFLAGS  = -module $(objdir) -L$(objdir)
 ifeq ($(openmp), 1)
     # Overwrite default choices with openmp relevant choices 
 
-    FFTWROOT = exlib/fftw-omp
+    FFTWROOT = fesm-utils/fftw-omp
     INC_FFTW = -I${FFTWROOT}/include
     LIB_FFTW = -L${FFTWROOT}/lib -lfftw3_omp -lfftw3 -lm
 
