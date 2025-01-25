@@ -353,15 +353,6 @@ contains
 
         case DEFAULT
 
-            ! Set elastic length scale to zero (not used)
-            isos%par%L_w = 0.0
-            
-            ! Set regional filter fields to zero (not used)
-            isos%domain%kei = 0.0 
-            isos%domain%GV  = 0.0
-            isos%domain%GE  = 0.0
-            isos%domain%GN  = 0.0
-            
             isos%domain%tau         = isos%par%tau          ! [yr]
             isos%domain%maskactive  = .true.
 
@@ -433,7 +424,7 @@ contains
         end if
 
         state%bsl               = 0.0
-        state%deltaV_bsl             = 0.0
+        state%deltaV_bsl        = 0.0
         state%V_af              = 0.0
         state%V_den             = 0.0
         state%V_pov             = 0.0
@@ -898,20 +889,20 @@ contains
         if (allocated(domain%kappa))        deallocate(domain%kappa)
         if (allocated(domain%maskactive))   deallocate(domain%maskactive)
 
-        if (allocated(domain%He_lith))           deallocate(domain%He_lith)
-        if (allocated(domain%D_lith))            deallocate(domain%D_lith)
-        if (allocated(domain%eta))               deallocate(domain%eta)
-        if (allocated(domain%eta_eff))           deallocate(domain%eta_eff)
-        if (allocated(domain%tau))               deallocate(domain%tau)
+        if (allocated(domain%He_lith))      deallocate(domain%He_lith)
+        if (allocated(domain%D_lith))       deallocate(domain%D_lith)
+        if (allocated(domain%eta))          deallocate(domain%eta)
+        if (allocated(domain%eta_eff))      deallocate(domain%eta_eff)
+        if (allocated(domain%tau))          deallocate(domain%tau)
 
-        if (allocated(domain%kei))       deallocate(domain%kei)
-        if (allocated(domain%GV))        deallocate(domain%GV)
-        if (allocated(domain%GE))        deallocate(domain%GE)
-        if (allocated(domain%GN))        deallocate(domain%GN)
+        if (allocated(domain%kei))          deallocate(domain%kei)
+        if (allocated(domain%GV))           deallocate(domain%GV)
+        if (allocated(domain%GE))           deallocate(domain%GE)
+        if (allocated(domain%GN))           deallocate(domain%GN)
 
-        if (allocated(domain%FGV))        deallocate(domain%FGV)
-        if (allocated(domain%FGE))        deallocate(domain%FGE)
-        if (allocated(domain%FGN))        deallocate(domain%FGN)
+        if (allocated(domain%FGV))          deallocate(domain%FGV)
+        if (allocated(domain%FGE))          deallocate(domain%FGE)
+        if (allocated(domain%FGN))          deallocate(domain%FGN)
         return
     end subroutine deallocate_isos_domain
 
@@ -925,14 +916,14 @@ contains
         if (allocated(state%w_equilibrium))     deallocate(state%w_equilibrium)
         if (allocated(state%we))                deallocate(state%we)
 
-        if (allocated(state%dz_ss))       deallocate(state%dz_ss)
+        if (allocated(state%dz_ss))             deallocate(state%dz_ss)
 
         if (allocated(state%H_above_bsl))       deallocate(state%H_above_bsl)
         if (allocated(state%Haf))               deallocate(state%Haf)
         if (allocated(state%Hice))              deallocate(state%Hice)
 
         if (allocated(state%rsl))               deallocate(state%rsl)
-        if (allocated(state%z_ss))               deallocate(state%z_ss)
+        if (allocated(state%z_ss))              deallocate(state%z_ss)
         if (allocated(state%canom_load))        deallocate(state%canom_load)
         if (allocated(state%canom_full))        deallocate(state%canom_full)
         if (allocated(state%mass_anom))         deallocate(state%mass_anom)
@@ -999,6 +990,15 @@ contains
         allocate(domain%FGV(2*nx-1, 2*ny-1))
         allocate(domain%FGE(2*nx-1, 2*ny-1))
         allocate(domain%FGN(2*nx-1, 2*ny-1))
+
+        ! Set some values to zero for safety
+
+        domain%kei = 0.0 
+        domain%GV  = 0.0
+        domain%GE  = 0.0
+        domain%GN  = 0.0
+        
+        domain%tau = 0.0 
 
         return
     end subroutine allocate_isos_domain
