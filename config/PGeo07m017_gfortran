@@ -5,6 +5,10 @@ NC_FROOT = /opt/homebrew/Cellar/netcdf-fortran/4.6.1_1
 INC_NC  = -I${NC_FROOT}/include
 LIB_NC  = -L${NC_FROOT}/lib -lnetcdff -L${NC_CROOT}/lib -lnetcdf 
 
+FESMUTILSROOT=fesm-utils/utils
+INC_FESMUTILS = -I${FESMUTILSROOT}/include-serial
+LIB_FESMUTILS = -L${FESMUTILSROOT}/include-serial -lfesmutils
+
 FFTWROOT = fesm-utils/fftw-serial
 INC_FFTW = -I${FFTWROOT}/include
 LIB_FFTW = -L${FFTWROOT}/lib -lfftw3 -lm
@@ -12,17 +16,18 @@ LIB_FFTW = -L${FFTWROOT}/lib -lfftw3 -lm
 FFLAGS  = -ffree-line-length-none -I$(objdir) -J$(objdir)
 
 ifeq ($(openmp), 1)
-    # Overwrite default choices with openmp relevant choices 
+    FESMUTILSROOT=fesm-utils/utils
+    INC_FESMUTILS = -I${FESMUTILSROOT}/include-omp
+    LIB_FESMUTILS = -L${FESMUTILSROOT}/include-omp -lfesmutils
 
     FFTWROOT = fesm-utils/fftw-omp
     INC_FFTW = -I${FFTWROOT}/include
     LIB_FFTW = -L${FFTWROOT}/lib -lfftw3_omp -lfftw3 -lm
 
     FFLAGS  = -I$(objdir) -J$(objdir) -ffree-line-length-none -fomit-frame-pointer -fopenmp 
-
 endif 
 
-LFLAGS  = $(LIB_NC) $(LIB_FFTW)
+LFLAGS  = $(LIB_NC) $(LIB_FESMUTILS) $(LIB_FFTW)
 
 DFLAGS_NODEBUG = -O2
 DFLAGS_DEBUG   = -w -g -ggdb -ffpe-trap=invalid,zero,overflow,underflow -fbacktrace -fcheck=all
