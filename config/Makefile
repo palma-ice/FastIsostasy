@@ -39,12 +39,6 @@ $(objdir)/precision.o: $(srcdir)/precision.f90
 $(objdir)/isostasy_defs.o: $(srcdir)/isostasy_defs.f90
 	$(FC) $(DFLAGS) $(FFLAGS) -c -o $@ $<
 
-$(objdir)/ncio.o: $(srcdir)/ncio.f90
-	$(FC) $(DFLAGS) $(FFLAGS) $(INC_NC) -c -o $@ $<
-
-$(objdir)/nml.o: $(srcdir)/nml.f90
-	$(FC) $(DFLAGS) $(FFLAGS) -c -o $@ $<
-
 # 1 dependence
 $(objdir)/isos_utils.o: $(srcdir)/isos_utils.f90 $(objdir)/isostasy_defs.o
 	$(FC) $(DFLAGS) $(FFLAGS) -c -o $@ $<
@@ -69,37 +63,37 @@ $(objdir)/sealevel.o: $(srcdir)/sealevel.f90 $(objdir)/isostasy_defs.o $(objdir)
 	$(FC) $(DFLAGS) $(FFLAGS) -c -o $@ $<
 
 # > 2 dependences
-$(objdir)/barysealevel.o: $(srcdir)/barysealevel.f90 $(objdir)/isos_utils.o $(objdir)/nml.o $(objdir)/ncio.o
-	$(FC) $(DFLAGS) $(FFLAGS) -c -o $@ $<
+$(objdir)/barysealevel.o: $(srcdir)/barysealevel.f90 $(objdir)/isos_utils.o
+	$(FC) $(DFLAGS) $(FFLAGS) $(INC_FESMUTILS) -c -o $@ $<
 
-$(objdir)/isostasy_io.o: $(srcdir)/isostasy_io.f90 $(objdir)/isostasy_defs.o $(objdir)/ncio.o $(objdir)/nml.o
-	$(FC) $(DFLAGS) $(FFLAGS) -c -o $@ $<
+$(objdir)/isostasy_io.o: $(srcdir)/isostasy_io.f90 $(objdir)/isostasy_defs.o
+	$(FC) $(DFLAGS) $(FFLAGS) $(INC_FESMUTILS) -c -o $@ $<
 
 $(objdir)/lv_elva.o: $(srcdir)/lv_elva.f90 $(objdir)/isostasy_defs.o $(objdir)/finite_differences.o $(objdir)/isos_utils.o
 	$(FC) $(DFLAGS) $(FFLAGS) -c -o $@ $<
 
 $(objdir)/fastisostasy.o: $(srcdir)/fastisostasy.f90 $(objdir)/isostasy_defs.o $(objdir)/isos_utils.o \
-						$(objdir)/isostasy_io.o $(objdir)/lv_elva.o $(objdir)/nml.o $(objdir)/ncio.o \
+						$(objdir)/isostasy_io.o $(objdir)/lv_elva.o \
 						$(objdir)/green_functions.o $(objdir)/kelvin_function.o $(objdir)/sealevel.o \
 						$(objdir)/lv_xlra.o $(objdir)/barysealevel.o
-	$(FC) $(DFLAGS) $(FFLAGS) -c -o $@ $<
+	$(FC) $(DFLAGS) $(FFLAGS) $(INC_FESMUTILS) -c -o $@ $<
 
 $(objdir)/isostasy_benchmarks.o: $(srcdir)/isostasy_benchmarks.f90 $(objdir)/isostasy_defs.o
 	$(FC) $(DFLAGS) $(FFLAGS) -c -o $@ $<
 
-isostasy_libs = 		$(objdir)/precision.o \
-						$(objdir)/isostasy_defs.o \
-						$(objdir)/isos_utils.o \
-						$(objdir)/convolutions.o \
-						$(objdir)/finite_differences.o \
-						$(objdir)/green_functions.o \
-						$(objdir)/kelvin_function.o \
-						$(objdir)/sealevel.o \
-						$(objdir)/lv_xlra.o \
-						$(objdir)/barysealevel.o \
-						$(objdir)/isostasy_io.o \
-						$(objdir)/lv_elva.o \
-						$(objdir)/fastisostasy.o \
+isostasy_libs = 	$(objdir)/precision.o \
+					$(objdir)/isostasy_defs.o \
+					$(objdir)/isos_utils.o \
+					$(objdir)/convolutions.o \
+					$(objdir)/finite_differences.o \
+					$(objdir)/green_functions.o \
+					$(objdir)/kelvin_function.o \
+					$(objdir)/sealevel.o \
+					$(objdir)/lv_xlra.o \
+					$(objdir)/barysealevel.o \
+					$(objdir)/isostasy_io.o \
+					$(objdir)/lv_elva.o \
+					$(objdir)/fastisostasy.o \
 
 ###############################################
 ##
@@ -115,9 +109,9 @@ isostasy-static: $(isostasy_libs)
 	@echo "    $(objdir)/libisostasy.a is ready."
 	@echo " "
 
-test_isostasy : isostasy-static $(objdir)/isostasy_benchmarks.o $(objdir)/ncio.o $(objdir)/nml.o
-		$(FC) $(DFLAGS) $(FFLAGS) -o $(bindir)/test_isostasy.x tests/test_isostasy.f90 \
-			-L${CURDIR}/libisostasy/include -lisostasy $(objdir)/isostasy_benchmarks.o $(objdir)/ncio.o $(objdir)/nml.o $(LFLAGS)
+test_isostasy : isostasy-static $(objdir)/isostasy_benchmarks.o
+		$(FC) $(DFLAGS) $(FFLAGS) $(INC_FESMUTILS) -o $(bindir)/test_isostasy.x tests/test_isostasy.f90 \
+			-L${CURDIR}/libisostasy/include -lisostasy $(objdir)/isostasy_benchmarks.o $(LFLAGS)
 		@echo " "
 		@echo "    test_isostasy.x is ready."
 		@echo " "
