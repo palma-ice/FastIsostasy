@@ -356,6 +356,9 @@ contains
             isos%domain%tau         = isos%par%tau          ! [yr]
             isos%domain%maskactive  = .true.
 
+            ! Set elastic length scale to zero (not used)
+            isos%par%L_w = 0.0
+            
         end select
         
         call isos_init_summary(isos)
