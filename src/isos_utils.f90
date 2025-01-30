@@ -307,13 +307,13 @@ module isos_utils
             ny_tmp = ny_ice + 1
         end if
 
-        write(*,*) nx_tmp, ny_tmp
+        write(*,*) "nx_tmp, ny_tmp:", nx_tmp, ny_tmp
 
         domain%n_pad_xy = nint(min_pad / domain%dx)
         domain%n_pad_x = domain%n_pad_xy
         domain%n_pad_y = domain%n_pad_xy
 
-        write(*,*) domain%n_pad_x, domain%n_pad_y
+        write(*,*) "(rectangular) n_pad_x, n_pad_y:", domain%n_pad_x, domain%n_pad_y
 
         if (nx_tmp .lt. ny_tmp) then
             domain%n_pad_x = domain%n_pad_x + (ny_tmp - nx_tmp) / 2
@@ -321,7 +321,7 @@ module isos_utils
             domain%n_pad_y = domain%n_pad_y + (nx_tmp - ny_tmp) / 2
         end if
 
-        write(*,*) domain%n_pad_x, domain%n_pad_y
+        write(*,*) "(square) n_pad_x, n_pad_y:", domain%n_pad_x, domain%n_pad_y
 
         n = nx_tmp + 2 * domain%n_pad_x
         if (n .ne. (ny_tmp + 2 * domain%n_pad_y)) then
@@ -333,7 +333,7 @@ module isos_utils
         domain%ny = n
         domain%offset = 0
         
-        write(*,*) domain%nx, domain%ny
+        write(*,*) "nx, ny:", domain%nx, domain%ny
 
         domain%icrop1 = domain%icrop1 + domain%n_pad_x
         domain%icrop2 = domain%nx - domain%n_pad_x
