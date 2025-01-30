@@ -78,9 +78,10 @@ contains
         real(dp), allocatable   :: buffer_n(:, :)
         real(wp), allocatable   :: eta_raw(:, :, :), eta_ext(:, :, :)
         real(wp)                :: D_lith_const
-        logical, allocatable    :: mask_inner(:, :), mask_outer(:, :), mask_all(:, :)
+        integer                 :: nx_rheo, ny_rheo
 
         ! write(*,*) "Defining params..."
+        write(*,*) "nx_ice, ny_ice: ", nx_ice, ny_ice
         call isos_par_load(isos%par, filename, group)
 
         if (present(K))         isos%par%correct_distortion     = .true.
@@ -103,16 +104,6 @@ contains
         call init_dims(isos%domain%yc, isos%domain%y, isos%domain%ny, dy)
         isos%domain%K(:, :) = 1
         if (present(K))         isos%domain%K                   = K
-
-        allocate(mask_inner(isos%domain%nx, isos%domain%ny))
-        allocate(mask_outer(isos%domain%nx, isos%domain%ny))
-        allocate(mask_all(isos%domain%nx, isos%domain%ny))
-        mask_inner = .false.
-        mask_outer = .false.
-        mask_all = .true.
-        mask_inner(icrop1:icrop2, jcrop1:jcrop2) = .true.
-        mask_outer = .not. mask_inner
-        ! write(*,*) sum(mask_inner * 1), sum(mask_outer * 1), sum(mask_all * 1)
 
         ! write(*,*) "Initializing FFT plans..."
         allocate(buffer_2n(2*isos%domain%nx-1, 2*isos%domain%ny-1))
@@ -173,7 +164,7 @@ contains
             else if (isos%par%min_pad > 100.e3) then
                 isos%domain%maskactive(icrop1:icrop2, jcrop1:jcrop2) = .true.
             else
-                write(*,*) "interactive_sealevel=.true. requires a mask file or at least 100km of padding."
+                write(*,*) "interactive_sealevel=true requires a mask file or at least 100km of padding."
                 stop
             end if
         else
@@ -235,13 +226,25 @@ contains
             case("rheology_file")
 
                 buffer_n = 0.0
+
+                nx_rheo = nc_size(isos%par%rheology_file, "xc")
+                ny_rheo = nc_size(isos%par%rheology_file, "yc")
+
+                write(*,*) "nx_ice, ny_ice: ", nx_ice, ny_ice
+                write(*,*) "icrop1, icrop2: ", icrop1, icrop2
+                write(*,*) "jcrop1, jcrop2: ", jcrop1, jcrop2
+                write(*,*) "nx_rheo, ny_rheo: ", nx_rheo, ny_rheo
+
+                ! The file contains the lithosphere thickness in meters...
                 call nc_read(isos%par%rheology_file, "litho_thickness", &
                     buffer_n(icrop1:icrop2, jcrop1:jcrop2), start=[1, 1], &
                     count=[nx_ice, ny_ice])
 
+                ! ... and is here converted to kilometers
                 isos%domain%He_lith(icrop1:icrop2, jcrop1:jcrop2) = buffer_n( &
                     icrop1:icrop2, jcrop1:jcrop2) * 1e-3_wp
 
+                write(*,*) "Performing flat extension..."
                 call flat_extension(isos%domain%He_lith, icrop1, icrop2, jcrop1, jcrop2)
 
                 call calc_heterogeneous_rigidity(isos%domain%D_lith, isos%par%E, &
