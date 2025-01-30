@@ -240,6 +240,9 @@ module isostasy_io
         call nc_write(filename, "He_lith", isos%domain%He_lith, units="km", &
             long_name="Lithosphere thickness", dim1="xc", dim2="yc" ,start=[1, 1])
 
+        call nc_write(filename, "D_lith", isos%domain%D_lith, units="N m", &
+            long_name="Lithosphere flexural rigidity", dim1="xc", dim2="yc", start=[1, 1])
+
         call nc_write(filename,"GE",isos%domain%GE, units="", &
             long_name="Elastic Green function", dim1="xc", dim2="yc", start=[1, 1])
 
