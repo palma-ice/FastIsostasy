@@ -2,6 +2,7 @@
     ! Options
     heterogeneous_ssh = .false.     ! Sea level varies spatially?
     interactive_sealevel = .false.  ! Sea level interacts with solid Earth deformation?
+    include_elastic = .true.        ! Include elastic deformation?
     correct_distortion = .false.    ! Account for distortion of projection?
     method          = 3             ! 0: constant displacement; 1: LLRA; 2: LV-ELRA, 3: LV-ELVA
     dt_prognostics  = 1.            ! [yr] Max. timestep to recalculate prognostics
@@ -47,4 +48,5 @@
     sl_name     = "none"    ! Variable name in netcdf file, if relevant
     A_ocean_pd  = 3.625e14  ! [m^2] Ocean surface as in Goelzer et al. (2020)
     A_ocean_path = "None"   ! Path to ocean surface file
+    restart     = "None"    ! Path to restart file
 /
