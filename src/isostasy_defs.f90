@@ -21,6 +21,7 @@ module isostasy_defs
         character(len=56)       :: lithosphere  ! [-] Method to prescribe lithospheric thickness field
         character(len=56)       :: viscosity_scaling_method
         real(wp)                :: viscosity_scaling
+        real(wp)                :: rheo_smoothing_radius ! [km] Smoothing radius for rheology
         
         real(wp), allocatable   :: zl(:)    ! [km] Layer boundaries
         real(wp), allocatable   :: viscosities(:)   ! [Pa s] Layer viscosities
