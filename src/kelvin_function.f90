@@ -19,47 +19,39 @@ module kelvin_function
     contains
 
 
-    subroutine calc_kei_filter_2D(filt,L_w,dx,dy)
+    subroutine calc_kei_filter_2D(filt, L_w, xc, yc)
         ! Calculate 2D Kelvin function (kei) kernel
 
         implicit none 
 
-        real(wp), intent(OUT) :: filt(:, :) 
-        real(wp), intent(IN)  :: L_w 
-        real(wp), intent(IN)  :: dx 
-        real(wp), intent(IN)  :: dy   
+        real(wp), intent(OUT) :: filt(:, :)
+        real(wp), intent(IN)  :: L_w
+        real(wp), intent(IN)  :: xc(:)  ! [m] x-coordinates of filter array
+        real(wp), intent(IN)  :: yc(:)  ! [m] y-coordinates of filter array
 
         ! Local variables 
-        integer  :: i, j, i1, j1, n, n2
+        integer  :: i, j, i1, j1, n
         real(wp) :: x, y, r
 
         real(wp), allocatable :: rn_vals(:) 
         real(wp), allocatable :: kei_vals(:) 
         
         real(wp) :: kei_test_0
-        real(wp) :: kei_test_1 
+        real(wp) :: kei_test_1
 
         ! Get size of filter array and half-width
-        n  = size(filt,1) 
-        n2 = (n-1)/2 
+        n  = size(filt, 1)
 
         ! Safety check
-        if (size(filt,1) .ne. size(filt,2)) then 
+        if (n .ne. size(filt,2)) then 
             write(*,*) "calc_kei_filt:: error: array 'filt' must be square [n,n]."
             write(*,*) "size(filt): ", size(filt,1), size(filt,2)
             stop
-        end if 
-
-        ! Safety check
-        if (mod(n,2) .ne. 1) then 
-            write(*,*) "calc_kei_filt:: error: n can only be odd."
-            write(*,*) "n = ", n
-            stop  
-        end if 
+        end if
 
         ! Use tabulated values saved directly into module
         ! to avoid external dependency on input file
-        call load_kei_values(rn_vals,kei_vals)
+        call load_kei_values(rn_vals, kei_vals)
 
         ! Load tabulated kei values from file
         ! filename="input/kelvin.res"
@@ -68,35 +60,27 @@ module kelvin_function
         ! TESTING to compare inline kei value calculation 
         ! to tabulated values.
         ! So far, the calc_kei_value does not work.
-    if (.FALSE.) then 
-        do i = 1, size(rn_vals,1)
-            r = rn_vals(i)*L_w
-            kei_test_0 = get_kei_value(r,L_w,rn_vals,kei_vals)
-            kei_test_1 = calc_kei_value(r,L_w)
-            write(*,*) "kei: ", r, rn_vals(i), kei_test_0, kei_test_1 
-        end do 
-        stop 
-    end if 
+        if (.FALSE.) then 
+            do i = 1, size(rn_vals,1)
+                r = rn_vals(i)*L_w
+                kei_test_0 = get_kei_value(r,L_w,rn_vals,kei_vals)
+                kei_test_1 = calc_kei_value(r,L_w)
+                write(*,*) "kei: ", r, rn_vals(i), kei_test_0, kei_test_1 
+            end do 
+            stop 
+        end if 
 
+        filt = 0
         ! Loop over filter array in two dimensions,
         ! calculate the distance from the center, normalized by L_w
         ! and impose correct Kelvin function value. 
-
-        do j = -n2, n2 
-        do i = -n2, n2
-
-            x  = i*dx 
-            y  = j*dy 
-            r  = sqrt(x**2+y**2)
-
-            ! Get actual index of array
-            i1 = i+1+n2 
-            j1 = j+1+n2 
-
-            ! Get correct kei value for this point
-            filt(i1,j1) = get_kei_value(r,L_w,rn_vals,kei_vals)
-
-        end do 
+        do j = 1, n
+        do i = 1, n
+            x = xc(i)
+            y = yc(j)
+            r = sqrt(x**2+y**2)
+            filt(i, j) = get_kei_value(r, L_w, rn_vals, kei_vals)
+        end do
         end do
 
         
