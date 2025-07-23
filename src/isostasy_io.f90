@@ -123,13 +123,16 @@ module isostasy_io
         call nc_write(filename, "we_ref", isos%ref%we, units="m", dim1="xc", dim2="yc", &
             dim3="time", ncid=ncid, start=[1,1,n], count=[nx,ny,1])
 
-        call nc_write(filename, "log10_eta_eff", log10(isos%domain%eta_eff), units="Pa s", &
-            dim1="xc", dim2="yc", dim3="time", ncid=ncid, start=[1,1,n], count=[nx,ny,1])
         call nc_write(filename, "He_lith", isos%domain%He_lith, units="km", dim1="xc", &
             dim2="yc", dim3="time", ncid=ncid, start=[1,1,n], count=[nx,ny,1])
-        call nc_write(filename, "mask_active", isos%domain%maskactive, units="1", dim1="xc", dim2="yc", &
-            dim3="time", ncid=ncid, start=[1,1,n], count=[nx,ny,1])
-        
+        call nc_write(filename, "mask_active", isos%domain%maskactive, units="1", &
+            dim1="xc", dim2="yc", dim3="time", ncid=ncid, start=[1,1,n], count=[nx,ny,1])
+        if (isos%par%method .eqv. 3) then
+            call nc_write(filename, "log10_eta_eff", log10(isos%domain%eta_eff), &
+                units="Pa s", dim1="xc", dim2="yc", dim3="time", ncid=ncid, &
+                start=[1,1,n], count=[nx,ny,1])
+        end if
+
         call nc_close(ncid)
 
     end subroutine isos_restart_write
