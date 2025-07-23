@@ -46,6 +46,7 @@ module isos_utils
     public :: gauss_values
     public :: calc_gaussian_thickness
     public :: calc_gaussian_viscosity
+    public :: bilinear_interpolation_array
     
     contains
 
@@ -244,7 +245,6 @@ module isos_utils
         ref%we              = now%we
 
         ref%z_bed           = now%z_bed
-        ref%rsl             = now%rsl
         ref%z_ss             = now%z_ss
 
         return
@@ -258,7 +258,12 @@ module isos_utils
         call copy_sparsestate(ref, now)
         ref%dwdt            = now%dwdt
         ref%Haf             = now%Haf
-        ref%dz_ss     = now%dz_ss
+        ref%dz_ss           = now%dz_ss
+        ref%canom_ice       = now%canom_ice
+        ! ref%canom_sediment  = now%canom_sediment
+        ref%canom_seawater  = now%canom_seawater
+        ref%canom_litho     = now%canom_litho
+        ref%canom_mantle    = now%canom_mantle
         ref%canom_load      = now%canom_load
         ref%canom_full      = now%canom_full
         ref%mass_anom       = now%mass_anom
@@ -379,7 +384,6 @@ module isos_utils
         type(isos_domain_class), intent(IN)     :: domain
 
         call in2out(out%Hice, now%Hice, domain)
-        call in2out(out%rsl, now%rsl, domain)
         call in2out(out%z_ss, now%z_ss, domain)
         call in2out(out%z_bed, now%z_bed, domain)
         call in2out(out%dwdt, now%dwdt, domain)
@@ -480,6 +484,88 @@ module isos_utils
 
         return
     end subroutine interp_2d
+
+    subroutine bilinear_interpolation(x, y, z, x_out, y_out, z_out)
+        implicit none
+        real, intent(in) :: x(:), y(:), z(:,:)
+        real, intent(in) :: x_out, y_out
+        real, intent(out) :: z_out
+        integer :: i, j
+        real :: x1, x2, y1, y2, z11, z21, z12, z22
+        real :: tx, ty, tol
+        logical :: return_flat
+
+        tol = 1.0
+        return_flat = .false.
+
+        ! Handle boundary conditions (flat boundary)
+        if (x_out .le. x(1) + tol) then
+            i = 1
+            return_flat = .true.
+        else if (x_out .ge. x(size(x)) - tol) then
+            i = size(x)
+            return_flat = .true.
+        else
+            ! Locate the grid cell containing the target point
+            do i = 1, size(x)-1
+                if (x_out .gt. x(i) .and. x_out .le. x(i+1)) exit
+            end do
+            x1 = x(i)
+            x2 = x(i+1)
+            tx = (x_out - x1) / (x2 - x1)
+        end if
+
+        if (y_out .le. y(1) + tol) then
+            j = 1
+            return_flat = .true.
+        else if (y_out .ge. y(size(y)) - tol) then
+            j = size(y)
+            return_flat = .true.
+        else
+            do j = 1, size(y)-1
+                if (y_out .gt. y(j) .and. y_out .le. y(j+1)) exit
+            end do
+            y1 = y(j)
+            y2 = y(j+1)
+            ty = (y_out - y1) / (y2 - y1)
+        end if
+
+        ! Handle flat boundary conditions
+        if (return_flat) then
+            z_out = z(i, j)  ! Clamp to the nearest edge value
+            return
+        else
+            ! Get the corresponding z values
+            z11 = z(i, j)
+            z21 = z(i+1, j)
+            z12 = z(i, j+1)
+            z22 = z(i+1, j+1)
+
+            ! Perform bilinear interpolation
+            z_out = z11 * (1.0 - tx) * (1.0 - ty) + &
+                    z21 * tx * (1.0 - ty) + &
+                    z12 * (1.0 - tx) * ty + &
+                    z22 * tx * ty
+            return
+        end if
+
+    end subroutine bilinear_interpolation
+
+    subroutine bilinear_interpolation_array(x, y, z, x_out, y_out, z_out)
+
+        implicit none
+        real(wp), intent(in) :: x(:), y(:), z(:, :), x_out(:), y_out(:)
+        real(wp), intent(inout) :: z_out(:, :)
+        integer :: nx, ny, i, j
+
+        nx = size(x_out)
+        ny = size(y_out)
+        do i = 1, nx
+            do j = 1, ny
+                call bilinear_interpolation(x, y, z, x_out(i), y_out(j), z_out(i, j))
+            end do
+        end do
+    end subroutine bilinear_interpolation_array
 
     ! ===== MASKING FUNCTIONS ==============================
 
@@ -864,14 +950,14 @@ module isos_utils
     end function gauss_values
 
 
-    subroutine calc_gaussian_viscosity(eta, eta_0, sign, dx, dy)
+    subroutine calc_gaussian_viscosity(eta, eta_0, sign, xc, yc)
 
-        real(wp), intent(OUT) :: eta(:, :)
-        real(wp), intent(IN) :: eta_0, sign, dx, dy
+        real(wp), intent(INOUT) :: eta(:, :)
+        real(wp), intent(IN)  :: xc(:), yc(:)
+        real(wp), intent(IN) :: eta_0, sign
 
         real(wp) :: Lx, Ly, f
         real(wp) :: xcntr, ycntr, xmax, xmin, ymax, ymin
-        real(wp), allocatable :: xc(:), yc(:)
         real(wp) :: eta_sigma_m1(2, 2)
 
         integer  :: i, j, nx, ny
@@ -879,26 +965,12 @@ module isos_utils
         nx = size(eta,1)
         ny = size(eta,2)
 
-        allocate(xc(nx))
-        allocate(yc(ny))
-
-        do i = 1, nx
-           xc(i) = dx*(i-1)
-        end do
         xmin = xc(1)
         xmax = xc(nx)
-
-        do j = 1, ny
-           yc(j) = dy*(j-1)
-        enddo
         ymin = yc(1)
         ymax = yc(ny)
-
-        
         xcntr = (xmax+xmin)/2.0
         ycntr = (ymax+ymin)/2.0
-
-
         Lx = (xmax - xmin)/2.
         Ly = (ymax - ymin)/2.
 
@@ -911,43 +983,29 @@ module isos_utils
               eta(i,j) = eta_0 * 10**(sign * f)
            enddo
         enddo
-
-        eta = exp(log10(1.e21 / eta)) * eta
         
         return
     end subroutine calc_gaussian_viscosity
 
-    subroutine calc_gaussian_thickness(He_lith,He_lith_0, He_lith_1,sign,dx,dy)
+    subroutine calc_gaussian_thickness(He_lith, He_lith_0, He_lith_1, sign, xc, yc)
 
-        real(wp), intent(IN) :: He_lith_0, He_lith_1,sign, dx, dy
-        real(wp), intent(OUT) :: He_lith(:, :)
+        real(wp), intent(IN) :: He_lith_0, He_lith_1, sign
+        real(wp), intent(IN) :: xc(:), yc(:)
+        real(wp), intent(INOUT) :: He_lith(:, :)
 
         real(wp) :: Lx, Ly
         real(wp) :: xcntr, ycntr, xmax, xmin, ymax, ymin
-        real(wp), allocatable :: xc(:), yc(:)
         real(wp) :: He_lith_sigma_m1(2,2)
         integer  :: i, j, nx, ny
 
         nx = size(He_lith,1)
         ny = size(He_lith,2)
 
-        allocate(xc(nx))
-        allocate(yc(ny))
-
-        
-        do i = 1, nx
-            xc(i) = dx*(i-1)
-        end do
         xmin = xc(1)
         xmax = xc(nx)
-
-        do j = 1, ny
-            yc(j) = dy*(j-1)
-        enddo
         ymin = yc(1)
         ymax = yc(ny)
 
-        
         xcntr = (xmax+xmin)/2.0
         ycntr = (ymax+ymin)/2.0
 
@@ -958,11 +1016,13 @@ module isos_utils
 
         do i = 1, nx
             do j = 1, ny
-                He_lith(i,j) = He_lith_0 + sign*He_lith_1 * &
-                    exp(-0.5*dot_product([xc(i),yc(j)]-[xcntr,ycntr], &
+                He_lith(i,j) = exp(-0.5*dot_product([xc(i),yc(j)]-[xcntr,ycntr], &
                     matmul(He_lith_sigma_m1, [xc(i),yc(j)]-[xcntr,ycntr]) ))
             enddo
         enddo
+
+        He_lith = He_lith / maxval(He_lith)
+        He_lith = He_lith_0 + sign * He_lith_1 * He_lith
         
         return
     end subroutine calc_gaussian_thickness
