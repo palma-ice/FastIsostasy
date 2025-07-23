@@ -15,6 +15,7 @@
     lithosphere = "rheology_file"
     viscosity_scaling_method = "none"
     viscosity_scaling = 1.
+    rheo_smoothing_radius = 40.0 ! [km] Smoothing radius for rheology
     layering    = "equalized"
     nl          = 3
     zl          = 260., 280., 300.
