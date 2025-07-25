@@ -52,6 +52,7 @@ module isostasy_defs
         character(len=256)       :: rheology_file
         character(len=64)        :: litho_thickness_varname ! Variable name in netcdf file
         character(len=64)        :: log10_viscosity_varname ! Variable name in netcdf file
+        character(len=64)        :: stddev_log10_viscosity_varname ! Variable name in netcdf file
         logical                  :: use_restart
 
         real(wp) :: L_w                         ! [m] Lithosphere flexural length scale (for method=2)
