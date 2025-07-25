@@ -71,9 +71,9 @@ contains
 
         ! Local variables
         integer                 :: nx_rheo, ny_rheo, nz_rheo
-        real(wp), allocatable   :: xc_rheo(:), yc_rheo(:), zc_rheo(:), depth(:)
+        real(wp), allocatable   :: xc_rheo(:), yc_rheo(:), zc_rheo(:), depth_rheo(:)
         real(wp), allocatable   :: eta_rheo(:, :, :), stddev_eta_rheo(:, :, :)
-        real(wp), allocatable   :: eta_raw(:, :, :), stddev_eta_raw(:, :, :)
+        real(wp), allocatable   :: eta_bilin(:, :, :), stddev_eta_bilin(:, :, :)
         real(wp), allocatable   :: T_rheo(:, :)
         logical                 :: correct_distortion
         integer                 :: nbsl, i, j, l
@@ -141,7 +141,7 @@ contains
         call calc_density_correction_factor(isos%par)
 
         write(*,*) "Initializing lithosphere..."
-        isos%domain%He_lith = isos%par%zl(1)
+        isos%domain%He_lith = isos%par%zl(1) * 1e3_wp
         call calc_homogeneous_rigidity(D_lith_const, isos%par%E, &
             isos%par%zl(1), isos%par%nu)
         call calc_flexural_lengthscale(isos%par%L_w, D_lith_const, &
@@ -227,14 +227,14 @@ contains
             case("gaussian_plus")
                 call calc_gaussian_thickness(isos%domain%He_lith, &
                     isos%par%zl(1), &
-                    100.0_wp, sign=1._wp, xc=isos%domain%xc, yc=isos%domain%yc)
+                    100e3, sign=1._wp, xc=isos%domain%xc, yc=isos%domain%yc)
                 call calc_heterogeneous_rigidity(isos%domain%D_lith, isos%par%E, &
                     isos%domain%He_lith, isos%par%nu)
 
             case("gaussian_minus")
                 call calc_gaussian_thickness(isos%domain%He_lith, &
                     isos%par%zl(1), &
-                    100.0_wp, sign=-1._wp, xc=isos%domain%xc, yc=isos%domain%yc)
+                    100e3, sign=-1._wp, xc=isos%domain%xc, yc=isos%domain%yc)
                 call calc_heterogeneous_rigidity(isos%domain%D_lith, isos%par%E, &
                     isos%domain%He_lith, isos%par%nu)
 
@@ -260,7 +260,7 @@ contains
                 if (string_buffer .eq. "km") then
                     T_rheo = T_rheo * 1e3_wp ! convert to meters
                 else if (string_buffer .eq. "m") then
-                    ! do nothing, already in meters
+                    write(*,*) "isos_init:: Using lithosphere thickness in meters."
                 else
                     write(*,*) "isos_init:: Error: unknown unit for ", &
                         isos%par%litho_thickness_varname, "in rheology file: ", string_buffer
@@ -329,17 +329,18 @@ contains
                 call nc_read_and_scale(isos%par%rheology_file, "zc", zc_rheo)
 
                 write(*,*) "Deriving rheology depth..."
-                ! derive increasing depth from increasing zc_rheo
-                allocate(depth(nz_rheo))
+                ! depth needs to be in increasing order for interpolation along z
+                allocate(depth_rheo(nz_rheo))
                 do i = 1, nz_rheo
-                    depth(i) = 6371 - zc_rheo(nz_rheo-i+1) ! zc_rheo(1)
+                    depth_rheo(i) = zc_rheo(nz_rheo) - zc_rheo(nz_rheo-i+1)
                 end do
+                write(*,*) "depth rheo: ", depth_rheo
 
                 write(*,*) "Allocating rheology arrays..."
                 allocate(eta_rheo(nx_rheo, ny_rheo, nz_rheo))
                 allocate(stddev_eta_rheo(nx_rheo, ny_rheo, nz_rheo))
-                allocate(eta_raw(isos%domain%nx, isos%domain%ny, nz_rheo))
-                allocate(stddev_eta_raw(isos%domain%nx, isos%domain%ny, nz_rheo))
+                allocate(eta_bilin(isos%domain%nx, isos%domain%ny, nz_rheo))
+                allocate(stddev_eta_bilin(isos%domain%nx, isos%domain%ny, nz_rheo))
 
                 write(*,*) "Reading log10 viscosity..."
                 call nc_read(isos%par%rheology_file, isos%par%log10_viscosity_varname, eta_rheo)
@@ -350,48 +351,49 @@ contains
                     ! than the rheology domain
                     call bilinear_interpolation_array(xc_rheo, yc_rheo, &
                         eta_rheo(:, :, nz_rheo-i+1), isos%domain%xc, &
-                        isos%domain%yc, eta_raw(:, :, i))
+                        isos%domain%yc, eta_bilin(:, :, i))
                 end do
                 
                 select case(trim(isos%par%viscosity_scaling_method))
                 case("stddev")
                     ! assumes a flat extension of the values if isos domain is larger
                     ! than the rheology domain
-                    call nc_read(isos%par%rheology_file, "stddev_log10_visc", &
+                    call nc_read(isos%par%rheology_file, isos%par%stddev_log10_viscosity_varname, &
                         stddev_eta_rheo)
                     do i = 1, nz_rheo
                         call bilinear_interpolation_array(xc_rheo, yc_rheo, &
                             stddev_eta_rheo(:, :, nz_rheo-i+1), isos%domain%xc, &
-                            isos%domain%yc, stddev_eta_raw(:, :, i))
+                            isos%domain%yc, stddev_eta_bilin(:, :, i))
                     end do
-                    eta_raw = eta_raw + isos%par%viscosity_scaling * stddev_eta_raw
+                    eta_bilin = eta_bilin + isos%par%viscosity_scaling * stddev_eta_bilin
                 end select
 
-                where (eta_raw < 16) eta_raw = 16
-                where (eta_raw > 23) eta_raw = 23
+                where (eta_bilin < 16) eta_bilin = 16
+                where (eta_bilin > 23) eta_bilin = 23
                 ! eta_ext = 21
-                ! eta_ext(icrop1:icrop2, jcrop1:jcrop2, :) = eta_raw(:, :, :)
+                ! eta_ext(icrop1:icrop2, jcrop1:jcrop2, :) = eta_bilin(:, :, :)
 
                 ! write(*,*) "extrema of depth: ", minval(depth), maxval(depth)
                 ! write(*,*) "extrema of boundaries: ", minval(isos%domain%boundaries), maxval(isos%domain%boundaries)
-                ! write(*,*) "extrema of log10 eta raw: ", minval(eta_raw), maxval(eta_raw)
-
+                ! write(*,*) "extrema of log10 eta raw: ", minval(eta_bilin), maxval(eta_bilin)
+                write(*,*) "depth_rheo: ", depth_rheo
                 write(*,*) "Interpolating viscosity vertically..."
                 do l = 1, isos%par%nl
                     do i = 1, isos%domain%nx
                     do j = 1, isos%domain%ny
-                        ! Everything related to layer boundaries is computed in km!
-                        call interp_0d(depth, eta_raw(i, j, :), &
+                        call interp_0d(depth_rheo, eta_bilin(i, j, :), &
                             isos%domain%boundaries(i, j, l), &
                             isos%domain%eta(i, j, l))
+
                     end do
                     end do
+                    write(*,*) "isos_init:: eta extrema at layer ", l, &
+                        minval(isos%domain%eta(:, :, l)), maxval(isos%domain%eta(:, :, l))
                 end do
 
                 isos%domain%eta = 10. ** (isos%domain%eta)
 
                 write(*,*) "Computing effective viscosity..."
-                ! Everything related to layer boundaries is computed in km!
                 call calc_effective_viscosity( &
                     isos%domain%eta_eff, isos%domain%eta, &
                     isos%domain%xc, isos%domain%yc, isos%domain%boundaries)
@@ -400,8 +402,6 @@ contains
                         isos%par%rheo_smoothing_radius)
                 end if
                 write(*,*) "extrema of eta_eff: ", minval(isos%domain%eta_eff), maxval(isos%domain%eta_eff)
-
-                ! call flat_extension(isos%domain%eta_eff, icrop1, icrop2, jcrop1, jcrop2)
 
             case DEFAULT
                 ! do nothing, eta was set above
@@ -598,7 +598,9 @@ contains
         ! write(*,*) "BSL ref: ", isos%ref%bsl
         if (isos%par%use_restart) then
             ! write(*,*) "Reading restart file..."
-            call isos_restart_read(isos,isos%par%restart,time)
+            call isos_restart_read(isos, isos%par%restart,time)
+            call calc_Haf(isos%ref, isos%par)
+            call calc_masks(isos%ref)
 
             ! Reference state has been set via the restart file
             isos%par%ref_was_set = .TRUE. 
@@ -606,10 +608,6 @@ contains
 
         else
             call extendice2isostasy(isos%now, z_bed, H_ice, isos%domain)
-            isos%now%bsl = bsl%bsl_now
-            call calc_z_ss(isos%now%z_ss, isos%now%bsl, isos%now%z_ss, isos%now%dz_ss)
-            call calc_Haf(isos%now, isos%par)
-            call calc_masks(isos%now)
 
             if (.not. isos%par%ref_was_set) then
                 call set_initialstate_as_ref(isos)
@@ -617,6 +615,11 @@ contains
             end if
 
         end if
+        
+        isos%now%bsl = bsl%bsl_now
+        call calc_z_ss(isos%now%z_ss, isos%now%bsl, isos%now%z_ss, isos%now%dz_ss)
+        call calc_Haf(isos%now, isos%par)
+        call calc_masks(isos%now)
 
         ! Define initial time of isostasy model
         ! (set time_diagnostics earlier, so that it is definitely updated on the first timestep)
@@ -847,10 +850,10 @@ contains
         type(isos_state_class), intent(IN) :: isos_state
 
         ! call large_check(isos_state%Haf, 1e6_wp, "Haf")
-        call large_check(isos_state%w, 1e6_wp, "w")
-        call large_check(isos_state%we, 1e6_wp, "we")
-        call large_check(isos_state%w_equilibrium, 1e6_wp, "w_equilibrium")
-        call large_check(isos_state%dz_ss, 1e6_wp, "dz_ss")
+        call large_check(isos_state%w, 1e5_wp, "w")
+        call large_check(isos_state%we, 1e5_wp, "we")
+        call large_check(isos_state%w_equilibrium, 1e5_wp, "w_equilibrium")
+        call large_check(isos_state%dz_ss, 1e3_wp, "dz_ss")
         
     end subroutine check_isos_instabilities
 
@@ -937,6 +940,7 @@ contains
         allocate(par%viscosities(par%nl))
         allocate(par%zl(par%nl))
         call nml_read(filename,group,"zl",          par%zl)
+        par%zl = par%zl * 1e3_wp ! Convert to meters
 
         call nml_read(filename,group,"mantle",          par%mantle) 
         call nml_read(filename,group,"lithosphere",     par%lithosphere)
@@ -945,6 +949,7 @@ contains
         
         if (par%layering .eq. "parallel") then
             call nml_read(filename,group,"dl",          par%dl)
+            par%dl = par%dl * 1e3_wp ! Convert to meters
         end if
 
         if ((par%mantle .eq. "rheology_file") .or. &
@@ -954,6 +959,8 @@ contains
                 par%litho_thickness_varname)
             call nml_read(filename, group, "log10_viscosity_varname", &
                 par%log10_viscosity_varname)
+            call nml_read(filename, group, "stddev_log10_viscosity_varname", &
+                par%stddev_log10_viscosity_varname)
             call nml_read(filename, group, "rheo_smoothing_radius", par%rheo_smoothing_radius)
             par%rheo_smoothing_radius = par%rheo_smoothing_radius * 1e3_wp ! Convert to meters
         end if
@@ -1188,7 +1195,8 @@ contains
         if (string_buffer .eq. "km") then
             vals = vals * 1e3_wp ! convert to meters
         else if (string_buffer .eq. "m") then
-            ! do nothing, already in meters
+            write(*,*) "nc_read_and_scale:: units are already in meters."
+            vals = vals
         else
             write(*,*) "nc_read_and_scale:: unknown unit."
             stop
