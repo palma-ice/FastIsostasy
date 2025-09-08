@@ -26,12 +26,13 @@ module isostasy_io
         logical,           intent(IN) :: create
 
         ! Local variables 
-        character(len=16) :: xnm 
-        character(len=16) :: ynm 
+        character(len=16) :: xnm
+        character(len=16) :: ynm
+        character(len=16) :: znm
         character(len=16) :: grid_mapping_name
 
         xnm = "xc"
-        ynm = "yc" 
+        ynm = "yc"
         grid_mapping_name = "crs"
 
         ! Create the netcdf file if desired
@@ -123,13 +124,16 @@ module isostasy_io
         call nc_write(filename, "we_ref", isos%ref%we, units="m", dim1="xc", dim2="yc", &
             dim3="time", ncid=ncid, start=[1,1,n], count=[nx,ny,1])
 
-        call nc_write(filename, "log10_eta_eff", log10(isos%domain%eta_eff), units="Pa s", &
-            dim1="xc", dim2="yc", dim3="time", ncid=ncid, start=[1,1,n], count=[nx,ny,1])
-        call nc_write(filename, "He_lith", isos%domain%He_lith, units="km", dim1="xc", &
+        call nc_write(filename, "He_lith", isos%domain%He_lith * 1e-3, units="km", dim1="xc", &
             dim2="yc", dim3="time", ncid=ncid, start=[1,1,n], count=[nx,ny,1])
-        call nc_write(filename, "mask_active", isos%domain%maskactive, units="1", dim1="xc", dim2="yc", &
-            dim3="time", ncid=ncid, start=[1,1,n], count=[nx,ny,1])
-        
+        call nc_write(filename, "mask_active", isos%domain%maskactive, units="1", &
+            dim1="xc", dim2="yc", dim3="time", ncid=ncid, start=[1,1,n], count=[nx,ny,1])
+        if (isos%par%method .eqv. 3) then
+            call nc_write(filename, "log10_eta_eff", log10(isos%domain%eta_eff), &
+                units="Pa s", dim1="xc", dim2="yc", dim3="time", ncid=ncid, &
+                start=[1,1,n], count=[nx,ny,1])
+        end if
+
         call nc_close(ncid)
 
     end subroutine isos_restart_write
@@ -225,7 +229,8 @@ module isostasy_io
         real(wp),         intent(IN) :: time_init
         
         ! Local variables
-        integer :: nf
+        integer :: nf, l
+        character(len=8) :: l_str
         
         ! Create the empty netcdf file
         call nc_create(filename)
@@ -237,8 +242,11 @@ module isostasy_io
             units="year", unlimited=.TRUE.)
 
         ! Write constant fields
-        call nc_write(filename, "He_lith", isos%domain%He_lith, units="km", &
+        call nc_write(filename, "He_lith", isos%domain%He_lith * 1e-3, units="km", &
             long_name="Lithosphere thickness", dim1="xc", dim2="yc" ,start=[1, 1])
+
+        call nc_write(filename, "D_lith", isos%domain%D_lith, units="N m", &
+            long_name="Lithosphere flexural rigidity", dim1="xc", dim2="yc", start=[1, 1])
 
         call nc_write(filename,"GE",isos%domain%GE, units="", &
             long_name="Elastic Green function", dim1="xc", dim2="yc", start=[1, 1])
@@ -268,6 +276,14 @@ module isostasy_io
             call nc_write(filename, "kappa", isos%domain%kappa, units="", &
                 long_name="Pseudodifferential operator in Fourier space", &
                 dim1="xc", dim2="yc", start=[1, 1])
+
+            ! do l = 1, size(isos%domain%eta, dim=3)
+            !     write(l_str, '(I0)') l  ! Convert integer to string
+            !     call nc_write(filename, "log10_eta_" // trim(adjustl(l_str)), &
+            !         log10(isos%domain%eta(:, :, l)), units="Pa s", &
+            !         long_name="layer " // l_str // " viscosity", &
+            !         dim1="xc", dim2="yc")
+            ! end do
         end if
 
         call nc_write(filename, "maskactive", isos%domain%maskactive, units="1", &

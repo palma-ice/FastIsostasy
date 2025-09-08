@@ -2,6 +2,7 @@
     ! Options
     heterogeneous_ssh = .true.      ! Sea level varies spatially?
     interactive_sealevel = .true.   ! Sea level interacts with solid Earth deformation?
+    include_elastic = .true.       ! Include elastic deformation?
     correct_distortion = .false.    ! Account for distortion of projection?
     method          = 3             ! 0: constant displacement; 1: LLRA; 2: LV-ELRA, 3: LV-ELVA
     dt_prognostics  = 1.            ! [yr] Max. timestep to recalculate prognostics
@@ -12,8 +13,9 @@
     ! Rheology
     mantle = "rheology_file"
     lithosphere = "rheology_file"
-    viscosity_scaling_method = "scale"
+    viscosity_scaling_method = "none"
     viscosity_scaling = 1.
+    rheo_smoothing_radius = 40.0 ! [km] Smoothing radius for rheology
     layering    = "equalized"
     nl          = 3
     zl          = 260., 280., 300.
@@ -35,7 +37,10 @@
     ! Files
     restart = "None"
     mask_file = "../isostasy_data/tools/masks/ANT-32KM_activemask.nc"
-    rheology_file = "../isostasy_data/earth_structure/ANT-32KM_Latychev.nc"
+    rheology_file = "../isostasy_data/earth_structure/ANT-32KM_Pan2022.nc"
+    litho_thickness_varname = "litho_thickness" ! Variable name in netcdf file
+    log10_viscosity_varname = "log10_eta"       ! Variable name in netcdf file
+    stddev_log10_viscosity_varname = "none"     ! Variable name in netcdf file
 /
 
 &barysealevel

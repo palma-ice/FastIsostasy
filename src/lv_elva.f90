@@ -227,10 +227,10 @@ module lv_elva
 
         write(*,*) "Number of layers: ", nl
 
-        if (nl .eq. 1) then
-            eta_eff = eta(:, :, 1)
 
-        else if (nl .ge. 1) then
+        eta_eff(:, :) = eta(:, :, nl)
+        
+        if (nl .ge. 1) then
             Wx = maxval(xc)
             Wy = maxval(yc)
             ! W = (Wx + Wy) / 2.0
@@ -238,15 +238,15 @@ module lv_elva
             kappa = pi/W
 
             ! Start with n-th layer: viscous half space
-            eta_eff(:, :) = eta(:, :, nl)
             write(*,*) "Value range of effective viscosity: ", minval(eta_eff), maxval(eta_eff)
 
             do k = nl, 2, -1
 
                 ! convert to meters for consistence with W, Wx, Wy
-                dz = (layer_boundaries(:, :, k) - layer_boundaries(:, :, k-1)) * 1e3
+                dz = (layer_boundaries(:, :, k) - layer_boundaries(:, :, k-1))
 
-                ! write(*,*) k, minval(dz), maxval(dz), minval(layer_boundaries(:, :, k)), maxval(layer_boundaries(:, :, k)), minval(layer_boundaries(:, :, k-1)), maxval(layer_boundaries(:, :, k-1))
+                write(*,*) "Extrema of layer thickness and boundary at index ", k, minval(dz), maxval(dz), &
+                    minval(layer_boundaries(:, :, k)), maxval(layer_boundaries(:, :, k))
 
                 eta_c = eta(:, :, k-1)
                 eta_ratio = eta_c / eta_eff
@@ -257,7 +257,7 @@ module lv_elva
 
                 do i = 1, nx
                 do j = 1, ny
-                    R(i, j) = (2.0 * eta_ratio(i, j) * c(i, j) * s(i, j) + &
+                    R(i, j) = ( 2.0 * eta_ratio(i, j) * c(i, j) * s(i, j) + &
                         (1-eta_ratio(i, j)**2) * (dz(i, j)*kappa)**2 + &
                         (eta_ratio(i, j)*s(i, j))**2 + c(i, j)**2 ) / &
                         ((eta_ratio(i, j) + inv_ratio(i, j))* c(i, j) * s(i, j) + &
@@ -267,14 +267,12 @@ module lv_elva
                 end do
 
                 eta_eff = R * eta_eff
-
+                write(*,*) "Value range of effective viscosity: ", minval(eta_eff), maxval(eta_eff)
             end do
         else
             print*,'Number of levels is wrong: nl = ', nl
             stop
         endif
-
-        write(*,*) "Value range of effective viscosity: ", minval(eta_eff), maxval(eta_eff)
 
         return
     end subroutine calc_effective_viscosity
