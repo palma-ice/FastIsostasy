@@ -288,6 +288,12 @@ module isostasy_io
 
         call nc_write(filename, "maskactive", isos%domain%maskactive, units="1", &
             long_name="Active mask", dim1="xc", dim2="yc", start=[1, 1])
+
+        call nc_write(filename, "H_ice_ref", isos%ref%Hice, units="1", &
+            long_name="Reference ice thickness", dim1="xc", dim2="yc", start=[1, 1])
+
+        call nc_write(filename, "z_bed_ref", isos%ref%z_bed, units="m", &
+            long_name="Reference bedrock elevation", dim1="xc", dim2="yc", start=[1, 1])
         return
 
     end subroutine isos_write_init_extended
@@ -375,7 +381,6 @@ module isostasy_io
         return 
     end subroutine isos_write_step
 
-
     ! Write results to file
     subroutine isos_write_step_extended(isos, filename, time)
 
@@ -445,5 +450,4 @@ module isostasy_io
 
         return 
     end subroutine isos_write_step_extended
-
 end module isostasy_io
