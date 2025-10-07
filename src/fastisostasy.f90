@@ -612,6 +612,7 @@ contains
         
         isos%now%bsl = bsl%bsl_now
         call calc_z_ss(isos%now%z_ss, isos%now%bsl, isos%now%z_ss, isos%now%dz_ss)
+        call calc_Haf(isos%ref, isos%par)
         call calc_Haf(isos%now, isos%par)
         call calc_masks(isos%now)
 
