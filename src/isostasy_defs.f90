@@ -10,6 +10,7 @@ module isostasy_defs
     type isos_param_class
         logical     :: heterogeneous_ssh    ! Sea level varies spatially?
         logical     :: interactive_sealevel ! Sea level interacts with solid Earth deformation?
+        logical     :: include_elastic      ! Include elastic deformation?
         logical     :: correct_distortion   ! Account for distortion of projection?
         integer     :: method               ! Computation method for viscous displacement
         real(wp)    :: dt_prognostics       ! [yr] Timestep to recalculate prognostics
@@ -20,6 +21,7 @@ module isostasy_defs
         character(len=56)       :: lithosphere  ! [-] Method to prescribe lithospheric thickness field
         character(len=56)       :: viscosity_scaling_method
         real(wp)                :: viscosity_scaling
+        real(wp)                :: rheo_smoothing_radius ! [km] Smoothing radius for rheology
         
         real(wp), allocatable   :: zl(:)    ! [km] Layer boundaries
         real(wp), allocatable   :: viscosities(:)   ! [Pa s] Layer viscosities
@@ -48,6 +50,9 @@ module isostasy_defs
         character(len=256)       :: restart
         character(len=256)       :: mask_file
         character(len=256)       :: rheology_file
+        character(len=64)        :: litho_thickness_varname ! Variable name in netcdf file
+        character(len=64)        :: log10_viscosity_varname ! Variable name in netcdf file
+        character(len=64)        :: stddev_log10_viscosity_varname ! Variable name in netcdf file
         logical                  :: use_restart
 
         real(wp) :: L_w                         ! [m] Lithosphere flexural length scale (for method=2)
@@ -67,6 +72,10 @@ module isostasy_defs
         integer                 :: nx, ny
         real(wp)                :: dx, dy
 
+        real(wp), allocatable :: xc_ice(:)        ! [m] X coordinates of ice domain
+        real(wp), allocatable :: yc_ice(:)        ! [m] Y coordinates of ice domain
+        real(wp), allocatable :: x_ice(:, :)    ! [m] X coordinates of ice domain
+        real(wp), allocatable :: y_ice(:, :)    ! [m] Y coordinates of ice domain
         real(wp), allocatable   :: xc(:)            ! [m]
         real(wp), allocatable   :: yc(:)            ! [m]
         real(wp), allocatable   :: x(:, :)          ! [m]
@@ -116,14 +125,17 @@ module isostasy_defs
         real(wp), allocatable :: w_equilibrium(:, :)  ! Current viscous equilibrium displacement (XLRA)
         real(wp), allocatable :: we(:, :)             ! [m] Elastic displacement
 
-        real(wp), allocatable :: H_above_bsl(:, :)      ! [m] Ice thickness above BSL
         real(wp), allocatable :: Haf(:, :)              ! [m] Ice thickness above floatation
         real(wp), allocatable :: Hice(:, :)             ! [m] Thickness of ice column
         ! real(wp), allocatable :: Hsediment(:, :)      ! [m] Thickness of sediment column
 
-        real(wp), allocatable :: rsl(:, :)           ! [m] relative sea level
         real(wp), allocatable :: z_ss(:, :)           ! [m] sea-surface height
         real(wp), allocatable :: dz_ss(:, :)   ! [m] sea-surface height perturbation
+        real(wp), allocatable :: canom_ice(:, :)
+        real(wp), allocatable :: canom_sediment(:, :)
+        real(wp), allocatable :: canom_seawater(:, :)
+        real(wp), allocatable :: canom_litho(:, :)
+        real(wp), allocatable :: canom_mantle(:, :)
         real(wp), allocatable :: canom_load(:, :)    ! [kg m^-2] Load column anomaly
         real(wp), allocatable :: canom_full(:, :)    ! [kg m^-2] Full column anomaly
         real(wp), allocatable :: mass_anom(:, :)     ! [kg] Mass anomaly
@@ -141,7 +153,6 @@ module isostasy_defs
         real(wp), allocatable       :: we(:, :)
         real(wp), allocatable       :: w_equilibrium(:, :)
 
-        real(wp), allocatable       :: rsl(:, :)
         real(wp), allocatable       :: z_ss(:, :)
         real(wp), allocatable       :: dz_ss(:, :)
         real(wp), allocatable       :: z_bed(:, :)

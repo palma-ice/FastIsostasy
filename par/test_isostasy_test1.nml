@@ -2,6 +2,7 @@
     ! Options
     heterogeneous_ssh = .false.     ! Sea level varies spatially?
     interactive_sealevel = .false.  ! Sea level interacts with solid Earth deformation?
+    include_elastic = .false.       ! Include elastic deformation?
     correct_distortion = .false.    ! Account for distortion of projection?
     method          = 3             ! 0: constant displacement; 1: LLRA; 2: LV-ELRA, 3: LV-ELVA
     dt_prognostics  = 1.            ! [yr] Max. timestep to recalculate prognostics
@@ -23,6 +24,7 @@
     viscosities = 1.e21             ! [Pa s] Layer viscosities. Only used if
                                     ! mantle = "uniform" or "gaussian_plus" or "gaussian_minus".
                                     ! viscosity field is provided.
+    tau = 3000.0                    ! [yr] Relaxation time used for "method" = 2
 
     ! Physical constants
     E               = 66.0          ! [GPa] Young modulus
