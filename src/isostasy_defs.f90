@@ -19,14 +19,17 @@ module isostasy_defs
 
         character(len=56)       :: mantle       ! [-] Method to prescribe viscosity field
         character(len=56)       :: lithosphere  ! [-] Method to prescribe lithospheric thickness field
+        character(len=64)       :: layering
+        character(len=64)       :: lumping
         character(len=56)       :: viscosity_scaling_method
         real(wp)                :: viscosity_scaling
         real(wp)                :: rheo_smoothing_radius ! [km] Smoothing radius for rheology
         
-        real(wp), allocatable   :: zl(:)    ! [km] Layer boundaries
+        real(wp), allocatable   :: zl(:)            ! [km] Layer boundaries
         real(wp), allocatable   :: viscosities(:)   ! [Pa s] Layer viscosities
         integer                 :: nl               ! [-] Number of layers for LV-ELVA
         real(wp)                :: dl
+        real(wp)                :: eta_ref          ! [Pa s] Reference viscosity for scaling
         real(wp)                :: tau              ! [yr] Asthenospheric relaxation time
 
         ! Physical constants
@@ -46,7 +49,6 @@ module isostasy_defs
         real(wp) :: r_earth
         real(wp) :: m_earth
 
-        character(len=64)        :: layering
         character(len=256)       :: restart
         character(len=256)       :: mask_file
         character(len=256)       :: rheology_file
@@ -86,6 +88,7 @@ module isostasy_defs
         real(wp), allocatable   :: A(:, :)          ! [m^2] Cell area
         real(wp), allocatable   :: K(:, :)          ! [1] Distortion matrix
         real(wp), allocatable   :: kappa(:, :)      ! [1] Pseudodifferential operator
+        real(wp), allocatable   :: R(:, :)          ! [1] Scaling operator for viscosity variations
         logical,  allocatable   :: maskactive(:, :) ! [1] Active mask
 
         real(wp), allocatable   :: boundaries(:, :, :)
