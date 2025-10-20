@@ -75,6 +75,7 @@ module isos_utils
 
     ! Calculate flexural rigidity based on effective elastic thickness of the lithosphere
     ! (He_lith), Young's modulus and Poisson's ratio. See Coulon et al. (2021) Eq. 5 & 6.
+    ! Assume He_lith in km, therefore 1e9 scaling
     subroutine calc_homogeneous_rigidity(D_lith, E, He_lith, nu)
         implicit none
         real(wp), intent(OUT) :: D_lith
@@ -82,7 +83,7 @@ module isos_utils
         real(wp), intent(IN)  :: He_lith
         real(wp), intent(IN)  :: nu
 
-        D_lith = (E*1e9) * (He_lith)**3 / (12.0 * (1.0-nu**2))
+        D_lith = E * 1e9 * (He_lith)**3 / (12.0 * (1.0-nu**2))
         return
     end subroutine calc_homogeneous_rigidity
 
@@ -93,7 +94,7 @@ module isos_utils
         real(wp), intent(IN)    :: He_lith(:, :)
         real(wp), intent(IN)    :: nu
 
-        D_lith = (E*1e9) * (He_lith)**3 / (12.0*(1.0-nu**2))
+        D_lith = E * 1e9 * (He_lith)**3 / (12.0*(1.0-nu**2))
 
         return
     end subroutine calc_heterogeneous_rigidity
@@ -217,17 +218,22 @@ module isos_utils
 
     ! ===== MISC ==============================
 
-    subroutine init_dims(vec, mat, n, d)
+    subroutine init_dims(vec, mat, n, d, dim_idx)
         implicit none
         real(wp), intent(OUT)   :: vec(:)
         real(wp), intent(OUT)   :: mat(:, :)
         integer, intent(IN)     :: n
         real(wp), intent(IN)    :: d
         integer                 :: i
+        integer, intent(IN)     :: dim_idx
 
         do i = 1, n
             vec(i) = (i - n/2 - 1)*d
-            mat(i, :) = (i - n/2 - 1)*d
+            if (dim_idx .eq. 1) then
+                mat(i, :) = (i - n/2 - 1)*d
+            else if (dim_idx .eq. 2) then
+                mat(:, i) = (i - n/2 - 1)*d
+            end if
         end do
 
         return
