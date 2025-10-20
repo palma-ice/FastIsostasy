@@ -15,7 +15,7 @@ module lv_elva
     public :: calc_parallel_layerboundaries
     public :: calc_equalized_layerboundaries
     public :: calc_folded_layerboundaries
-    public :: layered_viscosity
+    public :: layered_viscosity_from_vector
     public :: calc_effective_viscosity
     public :: calc_fft_backward_r2r
     public :: calc_fft_forward_r2r
@@ -28,7 +28,7 @@ module lv_elva
     contains
 
     ! Calculate vertical displacement rate (viscous part) on rectangular domain.
-    subroutine calc_lvelva(dwdt, w, canom_full, maskactive, g, nu, D_lith, eta,&
+    subroutine calc_lvelva(dwdt, w, canom_full, maskactive, g, nu, D_lith, eta, R, &
         kappa, nx, ny, dx_matrix, dy_matrix, sec_per_year, forward_plan, backward_plan)
 
         implicit none
@@ -40,7 +40,8 @@ module lv_elva
         real(wp), intent(IN)    :: g
         real(wp), intent(IN)    :: nu
         real(wp), intent(IN)    :: D_lith(:, :) 
-        real(wp), intent(IN)    :: eta(:, :)   ! [Pa s] Viscosity, eta=1e21 by default. 
+        real(wp), intent(IN)    :: eta(:, :)   ! [Pa s] Viscosity, eta=1e21 by default.
+        real(wp), intent(IN)    :: R(:, :)     ! [1] Viscosity scaling operator, R=1 by default.
         real(wp), intent(IN)    :: kappa(:, :)
         integer, intent(IN)     :: nx, ny
         real(wp), intent(IN)    :: sec_per_year
@@ -111,12 +112,12 @@ module lv_elva
         call maskfield(p, -g * canom_full, maskactive, nx, ny)
         f = (p + Mx_xx + 2.0_wp * Mxy_xy + My_yy) / (2.0_wp * eta)
         call calc_fft_forward_r2r(forward_plan, f, f_hat)
-        dwdt_hat = f_hat / kappa
+        dwdt_hat = f_hat / (kappa * R)
 
         ! write(*,*) sum(dwdt_hat), sum(f_hat)
         call calc_fft_backward_r2r(backward_plan, dwdt_hat, dwdt_dp)
         call apply_zerobc_at_corners_dp(dwdt_dp, nx, ny)
-        dwdt = dwdt_dp 
+        dwdt = dwdt_dp
         
         ! Rate of viscous asthenosphere uplift per unit time (seconds)
         dwdt = dwdt * sec_per_year  !  [m/s] x [s/a] = [m/a]
@@ -124,6 +125,8 @@ module lv_elva
         return
     end subroutine calc_lvelva
     
+    ! subroutine calc_layerboundaries
+    ! end subroutine calc_layerboundaries
 
     subroutine calc_parallel_layerboundaries(layer_boundaries, He_lith, nl, dl)
         ! Everything related to layer boundaries is computed in km!
@@ -136,9 +139,11 @@ module lv_elva
 
         layer_boundaries(:, :, 1) = He_lith
 
-        do k = 2, nl
-            layer_boundaries(:, :, k) = layer_boundaries(:, :, k-1) + dl
-        end do
+        if (nl .gt. 1) then
+            do k = 2, nl
+                layer_boundaries(:, :, k) = layer_boundaries(:, :, k-1) + dl
+            end do
+        end if
         return
     end subroutine calc_parallel_layerboundaries
 
@@ -153,9 +158,12 @@ module lv_elva
 
         layer_boundaries(:, :, 1) = He_lith
 
-        do k = 2, nl
-            layer_boundaries(:, :, k) = zl(k)
-        end do
+        if (nl .gt. 1) then
+            do k = 2, nl
+                layer_boundaries(:, :, k) = zl(k)
+            end do
+        end if
+
         return
     end subroutine calc_equalized_layerboundaries
 
@@ -168,13 +176,21 @@ module lv_elva
         real(wp), intent(IN)    :: zl(:)
         integer                 :: k
 
-        layer_boundaries(:, :, 1) = He_lith
         write(*,*) "folded layer boundaries not implemented yet."
         stop
+        
+        ! layer_boundaries(:, :, 1) = He_lith
+
+        ! if (nl .gt. 1) then
+        !     do k = 2, nl
+        !         layer_boundaries(:, :, k) = zl(k)
+        !     end do
+        ! end if
+
         return
     end subroutine calc_folded_layerboundaries
 
-    subroutine layered_viscosity(eta, eta_vec)
+    subroutine layered_viscosity_from_vector(eta, eta_vec)
         implicit none
         real(wp), intent(INOUT) :: eta(:, :, :)
         real(wp), intent(IN)    :: eta_vec(:)
@@ -186,31 +202,61 @@ module lv_elva
         end do
 
         return
-    end subroutine layered_viscosity
+    end subroutine layered_viscosity_from_vector
 
-    subroutine calc_effective_viscosity(eta_eff, eta, xc, yc, layer_boundaries)
+    subroutine calc_effective_viscosity(eta_eff, R, eta, kappa, xc, yc, layer_boundaries, par)
 
         implicit none
 
-        real(wp), intent(INOUT)  :: eta_eff(:, :)
+        real(wp), intent(INOUT)             :: eta_eff(:, :), R(:, :)
+        real(wp), intent(IN)                :: eta(:, :, :)
+        real(wp), intent(IN)                :: kappa(:, :)
+        real(wp), intent(IN)                :: xc(:), yc(:)
+        real(wp), intent(IN)                :: layer_boundaries(:, :, :)
+        type(isos_param_class), intent(IN)  :: par
+       
+        integer  :: nl
+        nl = size(eta, 3)
+
+        select case (trim(par%lumping))
+        case("bottom")
+            eta_eff(:, :) = eta(:, :, nl)
+        case("min")
+            eta_eff = minval(eta, dim=3)
+        case("max")
+            eta_eff = maxval(eta, dim=3)
+        case("mean")
+            eta_eff = sum(eta, dim=3) / real(nl, wp)
+        case("logmean")
+            eta_eff = 10 ** ( sum( log10(eta), dim=3) / real(nl, wp) )
+        case("freqdomain")
+            call calc_viscosity_scaling_freqdomain(eta_eff, R, eta, kappa, xc, yc, layer_boundaries)
+        end select
+
+        return
+    end subroutine calc_effective_viscosity
+
+    subroutine calc_viscosity_scaling_freqdomain(eta_eff, R, eta, kappa, xc, yc, layer_boundaries)
+
+        implicit none
+
+        real(wp), intent(INOUT)  :: eta_eff(:, :), R(:, :)
+        real(wp), intent(IN)     :: kappa(:, :)
         real(wp), intent(IN)     :: eta(:, :, :)
         real(wp), intent(IN)     :: xc(:), yc(:)
         real(wp), intent(IN)     :: layer_boundaries(:, :, :)
 
-        real(wp) :: Wx, Wy, W
-        real(wp) :: kappa
         real(wp), allocatable ::  eta_c(:, :)
         real(wp), allocatable ::  eta_ratio(:, :)
         real(wp), allocatable ::  inv_ratio(:, :)
-        real(wp), allocatable ::  R(:, :)
         real(wp), allocatable ::  dz(:, :)
         real(wp), allocatable ::  c(:, :)
         real(wp), allocatable ::  s(:, :)
        
         integer  :: i, j, k, nx, ny, nl
 
-        nx = size(eta_eff, 1)
-        ny = size(eta_eff, 2)
+        nx = size(xc)
+        ny = size(yc)
         nl = size(eta, 3)
         if (nl .ne. size(layer_boundaries, 3)) then
             write(*,*) "Number of levels in eta and in boundaries do not coincide."
@@ -220,23 +266,15 @@ module lv_elva
         allocate(eta_c(nx, ny))
         allocate(eta_ratio(nx, ny))
         allocate(inv_ratio(nx, ny))
-        allocate(R(nx, ny))
         allocate(dz(nx, ny))
         allocate(c(nx, ny))
         allocate(s(nx, ny))
 
         write(*,*) "Number of layers: ", nl
 
-
         eta_eff(:, :) = eta(:, :, nl)
         
-        if (nl .ge. 1) then
-            Wx = maxval(xc)
-            Wy = maxval(yc)
-            ! W = (Wx + Wy) / 2.0
-            W = 2e6
-            kappa = pi/W
-
+        if (nl .gt. 1) then
             ! Start with n-th layer: viscous half space
             write(*,*) "Value range of effective viscosity: ", minval(eta_eff), maxval(eta_eff)
 
@@ -254,28 +292,106 @@ module lv_elva
 
                 c = cosh(dz*kappa)
                 s = sinh(dz*kappa)
+                R = R * (2 * eta_ratio * c * s + &
+                    (1-eta_ratio**2) * (dz*kappa)**2 + &
+                    (eta_ratio*s)**2 + c**2 ) / &
+                    ((eta_ratio + inv_ratio) * c * s + &
+                    (eta_ratio - inv_ratio) * dz * kappa + &
+                    s**2 + c**2)
 
-                do i = 1, nx
-                do j = 1, ny
-                    R(i, j) = ( 2.0 * eta_ratio(i, j) * c(i, j) * s(i, j) + &
-                        (1-eta_ratio(i, j)**2) * (dz(i, j)*kappa)**2 + &
-                        (eta_ratio(i, j)*s(i, j))**2 + c(i, j)**2 ) / &
-                        ((eta_ratio(i, j) + inv_ratio(i, j))* c(i, j) * s(i, j) + &
-                        (eta_ratio(i, j) - inv_ratio(i, j))*dz(i, j)*kappa + &
-                        s(i, j)**2 + c(i, j)**2)
-                end do
-                end do
-
-                eta_eff = R * eta_eff
-                write(*,*) "Value range of effective viscosity: ", minval(eta_eff), maxval(eta_eff)
             end do
-        else
-            print*,'Number of levels is wrong: nl = ', nl
-            stop
         endif
 
         return
-    end subroutine calc_effective_viscosity
+    end subroutine calc_viscosity_scaling_freqdomain
+
+    ! subroutine calc_viscosity_scaling_timedomain(eta_eff, R, eta, kappa, xc, yc, layer_boundaries)
+
+    !     implicit none
+
+    !     real(wp), intent(INOUT)  :: eta_eff(:, :), R(:, :)
+    !     real(wp), intent(IN)     :: kappa(:, :)
+    !     real(wp), intent(IN)     :: eta(:, :, :)
+    !     real(wp), intent(IN)     :: xc(:), yc(:)
+    !     real(wp), intent(IN)     :: layer_boundaries(:, :, :)
+
+    !     real(wp) :: Wx, Wy, W
+    !     real(wp) :: kappa
+    !     real(wp), allocatable ::  eta_c(:, :)
+    !     real(wp), allocatable ::  eta_ratio(:, :)
+    !     real(wp), allocatable ::  inv_ratio(:, :)
+    !     real(wp), allocatable ::  dz(:, :)
+    !     real(wp), allocatable ::  c(:, :)
+    !     real(wp), allocatable ::  s(:, :)
+       
+    !     integer  :: i, j, k, nx, ny, nl
+
+    !     nx = size(eta_eff, 1)
+    !     ny = size(eta_eff, 2)
+    !     nl = size(eta, 3)
+    !     if (nl .ne. size(layer_boundaries, 3)) then
+    !         write(*,*) "Number of levels in eta and in boundaries do not coincide."
+    !         stop
+    !     end if
+
+    !     allocate(eta_c(nx, ny))
+    !     allocate(eta_ratio(nx, ny))
+    !     allocate(inv_ratio(nx, ny))
+    !     allocate(R(nx, ny))
+    !     allocate(dz(nx, ny))
+    !     allocate(c(nx, ny))
+    !     allocate(s(nx, ny))
+
+    !     write(*,*) "Number of layers: ", nl
+
+    !     eta_eff(:, :) = eta(:, :, nl)
+        
+    !     if (nl .ge. 1) then
+    !         Wx = maxval(xc)
+    !         Wy = maxval(yc)
+    !         ! W = (Wx + Wy) / 2.0
+    !         W = 2e6
+    !         kappa = pi/W
+
+    !         ! Start with n-th layer: viscous half space
+    !         write(*,*) "Value range of effective viscosity: ", minval(eta_eff), maxval(eta_eff)
+
+    !         do k = nl, 2, -1
+
+    !             ! convert to meters for consistence with W, Wx, Wy
+    !             dz = (layer_boundaries(:, :, k) - layer_boundaries(:, :, k-1))
+
+    !             write(*,*) "Extrema of layer thickness and boundary at index ", k, minval(dz), maxval(dz), &
+    !                 minval(layer_boundaries(:, :, k)), maxval(layer_boundaries(:, :, k))
+
+    !             eta_c = eta(:, :, k-1)
+    !             eta_ratio = eta_c / eta_eff
+    !             inv_ratio = 1. / eta_ratio
+
+    !             c = cosh(dz*kappa)
+    !             s = sinh(dz*kappa)
+
+    !             do i = 1, nx
+    !             do j = 1, ny
+    !                 R(i, j) = ( 2.0 * eta_ratio(i, j) * c(i, j) * s(i, j) + &
+    !                     (1-eta_ratio(i, j)**2) * (dz(i, j)*kappa)**2 + &
+    !                     (eta_ratio(i, j)*s(i, j))**2 + c(i, j)**2 ) / &
+    !                     ((eta_ratio(i, j) + inv_ratio(i, j))* c(i, j) * s(i, j) + &
+    !                     (eta_ratio(i, j) - inv_ratio(i, j))*dz(i, j)*kappa + &
+    !                     s(i, j)**2 + c(i, j)**2)
+    !             end do
+    !             end do
+
+    !             eta_eff = R * eta_eff
+    !             write(*,*) "Value range of effective viscosity: ", minval(eta_eff), maxval(eta_eff)
+    !         end do
+    !     else
+    !         print*,'Number of levels is wrong: nl = ', nl
+    !         stop
+    !     endif
+
+    !     return
+    ! end subroutine calc_viscosity_scaling_timedomain
 
     subroutine calc_beta(beta, kappa, D_lith, rho_uppermantle, g) 
         ! Calculate analytical solution as in Bueler et al 2007 (eq 11)
