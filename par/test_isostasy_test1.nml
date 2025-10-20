@@ -10,20 +10,24 @@
     pad         = 0.                ! [km] Padding around domain (preferably chosen as a power
                                     ! of 2 multiplied by the resolution)
 
-    ! Rheology
+    ! Rheology methods
     mantle = "uniform"          ! Choose mantle viscosity field, options:
                                 ! "uniform", "gaussian_plus", "gaussian_minus", "rheology_file"
     lithosphere = "uniform"     ! Choose lithospheric thickness field:
                                 ! "uniform", "gaussian_plus", "gaussian_minus", "rheology_file"
+    layering    = "equalized"   ! "parallel" or "equalized"
+    lumping     = "freqdomain"  ! "bottom", "min", "max", "mean", "logmean", "freqdomain"
     viscosity_scaling_method = "scale"  ! "scale" or "min" or "max"
     viscosity_scaling = 1.              ! Only used if viscosity_scaling_method = "scale"
-    layering    = "equalized"       ! "parallel", "equalized" or "folded"
-    nl          = 1                 ! [1] Number of viscous layers for sub-lithospheric mantle
-    zl = 88.0                       ! [km] Depth of layer boundaries. The first value is overwritten
+    
+    ! Rheology parameters
+    nl          = 2                 ! [1] Number of viscous layers for sub-lithospheric mantle
+    zl = 88.0, 150.0                ! [km] Depth of layer boundaries. The first value is overwritten
                                     ! if a lithospheric thickness filed is provided.
-    viscosities = 1.e21             ! [Pa s] Layer viscosities. Only used if
+    viscosities = 0.04e21, 1.e21    ! [Pa s] Layer viscosities. Only used if
                                     ! mantle = "uniform" or "gaussian_plus" or "gaussian_minus".
                                     ! viscosity field is provided.
+    ref_viscosity = 1.e21           ! [Pa s] Reference viscosity for scaling
     tau = 3000.0                    ! [yr] Relaxation time used for "method" = 2
 
     ! Physical constants
