@@ -9,16 +9,25 @@
     dt_diagnostics  = 10.           ! [yr] Min. timestep to recalculate diagnostics
     pad         = 0.
 
-    ! Rheology
-    mantle = "uniform"
-    lithosphere = "gaussian_plus"
-    viscosity_scaling_method = "scale"
-    viscosity_scaling = 1.
-    layering    = "equalized"
-    nl          = 1
-    zl  = 150.
-    viscosities = 1.e21
-    tau             = 2000.0
+    ! Rheology methods
+    mantle = "uniform"          ! Choose mantle viscosity field, options:
+                                ! "uniform", "gaussian_plus", "gaussian_minus", "rheology_file"
+    lithosphere = "gaussian_plus"     ! Choose lithospheric thickness field:
+                                ! "uniform", "gaussian_plus", "gaussian_minus", "rheology_file"
+    layering    = "equalized"   ! "parallel" or "equalized"
+    lumping     = "min"         ! "bottom", "min", "max", "mean", "logmean", "freqdomain"
+    viscosity_scaling_method = "scale"  ! "scale" or "min" or "max"
+    viscosity_scaling = 1.              ! Only used if viscosity_scaling_method = "scale"
+    
+    ! Rheology parameters
+    nl          = 1                 ! [1] Number of viscous layers for sub-lithospheric mantle
+    zl = 150.                       ! [km] Depth of layer boundaries. The first value is overwritten
+                                    ! if a lithospheric thickness filed is provided.
+    viscosities = 1.e21             ! [Pa s] Layer viscosities. Only used if
+                                    ! mantle = "uniform" or "gaussian_plus" or "gaussian_minus".
+                                    ! viscosity field is provided.
+    ref_viscosity = 1.e21           ! [Pa s] Reference viscosity for scaling
+    tau = 3000.0                    ! [yr] Relaxation time used for "method" = 2
 
     ! Physical constants
     E               = 66.0          ! [GPa] Young modulus
@@ -29,7 +38,7 @@
     rho_uppermantle = 3400.0        ! [kg/m^3]
     rho_litho       = 3200.0        ! [kg/m^3]  If 0: decouple the elastic displacement from the viscous one
     g               = 9.81          ! [m/s^2]
-    r_earth         = 6.378e6       ! [m]  Earth radius, Coulon et al. (2021)
+    r_earth         = 6.378e3       ! [km]  Earth radius, Coulon et al. (2021)
     m_earth         = 5.972e24      ! [kg] Earth mass,   Coulon et al. (2021)
 
     ! Files

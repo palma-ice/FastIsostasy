@@ -40,7 +40,7 @@
     rho_litho       = 0.0           ! [kg/m^3]  Optionally set to 0 ==> decouple the elastic
                                     ! displacement from the viscous one
     g               = 9.81          ! [m/s^2]
-    r_earth         = 6.378e6       ! [m]  Earth radius, Coulon et al. (2021)
+    r_earth         = 6.378e3       ! [km]  Earth radius, Coulon et al. (2021)
     m_earth         = 5.972e24      ! [kg] Earth mass,   Coulon et al. (2021)
 
     ! Files

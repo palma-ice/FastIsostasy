@@ -10,17 +10,26 @@
     pad         = 512.              ! [km] Padding around domain (preferably chosen as a power
                                     ! of 2 multiplied by the resolution)
 
-    ! Rheology
-    mantle = "rheology_file"
-    lithosphere = "rheology_file"
-    viscosity_scaling_method = "none"
-    viscosity_scaling = 1.
+    ! Rheology methods
+    mantle = "rheology_file"          ! Choose mantle viscosity field, options:
+                                ! "uniform", "gaussian_plus", "gaussian_minus", "rheology_file"
+    lithosphere = "rheology_file"     ! Choose lithospheric thickness field:
+                                ! "uniform", "gaussian_plus", "gaussian_minus", "rheology_file"
+    layering    = "equalized"   ! "parallel" or "equalized"
+    lumping     = "min"         ! "bottom", "min", "max", "mean", "logmean", "freqdomain"
+    viscosity_scaling_method = "none"  ! "scale" or "min" or "max"
+    viscosity_scaling = 1.              ! Only used if viscosity_scaling_method = "scale"
+    
+    ! Rheology parameters
+    nl          = 3                 ! [1] Number of viscous layers for sub-lithospheric mantle
+    zl          = 260., 280., 300.  ! [km] Depth of layer boundaries. The first value is overwritten
+                                    ! if a lithospheric thickness filed is provided.
+    viscosities = 1e21, 2e21, 2e21  ! [Pa s] Layer viscosities. Only used if
+                                    ! mantle = "uniform" or "gaussian_plus" or "gaussian_minus".
+                                    ! viscosity field is provided.
+    ref_viscosity = 1.e21           ! [Pa s] Reference viscosity for scaling
+    tau = 3000.0                    ! [yr] Relaxation time used for "method" = 2
     rheo_smoothing_radius = 40.0 ! [km] Smoothing radius for rheology
-    layering    = "equalized"
-    nl          = 3
-    zl          = 260., 280., 300.
-    viscosities = 1e21, 2e21, 2e21
-    tau             = 2000.0
 
     ! Physical constants
     E               = 66.0          ! [GPa] Young modulus
@@ -31,16 +40,16 @@
     rho_uppermantle = 3400.0        ! [kg/m^3]
     rho_litho       = 3200.0        ! [kg/m^3]  If 0: decouple the elastic displacement from the viscous one
     g               = 9.81          ! [m/s^2]
-    r_earth         = 6.378e6       ! [m]  Earth radius, Coulon et al. (2021)
+    r_earth         = 6.378e3       ! [km]  Earth radius, Coulon et al. (2021)
     m_earth         = 5.972e24      ! [kg] Earth mass,   Coulon et al. (2021)
 
     ! Files
     restart = "None"
     mask_file = "../isostasy_data/tools/masks/ANT-32KM_activemask.nc"
     rheology_file = "../isostasy_data/earth_structure/ANT-32KM_Pan2022.nc"
-    litho_thickness_varname = "litho_thickness" ! Variable name in netcdf file
-    log10_viscosity_varname = "log10_eta"       ! Variable name in netcdf file
-    stddev_log10_viscosity_varname = "none"     ! Variable name in netcdf file
+    litho_thickness_varname = "litho_thickness"         ! Variable name in netcdf file
+    log10_viscosity_varname = "log10_eta"   ! Variable name in netcdf file
+    stddev_log10_viscosity_varname = "none"         ! Variable name in netcdf file
 /
 
 &barysealevel
