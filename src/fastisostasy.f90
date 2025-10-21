@@ -256,26 +256,16 @@ contains
                 allocate(yc_rheo(ny_rheo))
                 allocate(T_rheo(nx_rheo, ny_rheo))
                 
-                call nc_read_and_scale(isos%par%rheology_file, "xc", xc_rheo)
-                call nc_read_and_scale(isos%par%rheology_file, "yc", yc_rheo)
+                call nc_read_and_scale_vec(isos%par%rheology_file, "xc", xc_rheo)
+                call nc_read_and_scale_vec(isos%par%rheology_file, "yc", yc_rheo)
 
                 write(*,*) "nx_ice, ny_ice: ", nx_ice, ny_ice
                 write(*,*) "nx_rheo, ny_rheo: ", nx_rheo, ny_rheo
                 write(*,*) "icrop1, icrop2: ", icrop1, icrop2
                 write(*,*) "jcrop1, jcrop2: ", jcrop1, jcrop2
 
-                call nc_read(isos%par%rheology_file, isos%par%litho_thickness_varname, T_rheo)
-                call nc_read_attr(isos%par%rheology_file, isos%par%litho_thickness_varname, &
-                    "units", string_buffer)
-                if (string_buffer .eq. "km") then
-                    T_rheo = T_rheo * 1e3_wp ! convert to meters
-                else if (string_buffer .eq. "m") then
-                    write(*,*) "isos_init:: Using lithosphere thickness in meters."
-                else
-                    write(*,*) "isos_init:: Error: unknown unit for ", &
-                        isos%par%litho_thickness_varname, "in rheology file: ", string_buffer
-                    stop
-                end if
+                call nc_read_and_scale_matrix(isos%par%rheology_file, &
+                    isos%par%litho_thickness_varname, T_rheo)
 
                 ! assumes a flat extension of the values if isos domain is larger
                 ! than the rheology domain
@@ -337,7 +327,7 @@ contains
                 write(*,*) "Reading rheology coordinates..."
                 nz_rheo = nc_size(isos%par%rheology_file, "zc")
                 allocate(zc_rheo(nz_rheo))
-                call nc_read_and_scale(isos%par%rheology_file, "zc", zc_rheo)
+                call nc_read_and_scale_vec(isos%par%rheology_file, "zc", zc_rheo)
 
                 write(*,*) "Deriving rheology depth..."
                 ! depth needs to be in increasing order for interpolation along z
@@ -456,8 +446,8 @@ contains
         isos%par%time_prognostics = 1e10
 
         ! Initialize all values to zero initially for safety
-        call zero_init_state(isos%now, z_bed_background=-1e6_wp)
-        call zero_init_state(isos%ref, z_bed_background=-1e6_wp)
+        call zero_init_state(isos%now, z_bed_background=1e6_wp)
+        call zero_init_state(isos%ref, z_bed_background=1e6_wp)
 
         ! Initially the reference state has not been defined
         isos%par%ref_was_set = .FALSE.
@@ -555,7 +545,7 @@ contains
         real(wp), intent(IN), optional :: bsl               ! [a] Barystatic sea level
         real(wp), intent(IN), optional :: dz_ss(:, :)       ! [m] Sea surface perturbation
         
-        isos%ref%z_bed = -1e6
+        isos%ref%z_bed = 1e6
         isos%ref%Hice  = 0.0
 
         call out2in(isos%ref%z_bed, z_bed, isos%domain)
@@ -932,7 +922,6 @@ contains
         call nml_read(filename,group,"dt_diagnostics",      par%dt_diagnostics)
         call nml_read(filename,group,"dt_prognostics",      par%dt_prognostics)
         call nml_read(filename,group,"pad",                 par%min_pad)
-        par%min_pad = par%min_pad * 1e3_wp
 
         call nml_read(filename,group,"mantle",          par%mantle) 
         call nml_read(filename,group,"lithosphere",     par%lithosphere)
@@ -945,7 +934,6 @@ contains
         allocate(par%viscosities(par%nl))
         allocate(par%zl(par%nl))
         call nml_read(filename,group,"zl",          par%zl)
-        par%zl = par%zl * 1e3_wp ! Convert to meters
         call nml_read(filename,group,"viscosities",     par%viscosities)
         call nml_read(filename,group,"ref_viscosity",   par%eta_ref)
         call nml_read(filename,group,"tau",             par%tau)
@@ -954,6 +942,11 @@ contains
             call nml_read(filename,group,"dl",          par%dl)
             par%dl = par%dl * 1e3_wp ! Convert to meters
         end if
+        
+        ! Convert to meters
+        par%r_earth = par%r_earth * 1e3_wp
+        par%min_pad = par%min_pad * 1e3_wp
+        par%zl = par%zl * 1e3_wp
 
         if ((par%mantle .eq. "rheology_file") .or. &
             (par%lithosphere .eq. "rheology_file")) then
@@ -1197,7 +1190,7 @@ contains
         return
     end subroutine allocate_isos_out
 
-    subroutine nc_read_and_scale(fname, varname, vals)
+    subroutine nc_read_and_scale_vec(fname, varname, vals)
 
         implicit none
         character(len=*), intent(IN) :: fname, varname
@@ -1209,12 +1202,32 @@ contains
         if (string_buffer .eq. "km") then
             vals = vals * 1e3_wp ! convert to meters
         else if (string_buffer .eq. "m") then
-            write(*,*) "nc_read_and_scale:: units are already in meters."
+            write(*,*) "nc_read_and_scale_vec:: units are already in meters."
             vals = vals
         else
-            write(*,*) "nc_read_and_scale:: unknown unit."
+            write(*,*) "nc_read_and_scale_vec:: unknown unit."
             stop
         end if
-    end subroutine nc_read_and_scale
+    end subroutine nc_read_and_scale_vec
+
+    subroutine nc_read_and_scale_matrix(fname, varname, vals)
+
+        implicit none
+        character(len=*), intent(IN) :: fname, varname
+        real(wp), intent(OUT) :: vals(:, :)
+        character(len=256) :: string_buffer
+
+        call nc_read(fname, varname, vals)
+        call nc_read_attr(fname, varname, "units", string_buffer)
+        if (string_buffer .eq. "km") then
+            vals = vals * 1e3_wp ! convert to meters
+        else if (string_buffer .eq. "m") then
+            write(*,*) "nc_read_and_scale_matrix:: units are already in meters."
+            vals = vals
+        else
+            write(*,*) "nc_read_and_scale_matrix:: unknown unit."
+            stop
+        end if
+    end subroutine nc_read_and_scale_matrix
 
 end module fastisostasy

@@ -75,7 +75,7 @@ module isos_utils
 
     ! Calculate flexural rigidity based on effective elastic thickness of the lithosphere
     ! (He_lith), Young's modulus and Poisson's ratio. See Coulon et al. (2021) Eq. 5 & 6.
-    ! Assume He_lith in km, therefore 1e9 scaling
+    ! Factor 1e9 because E is given in GPa.
     subroutine calc_homogeneous_rigidity(D_lith, E, He_lith, nu)
         implicit none
         real(wp), intent(OUT) :: D_lith
