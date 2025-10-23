@@ -60,8 +60,8 @@ Reproducing the idealised load experiment from Bueler et al. (2007) with `isos.i
 1. `isostasy.method = 0`
 2. `isostasy.method = 1`
 3. `isostasy.method = 2`
-4. `isostasy.method = 3` one layer
-5. `isostasy.method = 3` two layers
+4. `isostasy.method = 3` one layer for mantle
+5. `isostasy.method = 3` two layers for mantle + `isostasy.lumping = "freqdomain`.
 
 ### Test 2
 
@@ -87,7 +87,11 @@ Reproducing glacial cycle with interactive sea level and:
 
 ### Test 5
 
-Greenland simulation.
+Greenland simulation of ice thickening and:
+1. `isostasy.method = 2`
+2. `isostasy.method = 3` one layer for mantle
+3. `isostasy.method = 3` two layers for mantle + `isostasy.lumping = "freqdomain`.
+
 
 
 ## Coupling FastIsostasy to your favorite ice-sheet model
