@@ -1,6 +1,7 @@
 program test_isostasy
 
     use ncio
+    use nml
     
     use isostasy_defs, only : sp, dp, wp
     use fastisostasy
@@ -55,7 +56,7 @@ program test_isostasy
 
     ! === Define experiment to be run ====
 
-    experiment = "test5"
+    experiment = "test4b"
 
     ! Tests are defined in Swierczek-Jereczek et al. (2024), GMD.
     ! Additional: "test5" = Lucía's Greenland ice-sheet load (since 15 ka)
@@ -63,20 +64,8 @@ program test_isostasy
     write(*,*) "experiment = ", trim(experiment)
 
         select case(trim(experiment))
-
-            case("test0")
-                time_init = 0.
-                time_end  = 2000
-                dtt       = 10.
-                dt_out    = 100.
-                dx = 50.e3
-                dy = dx
-                xmin = -3000.e3
-                xmax = abs(xmin)
-                ymin = xmin
-                ymax = abs(ymin)
             
-            case("test1")
+            case("test1a", "test1b", "test1c", "test1d", "test1d", "test1e")
                 time_init = 0.
                 time_end  = 50.e3
                 dtt       = 1.0
@@ -88,7 +77,7 @@ program test_isostasy
                 ymin = xmin
                 ymax = abs(ymin)
 
-            case("test2")
+            case("test2a", "test2b", "test2c")
                 time_init = 0.
                 time_end  = 50.e3
                 dtt       = 10.0
@@ -112,7 +101,7 @@ program test_isostasy
                 ymin = xmin
                 ymax = abs(ymin)
 
-            case("test4")
+            case("test4a", "test4b")
                 time_init =  -122.5e3
                 time_end  =    0.25e3
                 dtt       = 1.0
@@ -224,7 +213,7 @@ program test_isostasy
             H_ice = 0.0 
             H_ice(int((nx-1)/2),int((ny-1)/2)) = 1000.0 
 
-        case("test0", "test1","test3a","test3b","test3c","test3d") ! ice disk of R=1000 km and H=1000 m
+        case("test1a", "test1b", "test1c", "test1d", "test1d", "test1e","test3a","test3b","test3c","test3d") ! ice disk of R=1000 km and H=1000 m
 
             r0  = 1000.0e3 ! [m]
             h0  = 1000.0   ! [m]
@@ -248,7 +237,7 @@ program test_isostasy
             T_ice(:, :, 2) = H_ice
             z_bed(:, :) = 1e6_wp
             
-        case("test2")   ! Spada et al. (2011)
+        case("test2a", "test2b", "test2c")   ! Spada et al. (2011)
          
             r0 = 6.378e6*10.*3.1416/180. ! * 0.1 ! recheck
 
@@ -273,7 +262,7 @@ program test_isostasy
             T_ice(:, :, 2) = H_ice
             z_bed(:, :) = 1e6_wp
 
-        case("test4")  ! ICE6G_D
+        case("test4a", "test4b")  ! ICE6G_D
         ! Comment on “An Assessment of the ICE-6G_C (VM5a) Glacial Isostatic Adjustment Model” by Purcell et al.
         ! W. Richard Peltier, Donald F. Argus, Rosemarie Drummond
         ! https://agupubs.onlinelibrary.wiley.com/doi/full/10.1002/2016JB013844
@@ -388,7 +377,7 @@ program test_isostasy
             ! Calculate benchmark solutions when available and write to file
             select case(trim(experiment))
 
-                case("test1")   ! Calculate analytical solution to elva_disk
+                case("test1d")   ! Calculate analytical solution to elva_disk
 
                     call isosbench_elva_disk(z_bed_bench, r0, h0, eta, isos1%domain%dx, &
                         isos1%domain%D_lith(1,1), isos1%par%rho_ice, isos1%par%rho_uppermantle, &
