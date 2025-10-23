@@ -105,10 +105,22 @@ contains
         call convenient_calc_convolution_indices(isos%domain)
 
         call allocate_isos(isos, nx_ice, ny_ice, isos%par%nl)
-        call init_dims(isos%domain%xc_ice, isos%domain%x_ice, isos%domain%nx_ice, dx)
-        call init_dims(isos%domain%yc_ice, isos%domain%y_ice, isos%domain%ny_ice, dy)
-        call init_dims(isos%domain%xc, isos%domain%x, isos%domain%nx, dx)
-        call init_dims(isos%domain%yc, isos%domain%y, isos%domain%ny, dy)
+        call init_dims(isos%domain%xc_ice, isos%domain%x_ice, isos%domain%nx_ice, dx, 1)
+        call init_dims(isos%domain%yc_ice, isos%domain%y_ice, isos%domain%ny_ice, dy, 2)
+        call init_dims(isos%domain%xc, isos%domain%x, isos%domain%nx, dx, 1)
+        call init_dims(isos%domain%yc, isos%domain%y, isos%domain%ny, dy, 2)
+
+        write(*,*) "Domain size initialized: nx=", isos%domain%nx, &
+            ", ny=", isos%domain%ny, " (extrema xc: ", minval(isos%domain%xc), &
+            maxval(isos%domain%xc), ", extrema yc: ", minval(isos%domain%yc), &
+            maxval(isos%domain%yc), ")"
+
+        write(*,*) "Ice domain size initialized: nx_ice=", isos%domain%nx_ice, &
+            ", ny_ice=", isos%domain%ny_ice, " (extrema xc_ice: ", minval(isos%domain%xc_ice), &
+            maxval(isos%domain%xc_ice), ", extrema yc_ice: ", minval(isos%domain%yc_ice), &
+            maxval(isos%domain%yc_ice), ")"
+
+        isos%domain%R(:, :) = 1
         isos%domain%K(:, :) = 1
         if (present(K))         isos%domain%K                   = K
 
@@ -141,9 +153,9 @@ contains
         call calc_density_correction_factor(isos%par)
 
         write(*,*) "Initializing lithosphere..."
-        isos%domain%He_lith = isos%par%zl(1) * 1e3_wp
+        isos%domain%He_lith = isos%par%zl(1)
         call calc_homogeneous_rigidity(D_lith_const, isos%par%E, &
-            isos%par%zl(1), isos%par%nu)
+            isos%domain%He_lith(1, 1), isos%par%nu)
         call calc_flexural_lengthscale(isos%par%L_w, D_lith_const, &
             isos%par%rho_uppermantle, isos%par%g)
         isos%domain%D_lith = D_lith_const
@@ -225,15 +237,13 @@ contains
                 isos%domain%D_lith   = D_lith_const
 
             case("gaussian_plus")
-                call calc_gaussian_thickness(isos%domain%He_lith, &
-                    isos%par%zl(1), &
+                call calc_gaussian_thickness(isos%domain%He_lith, isos%par%zl(1), &
                     100e3, sign=1._wp, xc=isos%domain%xc, yc=isos%domain%yc)
                 call calc_heterogeneous_rigidity(isos%domain%D_lith, isos%par%E, &
                     isos%domain%He_lith, isos%par%nu)
 
             case("gaussian_minus")
-                call calc_gaussian_thickness(isos%domain%He_lith, &
-                    isos%par%zl(1), &
+                call calc_gaussian_thickness(isos%domain%He_lith, isos%par%zl(1), &
                     100e3, sign=-1._wp, xc=isos%domain%xc, yc=isos%domain%yc)
                 call calc_heterogeneous_rigidity(isos%domain%D_lith, isos%par%E, &
                     isos%domain%He_lith, isos%par%nu)
@@ -246,26 +256,16 @@ contains
                 allocate(yc_rheo(ny_rheo))
                 allocate(T_rheo(nx_rheo, ny_rheo))
                 
-                call nc_read_and_scale(isos%par%rheology_file, "xc", xc_rheo)
-                call nc_read_and_scale(isos%par%rheology_file, "yc", yc_rheo)
+                call nc_read_and_scale_vec(isos%par%rheology_file, "xc", xc_rheo)
+                call nc_read_and_scale_vec(isos%par%rheology_file, "yc", yc_rheo)
 
                 write(*,*) "nx_ice, ny_ice: ", nx_ice, ny_ice
                 write(*,*) "nx_rheo, ny_rheo: ", nx_rheo, ny_rheo
                 write(*,*) "icrop1, icrop2: ", icrop1, icrop2
                 write(*,*) "jcrop1, jcrop2: ", jcrop1, jcrop2
 
-                call nc_read(isos%par%rheology_file, isos%par%litho_thickness_varname, T_rheo)
-                call nc_read_attr(isos%par%rheology_file, isos%par%litho_thickness_varname, &
-                    "units", string_buffer)
-                if (string_buffer .eq. "km") then
-                    T_rheo = T_rheo * 1e3_wp ! convert to meters
-                else if (string_buffer .eq. "m") then
-                    write(*,*) "isos_init:: Using lithosphere thickness in meters."
-                else
-                    write(*,*) "isos_init:: Error: unknown unit for ", &
-                        isos%par%litho_thickness_varname, "in rheology file: ", string_buffer
-                    stop
-                end if
+                call nc_read_and_scale_matrix(isos%par%rheology_file, &
+                    isos%par%litho_thickness_varname, T_rheo)
 
                 ! assumes a flat extension of the values if isos domain is larger
                 ! than the rheology domain
@@ -304,13 +304,14 @@ contains
             end if
 
             write(*,*) "Choosing viscosity field..."
-            call layered_viscosity(isos%domain%eta, isos%par%viscosities)
+            call layered_viscosity_from_vector(isos%domain%eta, isos%par%viscosities)
             
             select case(trim(isos%par%mantle))
             case("uniform")
                 ! Everything related to layer boundaries is computed in km!
-                call calc_effective_viscosity(isos%domain%eta_eff, isos%domain%eta, &
-                    isos%domain%xc, isos%domain%yc, isos%domain%boundaries)
+                call calc_effective_viscosity(isos%domain%eta_eff, isos%domain%R, &
+                    isos%domain%eta, isos%domain%kappa, isos%domain%xc, isos%domain%yc, &
+                    isos%domain%boundaries, isos%par)
 
             case("gaussian_plus")
                 call calc_gaussian_viscosity(isos%domain%eta_eff, &
@@ -326,7 +327,7 @@ contains
                 write(*,*) "Reading rheology coordinates..."
                 nz_rheo = nc_size(isos%par%rheology_file, "zc")
                 allocate(zc_rheo(nz_rheo))
-                call nc_read_and_scale(isos%par%rheology_file, "zc", zc_rheo)
+                call nc_read_and_scale_vec(isos%par%rheology_file, "zc", zc_rheo)
 
                 write(*,*) "Deriving rheology depth..."
                 ! depth needs to be in increasing order for interpolation along z
@@ -394,9 +395,9 @@ contains
                 isos%domain%eta = 10. ** (isos%domain%eta)
 
                 write(*,*) "Computing effective viscosity..."
-                call calc_effective_viscosity( &
-                    isos%domain%eta_eff, isos%domain%eta, &
-                    isos%domain%xc, isos%domain%yc, isos%domain%boundaries)
+                call calc_effective_viscosity(isos%domain%eta_eff, isos%domain%R, &
+                    isos%domain%eta, isos%domain%kappa, isos%domain%xc, isos%domain%yc, &
+                    isos%domain%boundaries, isos%par)
                 if (isos%par%rheo_smoothing_radius > 0.0_wp) then
                     call smooth_gauss_2D(isos%domain%eta_eff, isos%domain%dx, &
                         isos%par%rheo_smoothing_radius)
@@ -425,7 +426,8 @@ contains
             isos%domain%eta_eff = isos%domain%eta_eff * &
                 isos%par%compressibility_correction
 
-            isos%domain%eta_eff = exp(log10(1e21 / isos%domain%eta_eff)) * isos%domain%eta_eff
+            isos%domain%eta_eff = exp(log10(isos%par%eta_ref / isos%domain%eta_eff)) * &
+                isos%domain%eta_eff
 
         case DEFAULT
 
@@ -444,8 +446,8 @@ contains
         isos%par%time_prognostics = 1e10
 
         ! Initialize all values to zero initially for safety
-        call zero_init_state(isos%now, z_bed_background=-1e6_wp)
-        call zero_init_state(isos%ref, z_bed_background=-1e6_wp)
+        call zero_init_state(isos%now, z_bed_background=1e6_wp)
+        call zero_init_state(isos%ref, z_bed_background=1e6_wp)
 
         ! Initially the reference state has not been defined
         isos%par%ref_was_set = .FALSE.
@@ -504,6 +506,7 @@ contains
 
         state%bsl               = 0.0
         state%deltaV_bsl        = 0.0
+        state%dbsl_total        = 0.0
         state%V_af              = 0.0
         state%V_den             = 0.0
         state%V_pov             = 0.0
@@ -543,16 +546,15 @@ contains
         real(wp), intent(IN), optional :: bsl               ! [a] Barystatic sea level
         real(wp), intent(IN), optional :: dz_ss(:, :)       ! [m] Sea surface perturbation
         
-        isos%ref%z_bed = -1e6
+        isos%ref%z_bed = 1e6
         isos%ref%Hice  = 0.0
 
         call out2in(isos%ref%z_bed, z_bed, isos%domain)
         call out2in(isos%ref%Hice,  H_ice, isos%domain)
-
         if (present(bsl))   isos%ref%bsl   = bsl
         if (present(dz_ss)) isos%ref%dz_ss = dz_ss
         ! No need to set w, we, dz_ss and bsl to 0 because `zero_init_state(isos%ref)` in isos_init()
-        
+
         ! Now the reference state has been defined
         isos%par%ref_was_set = .TRUE.
 
@@ -560,24 +562,24 @@ contains
 
     end subroutine isos_init_ref
 
-    subroutine set_initialstate_as_ref(isos)
-        implicit none
-        type(isos_class), intent(INOUT) :: isos
+    ! subroutine set_initialstate_as_ref(isos)
+    !     implicit none
+    !     type(isos_class), intent(INOUT) :: isos
 
-        isos%ref%bsl = isos%now%bsl
-        isos%ref%Hice = isos%now%Hice
-        isos%ref%Haf  = isos%now%Haf
-        isos%ref%w = isos%now%w
-        isos%ref%we = isos%now%we
+    !     isos%ref%bsl = isos%now%bsl
+    !     isos%ref%Hice = isos%now%Hice
+    !     isos%ref%Haf  = isos%now%Haf
+    !     isos%ref%w = isos%now%w
+    !     isos%ref%we = isos%now%we
 
-        isos%ref%z_bed = isos%now%z_bed
-        isos%ref%z_ss = isos%now%z_ss
-        isos%ref%dz_ss = isos%now%dz_ss
-        isos%ref%maskocean = isos%now%maskocean
-        isos%ref%maskgrounded = isos%now%maskgrounded
-        isos%ref%maskcontinent = isos%now%maskcontinent
+    !     isos%ref%z_bed = isos%now%z_bed
+    !     isos%ref%z_ss = isos%now%z_ss
+    !     isos%ref%dz_ss = isos%now%dz_ss
+    !     isos%ref%maskocean = isos%now%maskocean
+    !     isos%ref%maskgrounded = isos%now%maskgrounded
+    !     isos%ref%maskcontinent = isos%now%maskcontinent
 
-    end subroutine set_initialstate_as_ref
+    ! end subroutine set_initialstate_as_ref
 
     subroutine isos_init_state(isos, z_bed, H_ice, time, bsl)
 
@@ -589,31 +591,36 @@ contains
         real(wp), intent(IN) :: time                        ! [a] Initial time
         type(bsl_class), intent(INOUT) :: bsl
 
+        isos%now%bsl = bsl%bsl_now
+
         ! write(*,*) "BSL ref: ", isos%ref%bsl
         if (isos%par%use_restart) then
             ! write(*,*) "Reading restart file..."
             call isos_restart_read(isos, isos%par%restart,time)
-            call calc_Haf(isos%ref, isos%par)
-            call calc_masks(isos%ref)
 
             ! Reference state has been set via the restart file
-            isos%par%ref_was_set = .TRUE. 
+            isos%par%ref_was_set = .TRUE.
             call extendice2isostasy(isos%now, z_bed, H_ice, isos%domain)
 
         else
-            call extendice2isostasy(isos%now, z_bed, H_ice, isos%domain)
+            call out2in(isos%now%z_bed, z_bed, isos%domain)
+            call out2in(isos%now%Hice,  H_ice, isos%domain)
 
             if (.not. isos%par%ref_was_set) then
-                call set_initialstate_as_ref(isos)
+                call isos_init_ref(isos, z_bed, H_ice, isos%now%bsl, isos%now%dz_ss)
                 write(*,*) "isos_init_state:: reference state was set to initial state."
             end if
 
         end if
         
-        isos%now%bsl = bsl%bsl_now
+        ! ref%z_ss is computed from ref%bsl and ref%dz_ss
+        isos%ref%z_ss = 0.0_wp
+        call calc_z_ss(isos%ref%z_ss, isos%ref%bsl, isos%ref%z_ss, isos%ref%dz_ss)
         call calc_z_ss(isos%now%z_ss, isos%now%bsl, isos%now%z_ss, isos%now%dz_ss)
+
         call calc_Haf(isos%ref, isos%par)
         call calc_Haf(isos%now, isos%par)
+        call calc_masks(isos%ref)
         call calc_masks(isos%now)
 
         ! Define initial time of isostasy model
@@ -708,10 +715,18 @@ contains
             ! write(*,*) "isos_update:: Update 1"
             call calc_Haf(isos%now, isos%par)
             call calc_sl_contributions(isos)
+
             if (trim(bsl%method) .eq. "fastiso") then
-                ! minus sign because what goes into ice sheet goes out of ocean.
                 bsl%bsl_now = bsl%bsl_now - isos%now%deltaV_bsl / bsl%A_ocean_now
+                ! minus sign because what goes into ice sheet goes out of ocean.
             end if
+
+            if (trim(bsl%method) .eq. "mixed") then
+                isos%now%dbsl_total = isos%now%dbsl_total + isos%now%deltaV_bsl / bsl%A_ocean_now
+                bsl%bsl_now = bsl%bsl_now - isos%now%dbsl_total
+                ! minus sign because what goes into ice sheet goes out of ocean.
+            end if
+
             isos%now%bsl = bsl%bsl_now
             call calc_z_ss(isos%now%z_ss, isos%now%bsl, isos%ref%z_ss, isos%now%dz_ss)
 
@@ -800,7 +815,8 @@ contains
                 call calc_columnanoms_full(isos)
                 call calc_lvelva(isos%now%dwdt, isos%now%w, isos%now%canom_full, &
                     isos%domain%maskactive, isos%par%g, isos%par%nu, isos%domain%D_lith, &
-                    isos%domain%eta_eff, isos%domain%kappa, isos%domain%nx, isos%domain%ny, &
+                    isos%domain%eta_eff, isos%domain%kappa, isos%domain%R, &
+                    isos%domain%nx, isos%domain%ny, &
                     isos%domain%dx_matrix, isos%domain%dy_matrix, isos%par%sec_per_year, &
                     isos%domain%forward_fftplan_r2r, isos%domain%backward_fftplan_r2r)
             end select
@@ -885,6 +901,7 @@ contains
         call deallocate_isos_state(isos%ref)
         call deallocate_isos_domain(isos%domain)
         call deallocate_isos_out(isos%out)
+        call deallocate_isos_param(isos%par)
 
         return
     end subroutine isos_end
@@ -919,33 +936,31 @@ contains
         call nml_read(filename,group,"dt_diagnostics",      par%dt_diagnostics)
         call nml_read(filename,group,"dt_prognostics",      par%dt_prognostics)
         call nml_read(filename,group,"pad",                 par%min_pad)
-        par%min_pad = par%min_pad * 1e3_wp
-
-        call nml_read(filename,group,"viscosity_scaling_method", par%viscosity_scaling_method)
-        call nml_read(filename,group,"viscosity_scaling", par%viscosity_scaling)
-
-        if ((par%method .eq. 1) .or. (par%method .eq. 2)) then     ! ELRA and LLRA
-            call nml_read(filename,group,"tau",             par%tau)
-        else
-            par%tau = 3000.0_wp
-        end if
-
-        ! elseif (par%method .eq. 3) then                            ! ELVA
-        call nml_read(filename,group,"nl",          par%nl)
-        allocate(par%viscosities(par%nl))
-        allocate(par%zl(par%nl))
-        call nml_read(filename,group,"zl",          par%zl)
-        par%zl = par%zl * 1e3_wp ! Convert to meters
 
         call nml_read(filename,group,"mantle",          par%mantle) 
         call nml_read(filename,group,"lithosphere",     par%lithosphere)
         call nml_read(filename,group,"layering",        par%layering)
+        call nml_read(filename,group,"lumping",              par%lumping)
+        call nml_read(filename,group,"viscosity_scaling_method", par%viscosity_scaling_method)
+        call nml_read(filename,group,"viscosity_scaling", par%viscosity_scaling)
+
+        call nml_read(filename,group,"nl",          par%nl)
+        allocate(par%viscosities(par%nl))
+        allocate(par%zl(par%nl))
+        call nml_read(filename,group,"zl",          par%zl)
         call nml_read(filename,group,"viscosities",     par%viscosities)
+        call nml_read(filename,group,"ref_viscosity",   par%eta_ref)
+        call nml_read(filename,group,"tau",             par%tau)
         
         if (par%layering .eq. "parallel") then
             call nml_read(filename,group,"dl",          par%dl)
             par%dl = par%dl * 1e3_wp ! Convert to meters
         end if
+        
+        ! Convert to meters
+        par%r_earth = par%r_earth * 1e3_wp
+        par%min_pad = par%min_pad * 1e3_wp
+        par%zl = par%zl * 1e3_wp
 
         if ((par%mantle .eq. "rheology_file") .or. &
             (par%lithosphere .eq. "rheology_file")) then
@@ -984,6 +999,7 @@ contains
         call deallocate_isos_state(isos%now)
         call deallocate_isos_state(isos%ref)
         call deallocate_isos_out(isos%out)
+
         call allocate_isos_domain(isos%domain, isos%domain%nx, isos%domain%ny, nl)
         call allocate_isos_state(isos%now, isos%domain%nx, isos%domain%ny)
         call allocate_isos_state(isos%ref, isos%domain%nx, isos%domain%ny)
@@ -991,6 +1007,17 @@ contains
 
         return
     end subroutine allocate_isos
+
+    subroutine deallocate_isos_param(par)
+        implicit none
+        type(isos_param_class), intent(INOUT) :: par
+
+        ! First ensure arrays are not allocated
+        if (allocated(par%viscosities)) deallocate(par%viscosities)
+        if (allocated(par%zl))           deallocate(par%zl)
+
+        return
+    end subroutine deallocate_isos_param
 
     subroutine deallocate_isos_domain(domain)
         implicit none 
@@ -1010,8 +1037,10 @@ contains
         if (allocated(domain%A))            deallocate(domain%A)
         if (allocated(domain%K))            deallocate(domain%K)
         if (allocated(domain%kappa))        deallocate(domain%kappa)
+        if (allocated(domain%R))            deallocate(domain%R)
         if (allocated(domain%maskactive))   deallocate(domain%maskactive)
 
+        if (allocated(domain%boundaries))   deallocate(domain%boundaries)
         if (allocated(domain%He_lith))      deallocate(domain%He_lith)
         if (allocated(domain%D_lith))       deallocate(domain%D_lith)
         if (allocated(domain%eta))          deallocate(domain%eta)
@@ -1039,12 +1068,11 @@ contains
         if (allocated(state%w_equilibrium))     deallocate(state%w_equilibrium)
         if (allocated(state%we))                deallocate(state%we)
 
-        if (allocated(state%dz_ss))             deallocate(state%dz_ss)
-
         if (allocated(state%Haf))               deallocate(state%Haf)
         if (allocated(state%Hice))              deallocate(state%Hice)
 
         if (allocated(state%z_ss))              deallocate(state%z_ss)
+        if (allocated(state%dz_ss))             deallocate(state%dz_ss)
         if (allocated(state%canom_ice))         deallocate(state%canom_ice)
         if (allocated(state%canom_seawater))    deallocate(state%canom_seawater)
         if (allocated(state%canom_litho))       deallocate(state%canom_litho)
@@ -1102,6 +1130,7 @@ contains
         allocate(domain%A(nx, ny))
         allocate(domain%K(nx, ny))
         allocate(domain%kappa(nx, ny))
+        allocate(domain%R(nx, ny))
         allocate(domain%maskactive(nx, ny))
 
         allocate(domain%He_lith(nx, ny))
@@ -1187,7 +1216,7 @@ contains
         return
     end subroutine allocate_isos_out
 
-    subroutine nc_read_and_scale(fname, varname, vals)
+    subroutine nc_read_and_scale_vec(fname, varname, vals)
 
         implicit none
         character(len=*), intent(IN) :: fname, varname
@@ -1199,12 +1228,32 @@ contains
         if (string_buffer .eq. "km") then
             vals = vals * 1e3_wp ! convert to meters
         else if (string_buffer .eq. "m") then
-            write(*,*) "nc_read_and_scale:: units are already in meters."
+            write(*,*) "nc_read_and_scale_vec:: units are already in meters."
             vals = vals
         else
-            write(*,*) "nc_read_and_scale:: unknown unit."
+            write(*,*) "nc_read_and_scale_vec:: unknown unit."
             stop
         end if
-    end subroutine nc_read_and_scale
+    end subroutine nc_read_and_scale_vec
+
+    subroutine nc_read_and_scale_matrix(fname, varname, vals)
+
+        implicit none
+        character(len=*), intent(IN) :: fname, varname
+        real(wp), intent(OUT) :: vals(:, :)
+        character(len=256) :: string_buffer
+
+        call nc_read(fname, varname, vals)
+        call nc_read_attr(fname, varname, "units", string_buffer)
+        if (string_buffer .eq. "km") then
+            vals = vals * 1e3_wp ! convert to meters
+        else if (string_buffer .eq. "m") then
+            write(*,*) "nc_read_and_scale_matrix:: units are already in meters."
+            vals = vals
+        else
+            write(*,*) "nc_read_and_scale_matrix:: unknown unit."
+            stop
+        end if
+    end subroutine nc_read_and_scale_matrix
 
 end module fastisostasy

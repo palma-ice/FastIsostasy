@@ -251,6 +251,12 @@ module isostasy_io
         call nc_write(filename,"GE",isos%domain%GE, units="", &
             long_name="Elastic Green function", dim1="xc", dim2="yc", start=[1, 1])
 
+        call nc_write(filename, "x", isos%domain%x*1e-3, units="km", &
+            long_name="X coordinate", dim1="xc", dim2="yc", start=[1, 1])
+
+        call nc_write(filename, "y", isos%domain%y*1e-3, units="km", &
+            long_name="Y coordinate", dim1="xc", dim2="yc", start=[1, 1])
+
         if (isos%par%interactive_sealevel) then
             call nc_write(filename, "GN", isos%domain%GN, units="", &
             long_name="SSH Green function", dim1="xc", dim2="yc", start=[1, 1])
@@ -273,8 +279,12 @@ module isostasy_io
                 long_name="Effective upper-mantle viscosity", &
                 dim1="xc", dim2="yc", start=[1, 1])
 
-            call nc_write(filename, "kappa", isos%domain%kappa, units="", &
+            call nc_write(filename, "kappa", isos%domain%kappa, units="1", &
                 long_name="Pseudodifferential operator in Fourier space", &
+                dim1="xc", dim2="yc", start=[1, 1])
+
+            call nc_write(filename, "R", isos%domain%R, units="1", &
+                long_name="Viscosity scaling in Fourier space", &
                 dim1="xc", dim2="yc", start=[1, 1])
 
             ! do l = 1, size(isos%domain%eta, dim=3)

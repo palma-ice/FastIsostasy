@@ -67,7 +67,7 @@ $(objdir)/barysealevel.o: $(srcdir)/barysealevel.f90 $(objdir)/isos_utils.o
 	$(FC) $(DFLAGS) $(FFLAGS) $(INC_FESMUTILS) -c -o $@ $<
 
 $(objdir)/isostasy_io.o: $(srcdir)/isostasy_io.f90 $(objdir)/isostasy_defs.o
-	$(FC) $(DFLAGS) $(FFLAGS) $(INC_FESMUTILS) -c -o $@ $<
+	$(FC) $(DFLAGS) $(FFLAGS) $(INC_FESMUTILS) $(INC_NC) -c -o $@ $<
 
 $(objdir)/lv_elva.o: $(srcdir)/lv_elva.f90 $(objdir)/isostasy_defs.o $(objdir)/finite_differences.o $(objdir)/isos_utils.o
 	$(FC) $(DFLAGS) $(FFLAGS) -c -o $@ $<
@@ -76,7 +76,7 @@ $(objdir)/fastisostasy.o: $(srcdir)/fastisostasy.f90 $(objdir)/isostasy_defs.o $
 						$(objdir)/isostasy_io.o $(objdir)/lv_elva.o \
 						$(objdir)/green_functions.o $(objdir)/kelvin_function.o $(objdir)/sealevel.o \
 						$(objdir)/lv_xlra.o $(objdir)/barysealevel.o
-	$(FC) $(DFLAGS) $(FFLAGS) $(INC_FESMUTILS) -c -o $@ $<
+	$(FC) $(DFLAGS) $(FFLAGS) $(INC_FESMUTILS) $(INC_NC) -c -o $@ $<
 
 $(objdir)/isostasy_benchmarks.o: $(srcdir)/isostasy_benchmarks.f90 $(objdir)/isostasy_defs.o
 	$(FC) $(DFLAGS) $(FFLAGS) -c -o $@ $<
@@ -110,10 +110,17 @@ isostasy-static: $(isostasy_libs)
 	@echo " "
 
 test_isostasy : isostasy-static $(objdir)/isostasy_benchmarks.o
-		$(FC) $(DFLAGS) $(FFLAGS) $(INC_FESMUTILS) -o $(bindir)/test_isostasy.x tests/test_isostasy.f90 \
+		$(FC) $(DFLAGS) $(FFLAGS) $(INC_FESMUTILS) $(INC_NC) -o $(bindir)/test_isostasy.x tests/test_isostasy.f90 \
 			-L${CURDIR}/libisostasy/include -lisostasy $(objdir)/isostasy_benchmarks.o $(LFLAGS)
 		@echo " "
 		@echo "    test_isostasy.x is ready."
+		@echo " "
+
+test_isostasy_looped : isostasy-static $(objdir)/isostasy_benchmarks.o
+		$(FC) $(DFLAGS) $(FFLAGS) $(INC_FESMUTILS) $(INC_NC) -o $(bindir)/test_isostasy_looped.x tests/test_isostasy_looped.f90 \
+			-L${CURDIR}/libisostasy/include -lisostasy $(objdir)/isostasy_benchmarks.o $(LFLAGS)
+		@echo " "
+		@echo "    test_isostasy_looped.x is ready."
 		@echo " "
 
 clean:

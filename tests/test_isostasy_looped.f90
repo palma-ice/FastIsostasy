@@ -1,4 +1,4 @@
-program test_isostasy
+program test_isostasy_looped
 
     use ncio
     use nml
@@ -22,6 +22,7 @@ program test_isostasy
     character(len=512) :: file_bsl_restart
 
     character(len=56)  :: experiment
+    character(len=56), allocatable  :: experiments(:)
     character(len=56)  :: mantle
     character(len=56)  :: lithosphere
 
@@ -32,7 +33,7 @@ program test_isostasy
 
     real(wp) :: r0, h0, eta
 
-    integer  :: i, j, nx, ny, nz, slice_time
+    integer  :: i, j, nx, ny, nz, slice_time, i_xp, n_xp
     real(wp) :: time_now
     real(wp) :: xmin, xmax, dx
     real(wp) :: ymin, ymax, dy
@@ -56,7 +57,40 @@ program test_isostasy
 
     ! === Define experiment to be run ====
 
-    experiment = "test4b"
+    n_xp = 15
+    allocate(experiments(n_xp))
+    experiments(1) = "test1a"
+    experiments(2) = "test1b"
+    experiments(3) = "test1c"
+    experiments(4) = "test1d"
+    experiments(5) = "test1e"
+    experiments(6) = "test2a"
+    experiments(7) = "test2b"
+    experiments(8) = "test2c"
+    experiments(9) = "test3a"
+    experiments(10) = "test3b"
+    experiments(11) = "test3c"
+    experiments(12) = "test3d"
+    experiments(13) = "test4a"
+    experiments(14) = "test4b"
+    experiments(15) = "test5"
+
+    i_xp = 0
+    do i_xp = 1, n_xp
+
+    experiment = experiments(i_xp)
+
+    if (allocated(xc))          deallocate(xc)
+    if (allocated(yc))          deallocate(yc)
+    if (allocated(z_bed))       deallocate(z_bed)
+    if (allocated(H_ice))       deallocate(H_ice)
+    if (allocated(T_ice))       deallocate(T_ice)
+    if (allocated(time_ice))    deallocate(time_ice)
+    if (allocated(z_ss))        deallocate(z_ss)
+    if (allocated(mask))        deallocate(mask)
+    if (allocated(z_bed_bench)) deallocate(z_bed_bench)
+    if (allocated(xc_ice))      deallocate(xc_ice)
+    if (allocated(yc_ice))      deallocate(yc_ice)
 
     ! Tests are defined in Swierczek-Jereczek et al. (2024), GMD.
     ! Additional: "test5" = Lucía's Greenland ice-sheet load (since 15 ka)
@@ -65,7 +99,7 @@ program test_isostasy
 
         select case(trim(experiment))
             
-            case("test1a", "test1b", "test1c", "test1d", "test1d", "test1e")
+            case("test1a", "test1b", "test1c", "test1d", "test1e")
                 time_init = 0.
                 time_end  = 50.e3
                 dtt       = 1.0
@@ -133,7 +167,7 @@ program test_isostasy
 
     
     ! === Define runtime information =========
-    ! executable is defined in libisostasy/bin/test_isostasy.x 
+    ! executable is defined in libisostasy/bin/test_isostasy_looped.x 
     ! output directory should be predefined: output/test-isostasy
 
     parfldr = "par/"
@@ -213,7 +247,7 @@ program test_isostasy
             H_ice = 0.0 
             H_ice(int((nx-1)/2),int((ny-1)/2)) = 1000.0 
 
-        case("test1a", "test1b", "test1c", "test1d", "test1d", "test1e","test3a","test3b","test3c","test3d") ! ice disk of R=1000 km and H=1000 m
+        case("test1a", "test1b", "test1c", "test1d", "test1e","test3a","test3b","test3c","test3d") ! ice disk of R=1000 km and H=1000 m
 
             r0  = 1000.0e3 ! [m]
             h0  = 1000.0   ! [m]
@@ -402,5 +436,7 @@ program test_isostasy
 
     call isos_restart_write(isos1, file_isos_restart, time)
     call bsl_restart_write(bsl, file_bsl_restart, time)
+    
+    end do  ! loop over experiments
 
-end program test_isostasy
+end program test_isostasy_looped

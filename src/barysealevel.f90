@@ -16,16 +16,14 @@ module barysealevel
     type bsl_class
         character(len=56)   :: method       ! "const", "file", "fastiso"
         character(len=512)  :: restart_file ! Filename for restart file
-        logical  :: use_restart  ! True if restart file is used
+        logical  :: use_restart             ! True if restart file is used
         logical  :: constant_ocean_surface  ! True if ocean surface area is constant
-        real(wp) :: bsl_init    ! [m] Initial bsl
-        real(wp) :: time        ! [yr] Current time
-        real(wp) :: bsl_now     ! [m] Current bsl
-        real(wp) :: A_ocean_now ! [m^2] Current ocean surface area
-        real(wp) :: sigma_now
-        real(wp) :: deltaV_bsl_now       ! [m^3] Volume contribution to BSL
-        type(series_type) :: series ! BSL time series from file
-        real(wp) :: A_ocean_pd      ! [m^2] PD A_ocean as in Goelzer et al. (2020)
+        real(wp) :: bsl_init                ! [m] Initial bsl
+        real(wp) :: time                    ! [yr] Current time
+        real(wp) :: bsl_now                 ! [m] Current bsl
+        real(wp) :: A_ocean_now             ! [m^2] Current ocean surface area
+        type(series_type) :: series         ! BSL time series from file
+        real(wp) :: A_ocean_pd              ! [m^2] PD A_ocean as in Goelzer et al. (2020)
         real(wp), allocatable :: A_ocean_vec(:)  ! [m^2] A_ocean vector for interpolation over bsl
         real(wp), allocatable :: bsl_vec(:)      ! [m] bsl vector for interpolation of A_ocean
     end type
@@ -49,10 +47,8 @@ contains
 
         ! Local variables
         character(len=56) :: varname
-        character(len=256):: A_ocean_path
         logical           :: use_nc, use_restart
-        integer           :: n, n_bsl_vec
-        real(wp)          :: A_ocean_pd_biased
+        integer           :: n
 
         bsl%time  = year_bp
 
@@ -84,7 +80,43 @@ contains
             end if
             
         case("file")
-            write(*,*) "bsl_init:: using BSL time series from file."
+            call bsl_init_file(bsl, filename, year_bp)
+
+        case("fastiso")
+            call bsl_init_fastiso(bsl, filename)
+
+        case("mixed")
+            call bsl_init_file(bsl, filename, year_bp)
+            call bsl_init_fastiso(bsl, filename)
+
+        case DEFAULT
+
+            write(error_unit,*) ""
+            write(error_unit,*) "bsl_init:: Error: method not recognized."
+            write(error_unit,*) "method = ", bsl%method
+            stop 
+
+        end select
+
+        bsl%bsl_now = bsl%bsl_init
+        write(*,*) "bsl_init:: BSL initialized to ", bsl%bsl_init, " m."
+
+        return
+
+    end subroutine bsl_init
+
+    subroutine bsl_init_file(bsl, filename, year_bp)
+
+        implicit none
+        type(bsl_class),  intent(INOUT) :: bsl
+        character(len=*), intent(IN)    :: filename
+        real(wp),         intent(IN)    :: year_bp
+        character(len=56) :: varname
+        logical           :: use_nc
+        integer           :: n
+
+
+        write(*,*) "bsl_init:: using BSL time series from file."
 
             ! Determine filename from which to load sea level time series
             call nml_read(filename, "barysealevel", "sl_path", bsl%series%filename, init=.TRUE.)
@@ -109,58 +141,56 @@ contains
             bsl%bsl_now  = series_interp(bsl%series, year_bp)
             call nml_read(filename, "barysealevel", "bsl_init", bsl%bsl_init)
             
-            if (bsl%bsl_now .ne. bsl%bsl_init) then
-                write(*,*) "bsl_init:: bsl_init and restart values differ."
-                stop
-            end if
+            ! if (bsl%bsl_now .ne. bsl%bsl_init) then
+            !     write(*,*) "bsl_init:: bsl_init and restart values differ."
+            !     stop
+            ! end if
 
             bsl%bsl_init = bsl%bsl_now
 
-        case("fastiso")
+        return
 
-            write(*,*) "bsl_init:: using BSL from FastIsostasy domains."
+    end subroutine bsl_init_file
 
-            ! Load the ocean surface area from parameter file
-            call nml_read(filename, "barysealevel", "bsl_init", bsl%bsl_init)
-            call nml_read(filename, "barysealevel", "A_ocean_path", A_ocean_path)
+    subroutine bsl_init_fastiso(bsl, filename)
 
-            if ((A_ocean_path .eq. "None") .or. &
-                (A_ocean_path .eq. "none") .or. &
-                (A_ocean_path .eq. "no")) then
-                bsl%constant_ocean_surface = .true.
-                bsl%A_ocean_now = bsl%A_ocean_pd
-                write(*,*) "A_ocean", bsl%A_ocean_now
-            else
-                bsl%constant_ocean_surface = .false.
-                n_bsl_vec = nc_size(A_ocean_path, "z")
-                allocate(bsl%bsl_vec(n_bsl_vec))
-                allocate(bsl%A_ocean_vec(n_bsl_vec))
-                call nc_read(A_ocean_path, "z", bsl%bsl_vec)
-                call nc_read(A_ocean_path, "A", bsl%A_ocean_vec)
+        implicit none
+        type(bsl_class),  intent(INOUT) :: bsl
+        character(len=*), intent(IN)    :: filename
+        character(len=256):: A_ocean_path
+        integer           :: n_bsl_vec
+        real(wp)          :: A_ocean_pd_biased
+        write(*,*) "bsl_init:: using BSL from FastIsostasy domains."
 
-                ! Correct pd bias of ocean surface file
-                call interp_0d(bsl%bsl_vec, bsl%A_ocean_vec, bsl%bsl_init, A_ocean_pd_biased)
-                bsl%A_ocean_vec = bsl%A_ocean_vec * bsl%A_ocean_pd / A_ocean_pd_biased
+        ! Load the ocean surface area from parameter file
+        call nml_read(filename, "barysealevel", "bsl_init", bsl%bsl_init)
+        call nml_read(filename, "barysealevel", "A_ocean_path", A_ocean_path)
 
-                ! Use corrected ocean surface area
-                call interp_0d(bsl%bsl_vec, bsl%A_ocean_vec, bsl%bsl_init, bsl%A_ocean_now)
-            end if
+        if ((A_ocean_path .eq. "None") .or. &
+            (A_ocean_path .eq. "none") .or. &
+            (A_ocean_path .eq. "no")) then
+            bsl%constant_ocean_surface = .true.
+            bsl%A_ocean_now = bsl%A_ocean_pd
+            write(*,*) "A_ocean", bsl%A_ocean_now
+        else
+            bsl%constant_ocean_surface = .false.
+            n_bsl_vec = nc_size(A_ocean_path, "z")
+            allocate(bsl%bsl_vec(n_bsl_vec))
+            allocate(bsl%A_ocean_vec(n_bsl_vec))
+            call nc_read(A_ocean_path, "z", bsl%bsl_vec)
+            call nc_read(A_ocean_path, "A", bsl%A_ocean_vec)
 
-        case DEFAULT
+            ! Correct pd bias of ocean surface file
+            call interp_0d(bsl%bsl_vec, bsl%A_ocean_vec, bsl%bsl_init, A_ocean_pd_biased)
+            bsl%A_ocean_vec = bsl%A_ocean_vec * bsl%A_ocean_pd / A_ocean_pd_biased
 
-            write(error_unit,*) ""
-            write(error_unit,*) "bsl_init:: Error: method not recognized."
-            write(error_unit,*) "method = ", bsl%method
-            stop 
-
-        end select
-
-        bsl%bsl_now = bsl%bsl_init
-        write(*,*) "bsl_init:: BSL initialized to ", bsl%bsl_init, " m."
+            ! Use corrected ocean surface area
+            call interp_0d(bsl%bsl_vec, bsl%A_ocean_vec, bsl%bsl_init, bsl%A_ocean_now)
+        end if
 
         return
 
-    end subroutine bsl_init
+    end subroutine bsl_init_fastiso
 
     subroutine bsl_update(bsl, year_bp)
 
@@ -174,23 +204,16 @@ contains
             ! Assign sea-level constant
             bsl%time  = year_bp
             bsl%bsl_now  = bsl%bsl_init
-            bsl%sigma_now = 0.0
 
         case("file")
-            bsl%time  = year_bp
-            bsl%bsl_now  = series_interp(bsl%series, year_bp)
-            bsl%sigma_now = 0.0
+            call bsl_update_file(bsl, year_bp)
+
+        case("mixed")
+            call bsl_update_file(bsl, year_bp)
+            call bsl_update_fastiso(bsl, year_bp)
 
         case("fastiso")
-            bsl%time  = year_bp
-            bsl%sigma_now = 0.0
-
-            if (bsl%constant_ocean_surface) then
-                bsl%A_ocean_now = bsl%A_ocean_pd
-            else
-                call interp_0d(bsl%bsl_vec, bsl%A_ocean_vec, bsl%bsl_now, &
-                    bsl%A_ocean_now)
-            end if
+            call bsl_update_fastiso(bsl, year_bp)
             
         case DEFAULT
 
@@ -203,6 +226,30 @@ contains
 
         return
     end subroutine bsl_update
+
+    subroutine bsl_update_file(bsl, year_bp)
+        implicit none
+        type(bsl_class), intent(INOUT)  :: bsl
+        real(wp), intent(IN)            :: year_bp
+        
+        bsl%time  = year_bp
+        bsl%bsl_now  = series_interp(bsl%series, year_bp)
+        return
+    end subroutine bsl_update_file
+
+    subroutine bsl_update_fastiso(bsl, year_bp)
+        implicit none
+        type(bsl_class), intent(INOUT)  :: bsl
+        real(wp), intent(IN)            :: year_bp
+        bsl%time  = year_bp
+        if (bsl%constant_ocean_surface) then
+            bsl%A_ocean_now = bsl%A_ocean_pd
+        else
+            call interp_0d(bsl%bsl_vec, bsl%A_ocean_vec, bsl%bsl_now, &
+                bsl%A_ocean_now)
+        end if
+        return
+    end subroutine bsl_update_fastiso
 
     subroutine read_series(series,filename)
         ! This subroutine will read a time series of

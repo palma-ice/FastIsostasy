@@ -97,8 +97,8 @@ module green_functions
         real(wp), intent(OUT) :: filt(:, :) 
         real(wp), intent(IN)  :: m_earth
         real(wp), intent(IN)  :: r_earth
-        real(wp), intent(IN)  :: dx 
-        real(wp), intent(IN)  :: dy   
+        real(wp), intent(IN)  :: dx
+        real(wp), intent(IN)  :: dy
 
         ! Local variables 
         integer  :: i, j, i1, j1, nx, ny, mx, my
@@ -120,7 +120,7 @@ module green_functions
             r  = sqrt(x**2+y**2)
 
             ! Get correct GE value for this point (given by colatitude, theta)
-            filt(i, j) = calc_gn_value(max(dy,r), r_earth, m_earth)
+            filt(i, j) = calc_gn_value(max(dy/2,r), r_earth, m_earth)
         end do
         end do
 

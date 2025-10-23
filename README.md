@@ -52,6 +52,44 @@ The output directory is hard-coded to `output/` for now. When the program runs s
 
 That's it!
 
+## Test details
+
+### Test 1
+
+Reproducing the idealised load experiment from Bueler et al. (2007) with `isos.include_elastic = .false.` and :
+1. `isostasy.method = 0`
+2. `isostasy.method = 1`
+3. `isostasy.method = 2`
+4. `isostasy.method = 3` one layer
+5. `isostasy.method = 3` two layers
+
+### Test 2
+
+Reproducing 1D GIA benchmark from Spada et al. (2011) with elastic displacement, viscous diplacement = ELVA, and:
+
+1. `isostasy.lumping = "max"`
+2. `isostasy.lumping = "min"`
+3. `isostasy.lumping = "freqdomain"`
+
+### Test 3
+
+Reproducing 3D GIA benchmark from Swierczek-Jereczek et al. (2024) with:
+1. `isostasy.mantle = "uniform"`; `isostasy.lithosphere = "gaussian_minus` (lithosphere thins towards the center of the domain following a Gaussian)
+2. `isostasy.mantle = "uniform"`; `isostasy.lithosphere = "gaussian_plus`
+3. `isostasy.mantle = "gaussian_minus"`; `isostasy.lithosphere = "uniform`
+4. `isostasy.mantle = "gaussian_plus"`; `isostasy.lithosphere = "uniform`
+
+### Test 4
+
+Reproducing glacial cycle with interactive sea level and:
+1. `barysealevel.method = "fastiso"`
+2. `barysealevel.method = "mixed"`
+
+### Test 5
+
+Greenland simulation.
+
+
 ## Coupling FastIsostasy to your favorite ice-sheet model
 
 Coupling FastIsostasy requires the following important steps:
