@@ -897,6 +897,7 @@ contains
         call deallocate_isos_state(isos%ref)
         call deallocate_isos_domain(isos%domain)
         call deallocate_isos_out(isos%out)
+        call deallocate_isos_param(isos%par)
 
         return
     end subroutine isos_end
@@ -994,6 +995,7 @@ contains
         call deallocate_isos_state(isos%now)
         call deallocate_isos_state(isos%ref)
         call deallocate_isos_out(isos%out)
+
         call allocate_isos_domain(isos%domain, isos%domain%nx, isos%domain%ny, nl)
         call allocate_isos_state(isos%now, isos%domain%nx, isos%domain%ny)
         call allocate_isos_state(isos%ref, isos%domain%nx, isos%domain%ny)
@@ -1001,6 +1003,17 @@ contains
 
         return
     end subroutine allocate_isos
+
+    subroutine deallocate_isos_param(par)
+        implicit none
+        type(isos_param_class), intent(INOUT) :: par
+
+        ! First ensure arrays are not allocated
+        if (allocated(par%viscosities)) deallocate(par%viscosities)
+        if (allocated(par%zl))           deallocate(par%zl)
+
+        return
+    end subroutine deallocate_isos_param
 
     subroutine deallocate_isos_domain(domain)
         implicit none 
@@ -1023,6 +1036,7 @@ contains
         if (allocated(domain%R))            deallocate(domain%R)
         if (allocated(domain%maskactive))   deallocate(domain%maskactive)
 
+        if (allocated(domain%boundaries))   deallocate(domain%boundaries)
         if (allocated(domain%He_lith))      deallocate(domain%He_lith)
         if (allocated(domain%D_lith))       deallocate(domain%D_lith)
         if (allocated(domain%eta))          deallocate(domain%eta)
@@ -1050,12 +1064,11 @@ contains
         if (allocated(state%w_equilibrium))     deallocate(state%w_equilibrium)
         if (allocated(state%we))                deallocate(state%we)
 
-        if (allocated(state%dz_ss))             deallocate(state%dz_ss)
-
         if (allocated(state%Haf))               deallocate(state%Haf)
         if (allocated(state%Hice))              deallocate(state%Hice)
 
         if (allocated(state%z_ss))              deallocate(state%z_ss)
+        if (allocated(state%dz_ss))             deallocate(state%dz_ss)
         if (allocated(state%canom_ice))         deallocate(state%canom_ice)
         if (allocated(state%canom_seawater))    deallocate(state%canom_seawater)
         if (allocated(state%canom_litho))       deallocate(state%canom_litho)
