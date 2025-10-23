@@ -120,7 +120,8 @@ module isostasy_defs
         real(wp)              :: V_af           ! [m^3] Volume contribution of ice above floatation
         real(wp)              :: V_pov          ! [m^3] Potential ocean volume contribution
         real(wp)              :: V_den          ! [m^3] Density-driven ocean volume contribution
-        real(wp)              :: deltaV_bsl     ! [m^3] BSL contribution from domain wrt previous time step
+        real(wp)              :: deltaV_bsl     ! [m^3] Volume contrib. from domain wrt previous time step
+        real(wp)              :: dbsl_total     ! [m^3] Cumulative BSL contrib. from domain
 
         real(wp), allocatable :: z_bed(:, :)          ! Bedrock elevation         [m]
         real(wp), allocatable :: dwdt(:, :)           ! Rate of bedrock uplift    [m/a]

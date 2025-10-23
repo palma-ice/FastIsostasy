@@ -506,6 +506,7 @@ contains
 
         state%bsl               = 0.0
         state%deltaV_bsl        = 0.0
+        state%dbsl_total        = 0.0
         state%V_af              = 0.0
         state%V_den             = 0.0
         state%V_pov             = 0.0
@@ -710,10 +711,18 @@ contains
             ! write(*,*) "isos_update:: Update 1"
             call calc_Haf(isos%now, isos%par)
             call calc_sl_contributions(isos)
+
             if (trim(bsl%method) .eq. "fastiso") then
-                ! minus sign because what goes into ice sheet goes out of ocean.
                 bsl%bsl_now = bsl%bsl_now - isos%now%deltaV_bsl / bsl%A_ocean_now
+                ! minus sign because what goes into ice sheet goes out of ocean.
             end if
+
+            if (trim(bsl%method) .eq. "mixed") then
+                isos%now%dbsl_total = isos%now%dbsl_total + isos%now%deltaV_bsl / bsl%A_ocean_now
+                bsl%bsl_now = bsl%bsl_now - isos%now%dbsl_total
+                ! minus sign because what goes into ice sheet goes out of ocean.
+            end if
+
             isos%now%bsl = bsl%bsl_now
             call calc_z_ss(isos%now%z_ss, isos%now%bsl, isos%ref%z_ss, isos%now%dz_ss)
 
