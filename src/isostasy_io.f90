@@ -391,7 +391,6 @@ module isostasy_io
         return 
     end subroutine isos_write_step
 
-
     ! Write results to file
     subroutine isos_write_step_extended(isos, filename, time)
 
@@ -461,5 +460,4 @@ module isostasy_io
 
         return 
     end subroutine isos_write_step_extended
-
 end module isostasy_io

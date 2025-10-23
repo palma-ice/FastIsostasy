@@ -612,8 +612,12 @@ contains
             end if
 
         end if
+        
+        ! ref%z_ss is computed from ref%bsl and ref%dz_ss
         isos%ref%z_ss = 0.0_wp
         call calc_z_ss(isos%ref%z_ss, isos%ref%bsl, isos%ref%z_ss, isos%ref%dz_ss)
+        call calc_z_ss(isos%now%z_ss, isos%now%bsl, isos%now%z_ss, isos%now%dz_ss)
+
         call calc_Haf(isos%ref, isos%par)
         call calc_Haf(isos%now, isos%par)
         call calc_masks(isos%ref)
