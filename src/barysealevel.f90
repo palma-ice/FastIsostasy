@@ -493,4 +493,13 @@ contains
         return 
     end subroutine bsl_write_step
 
+    subroutine bsl_end(bsl)
+        implicit none
+        type(bsl_class), intent(INOUT) :: bsl
+
+        if (allocated(bsl%bsl_vec))    deallocate(bsl%bsl_vec)
+        if (allocated(bsl%A_ocean_vec)) deallocate(bsl%A_ocean_vec)
+        return
+    end subroutine bsl_end
+
 end module barysealevel
