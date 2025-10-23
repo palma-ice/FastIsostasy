@@ -1,11 +1,12 @@
 
 &isostasy
     ! Options
-    heterogeneous_ssh = .true.     ! Sea level varies spatially?
-    interactive_sealevel = .true.  ! Sea level interacts with solid Earth deformation?
-    include_elastic = .true.       ! Include elastic deformation?
+    heterogeneous_ssh = .true.      ! Sea level varies spatially?
+    interactive_sealevel = .true.   ! Sea level interacts with solid Earth deformation?
+    include_elastic = .true.        ! Include elastic deformation?
+    correct_compression = .true.    ! Account for compression effects on relaxation time?
     correct_distortion = .false.    ! Account for distortion of projection?
-    method          = 3             ! 0: constant displacement; 1: LLRA; 2: LV-ELRA, 3: LV-ELVA
+    method          = 2             ! 0: constant displacement; 1: LLRA; 2: LV-ELRA, 3: LV-ELVA
     dt_prognostics  = 1.            ! [yr] Max. timestep to recalculate prognostics
     dt_diagnostics  = 10.           ! [yr] Min. timestep to recalculate diagnostics
     pad         = 512.              ! [km] Padding around domain (preferably chosen as a power
