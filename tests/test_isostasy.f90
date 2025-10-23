@@ -56,7 +56,7 @@ program test_isostasy
 
     ! === Define experiment to be run ====
 
-    experiment = "test4b"
+    experiment = "test4a"
 
     ! Tests are defined in Swierczek-Jereczek et al. (2024), GMD.
     ! Additional: "test5" = Lucía's Greenland ice-sheet load (since 15 ka)
@@ -65,7 +65,7 @@ program test_isostasy
 
         select case(trim(experiment))
             
-            case("test1a", "test1b", "test1c", "test1d", "test1d", "test1e")
+            case("test1a", "test1b", "test1c", "test1d", "test1e")
                 time_init = 0.
                 time_end  = 50.e3
                 dtt       = 1.0
@@ -213,7 +213,8 @@ program test_isostasy
             H_ice = 0.0 
             H_ice(int((nx-1)/2),int((ny-1)/2)) = 1000.0 
 
-        case("test1a", "test1b", "test1c", "test1d", "test1d", "test1e","test3a","test3b","test3c","test3d") ! ice disk of R=1000 km and H=1000 m
+        case("test1a", "test1b", "test1c", "test1d", "test1e", "test3a", "test3b", &
+            "test3c", "test3d") ! ice disk of R=1000 km and H=1000 m
 
             r0  = 1000.0e3 ! [m]
             h0  = 1000.0   ! [m]

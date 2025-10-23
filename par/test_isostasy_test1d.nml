@@ -3,6 +3,7 @@
     heterogeneous_ssh = .false.     ! Sea level varies spatially?
     interactive_sealevel = .false.  ! Sea level interacts with solid Earth deformation?
     include_elastic = .false.       ! Include elastic deformation?
+    correct_compression = .false.   ! Account for compression effects on relaxation time?
     correct_distortion = .false.    ! Account for distortion of projection?
     method          = 3             ! 0: constant displacement; 1: LLRA; 2: LV-ELRA, 3: LV-ELVA
     dt_prognostics  = 1.            ! [yr] Max. timestep to recalculate prognostics

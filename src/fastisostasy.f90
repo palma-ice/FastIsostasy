@@ -149,7 +149,11 @@ contains
 
         write(*,*) "Initializing physical constants..."
         isos%par%sec_per_year = 3600.0 * 24.0 * 365.25           ! [s/a]
-        isos%par%compressibility_correction = 1.5 / (1 + isos%par%nu)
+        if (isos%par%correct_compression) then
+            isos%par%compressibility_correction = 1.5 / (1 + isos%par%nu)
+        else
+            isos%par%compressibility_correction = 1.0
+        end if
         call calc_density_correction_factor(isos%par)
 
         write(*,*) "Initializing lithosphere..."
@@ -620,6 +624,7 @@ contains
 
         call calc_Haf(isos%ref, isos%par)
         call calc_Haf(isos%now, isos%par)
+
         call calc_masks(isos%ref)
         call calc_masks(isos%now)
 
@@ -930,8 +935,9 @@ contains
 
         call nml_read(filename,group,"heterogeneous_ssh",   par%heterogeneous_ssh)
         call nml_read(filename,group,"interactive_sealevel",par%interactive_sealevel)
-        call nml_read(filename,group,"correct_distortion",  par%correct_distortion)
         call nml_read(filename,group,"include_elastic",     par%include_elastic)
+        call nml_read(filename,group,"correct_distortion",  par%correct_distortion)
+        call nml_read(filename,group,"correct_compression", par%correct_compression)
         call nml_read(filename,group,"method",              par%method)
         call nml_read(filename,group,"dt_diagnostics",      par%dt_diagnostics)
         call nml_read(filename,group,"dt_prognostics",      par%dt_prognostics)
