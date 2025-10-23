@@ -11,6 +11,7 @@ module isostasy_defs
         logical     :: heterogeneous_ssh    ! Sea level varies spatially?
         logical     :: interactive_sealevel ! Sea level interacts with solid Earth deformation?
         logical     :: include_elastic      ! Include elastic deformation?
+        logical     :: correct_compression  ! Account for compression effects on relaxation time?
         logical     :: correct_distortion   ! Account for distortion of projection?
         integer     :: method               ! Computation method for viscous displacement
         real(wp)    :: dt_prognostics       ! [yr] Timestep to recalculate prognostics
