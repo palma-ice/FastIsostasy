@@ -1,0 +1,62 @@
+&isostasy
+    ! Options
+    heterogeneous_ssh = .true.      ! Sea level varies spatially?
+    interactive_sealevel = .false.  ! Sea level interacts with solid Earth deformation?
+    include_elastic = .true.        ! Include elastic deformation?
+    correct_distortion = .false.    ! Account for distortion of projection?
+    method          = 3             ! 0: constant displacement; 1: LLRA; 2: LV-ELRA, 3: LV-ELVA
+    dt_prognostics  = 1.            ! [yr] Max. timestep to recalculate prognostics
+    dt_diagnostics  = 10.           ! [yr] Min. timestep to recalculate diagnostics
+    pad         = 512.              ! [km] Padding around the domain (preferably chosen as a power
+                                    ! of 2 multiplied by the resolution)
+
+    ! Rheology methods
+    mantle = "uniform"          ! Choose mantle viscosity field, options:
+                                ! "uniform", "gaussian_plus", "gaussian_minus", "rheology_file"
+    lithosphere = "uniform"     ! Choose lithospheric thickness field:
+                                ! "uniform", "gaussian_plus", "gaussian_minus", "rheology_file"
+    layering    = "equalized"   ! "parallel" or "equalized"
+    lumping     = "freqdomain"  ! "bottom", "min", "max", "mean", "logmean", "freqdomain"
+    viscosity_scaling_method = "scale"  ! "scale" or "min" or "max"
+    viscosity_scaling = 1.              ! Only used if viscosity_scaling_method = "scale"
+    
+    ! Rheology parameters
+    nl          = 2                 ! [1] Number of viscous layers for sub-lithospheric mantle
+    zl = 70., 600.                  ! [km] Depth of layer boundaries. The first value is overwritten
+                                    ! if a lithospheric thickness filed is provided.
+    viscosities = 1.e21, 4.e21      ! [Pa s] Layer viscosities. Only used if
+                                    ! mantle = "uniform" or "gaussian_plus" or "gaussian_minus".
+                                    ! viscosity field is provided.
+    ref_viscosity = 1.e21           ! [Pa s] Reference viscosity for scaling
+    tau = 3000.0                    ! [yr] Relaxation time used for "method" = 2
+
+    ! Physical constants
+    E               = 128.0         ! [GPa] Young modulus
+    nu              = 0.28          ! [-] Poisson ratio
+    rho_ice         = 931.          ! [kg/m^3]
+    rho_seawater    = 1028.0        ! [kg/m^3]
+    rho_water       = 1000.0        ! [kg/m^3]
+    rho_uppermantle = 3400.0        ! [kg/m^3]
+    rho_litho       = 3000.0        ! [kg/m^3]  Optionally set to 0 ==> decouple the elastic
+                                    ! displacement from the viscous one
+    g               = 9.81          ! [m/s^2]
+    r_earth         = 6.378e3       ! [km]  Earth radius, Coulon et al. (2021)
+    m_earth         = 5.972e24      ! [kg] Earth mass,   Coulon et al. (2021)
+    
+    ! Files
+    restart = "None"
+    mask_file = "None"
+    rheology_file = "None"
+/
+
+&barysealevel
+    method      = "const"   ! "const": BSL = bsl_init throughout sim
+                            ! "file": BSL = time series provided from sl_path
+                            ! "fastiso": BSL = sum of contributions from fastiso domains
+    bsl_init    = 0.0       ! [m] BSL relative to present day
+    sl_path     = "input/sl_deglaciation.dat"   ! Input time series filename
+    sl_name     = "none"    ! Variable name in netcdf file, if relevant
+    A_ocean_pd  = 3.625e14  ! [m^2] Ocean surface as in Goelzer et al. (2020)
+    A_ocean_path = "None"   ! Path to ocean surface file
+    restart     = "None"    ! Path to restart file
+/
