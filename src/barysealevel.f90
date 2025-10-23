@@ -206,22 +206,14 @@ contains
             bsl%bsl_now  = bsl%bsl_init
 
         case("file")
-            bsl%time  = year_bp
-            bsl%bsl_now  = series_interp(bsl%series, year_bp)
+            call bsl_update_file(bsl, year_bp)
 
         case("mixed")
-            bsl%time  = year_bp
-            bsl%bsl_now  = series_interp(bsl%series, year_bp)
+            call bsl_update_file(bsl, year_bp)
+            call bsl_update_fastiso(bsl, year_bp)
 
         case("fastiso")
-            bsl%time  = year_bp
-
-            if (bsl%constant_ocean_surface) then
-                bsl%A_ocean_now = bsl%A_ocean_pd
-            else
-                call interp_0d(bsl%bsl_vec, bsl%A_ocean_vec, bsl%bsl_now, &
-                    bsl%A_ocean_now)
-            end if
+            call bsl_update_fastiso(bsl, year_bp)
             
         case DEFAULT
 
@@ -234,6 +226,30 @@ contains
 
         return
     end subroutine bsl_update
+
+    subroutine bsl_update_file(bsl, year_bp)
+        implicit none
+        type(bsl_class), intent(INOUT)  :: bsl
+        real(wp), intent(IN)            :: year_bp
+        
+        bsl%time  = year_bp
+        bsl%bsl_now  = series_interp(bsl%series, year_bp)
+        return
+    end subroutine bsl_update_file
+
+    subroutine bsl_update_fastiso(bsl, year_bp)
+        implicit none
+        type(bsl_class), intent(INOUT)  :: bsl
+        real(wp), intent(IN)            :: year_bp
+        bsl%time  = year_bp
+        if (bsl%constant_ocean_surface) then
+            bsl%A_ocean_now = bsl%A_ocean_pd
+        else
+            call interp_0d(bsl%bsl_vec, bsl%A_ocean_vec, bsl%bsl_now, &
+                bsl%A_ocean_now)
+        end if
+        return
+    end subroutine bsl_update_fastiso
 
     subroutine read_series(series,filename)
         ! This subroutine will read a time series of
