@@ -57,30 +57,24 @@ program test_isostasy_looped
 
     ! === Define experiment to be run ====
 
-    ! n_xp = 15
-    ! allocate(experiments(n_xp))
-    ! experiments(1) = "test1a"
-    ! experiments(2) = "test1b"
-    ! experiments(3) = "test1c"
-    ! experiments(4) = "test1d"
-    ! experiments(5) = "test1e"
-    ! experiments(6) = "test2a"
-    ! experiments(7) = "test2b"
-    ! experiments(8) = "test2c"
-    ! experiments(9) = "test3a"
-    ! experiments(10) = "test3b"
-    ! experiments(11) = "test3c"
-    ! experiments(12) = "test3d"
-    ! experiments(13) = "test4a"
-    ! experiments(14) = "test4b"
-    ! experiments(15) = "test5"
-
-    n_xp = 4
+    n_xp = 16
     allocate(experiments(n_xp))
-    experiments(1) = "test3d"
-    experiments(2) = "test4a"
-    experiments(3) = "test4b"
-    experiments(4) = "test5"
+    experiments(1) = "test1a"
+    experiments(2) = "test1b"
+    experiments(3) = "test1c"
+    experiments(4) = "test1d"
+    experiments(5) = "test1e"
+    experiments(6) = "test2a"
+    experiments(7) = "test2b"
+    experiments(8) = "test2c"
+    experiments(9) = "test3a"
+    experiments(10) = "test3b"
+    experiments(11) = "test3c"
+    experiments(12) = "test3d"
+    experiments(13) = "test4a"
+    experiments(14) = "test4b"
+    experiments(15) = "test5a"
+    experiments(16) = "test5b"
 
     i_xp = 0
     do i_xp = 1, n_xp
@@ -98,6 +92,7 @@ program test_isostasy_looped
     if (allocated(z_bed_bench)) deallocate(z_bed_bench)
     if (allocated(xc_ice))      deallocate(xc_ice)
     if (allocated(yc_ice))      deallocate(yc_ice)
+    if (allocated(z_bed_ice))   deallocate(z_bed_ice)
 
     ! Tests are defined in Swierczek-Jereczek et al. (2024), GMD.
     ! Additional: "test5" = Lucía's Greenland ice-sheet load (since 15 ka)
@@ -154,7 +149,7 @@ program test_isostasy_looped
                 ymin = xmin
                 ymax = abs(ymin)
 
-            case("test5")
+            case("test5a", "test5b")
                 time_init = 0.
                 time_end  = 15.e3
                 dtt       = 1.0
@@ -317,12 +312,13 @@ program test_isostasy_looped
             ncx = nc_size(filename,"xc")
             ncy = nc_size(filename,"yc")
 
-            if ((nct .lt. nt) .or. (ncx .ne. nx) .or. (ncy .ne. ny)) then
+            if ((ncx .ne. nx) .or. (ncy .ne. ny)) then
                 write(*,*) "nct, nt, ncx, nx, ncy, ny =", nct, nt, ncx, nx, ncy, ny
                 print*, 'Some dimensions do not correspond to those of the nc file.'
                 stop
             endif
 
+            write(*, *) "Reading ice .nc..."
             allocate(T_ice(ncx, ncy, nct))
             allocate(time_ice(nct))
             call nc_read(filename, "time", time_ice, start=[1], count=[nct])
@@ -331,8 +327,7 @@ program test_isostasy_looped
             T_ice = max(T_ice, 0.)
             H_ice = T_ice(:, :, 1)
 
-
-            ! Read z_bed
+            write(*, *) "Reading bed .nc..."
             filename = "isostasy_data/topography/ANT-32KM_Latychev.nc"
             ncx = nc_size(filename,"xc")
             ncy = nc_size(filename,"yc")
@@ -348,7 +343,7 @@ program test_isostasy_looped
             z_bed = z_bed_ice(:, :, 1)
             z_ss = 0.0_wp
 
-        case("test5")
+        case("test5a", "test5b")
 
            ! Lucías Greenland run
             r0 = 6.378e6*10.*3.1416/180.
@@ -444,7 +439,9 @@ program test_isostasy_looped
 
     call isos_restart_write(isos1, file_isos_restart, time)
     call bsl_restart_write(bsl, file_bsl_restart, time)
-    
+    call isos_end(isos1)
+    call bsl_end(bsl)
+
     end do  ! loop over experiments
 
 end program test_isostasy_looped

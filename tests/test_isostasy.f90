@@ -113,7 +113,7 @@ program test_isostasy
                 ymin = xmin
                 ymax = abs(ymin)
 
-            case("test5")
+            case("test5a", "test5b")
                 time_init = 0.
                 time_end  = 15.e3
                 dtt       = 1.0
@@ -277,7 +277,7 @@ program test_isostasy
             ncx = nc_size(filename,"xc")
             ncy = nc_size(filename,"yc")
 
-            if ((time_end .lt. nt) .or. (ncx .ne. nx) .or. (ncy .ne. ny)) then
+            if ((ncx .ne. nx) .or. (ncy .ne. ny)) then
                 print*, 'Some dimensions do not correspond to those of the nc file.'
                 stop
             endif
@@ -307,7 +307,7 @@ program test_isostasy
             z_bed = z_bed_ice(:, :, 1)
             z_ss = 0.0_wp
 
-        case("test5")
+        case("test5a", "test5b")
 
            ! Lucías Greenland run
             r0 = 6.378e6*10.*3.1416/180.
@@ -403,5 +403,7 @@ program test_isostasy
 
     call isos_restart_write(isos1, file_isos_restart, time)
     call bsl_restart_write(bsl, file_bsl_restart, time)
-
+    call isos_end(isos1)
+    call bsl_end(bsl)
+    
 end program test_isostasy
