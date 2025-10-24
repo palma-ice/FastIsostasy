@@ -12,7 +12,7 @@ LIB_FESMUTILS = -L${FESMUTILSROOT}/include-serial -lfesmutils
 
 FFTWROOT = fesm-utils/fftw-serial
 INC_FFTW = -I${FFTWROOT}/include
-LIB_FFTW = -L${FFTWROOT}/lib -lfftw3 -lm
+LIB_FFTW = -L${FFTWROOT}/lib -lfftw3
 
 FFLAGS  = -module $(objdir) -L$(objdir)
 
@@ -23,7 +23,7 @@ ifeq ($(openmp), 1)
 
     FFTWROOT = fesm-utils/fftw-omp
     INC_FFTW = -I${FFTWROOT}/include
-    LIB_FFTW = -L${FFTWROOT}/lib -lfftw3_omp -lfftw3 -lm
+    LIB_FFTW = -L${FFTWROOT}/lib -lfftw3_omp -lfftw3
 
     FFLAGS  = -module $(objdir) -L$(objdir) -qopenmp 
 endif 
