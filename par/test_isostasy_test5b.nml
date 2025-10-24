@@ -1,4 +1,3 @@
-
 &isostasy
     ! Options
     heterogeneous_ssh = .true.      ! Sea level varies spatially?

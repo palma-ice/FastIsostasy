@@ -47,7 +47,7 @@
     ! Files
     restart = "None"
     mask_file = "../isostasy_data/tools/masks/ANT-32KM_activemask.nc"
-    rheology_file = "../isostasy_data/earth_structure/ANT-32KM_Pan2022.nc"
+    rheology_file = "../isostasy_data/earth_structure/yelmo/ANT-32KM_Pan2022.nc"
     litho_thickness_varname = "litho_thickness"         ! Variable name in netcdf file
     log10_viscosity_varname = "log10_eta"   ! Variable name in netcdf file
     stddev_log10_viscosity_varname = "none"         ! Variable name in netcdf file
