@@ -270,6 +270,7 @@ contains
 
                 call nc_read_and_scale_matrix(isos%par%rheology_file, &
                     isos%par%litho_thickness_varname, T_rheo)
+                T_rheo = T_rheo * isos%par%litho_thickness_scaling
 
                 ! assumes a flat extension of the values if isos domain is larger
                 ! than the rheology domain
@@ -697,6 +698,24 @@ contains
         nstep = ceiling( dt / isos%par%dt_prognostics )
         nstep = max(nstep, 1)
 
+        ! write(*,*) "isos_update:: Update 1"
+        call calc_Haf(isos%now, isos%par)
+        call calc_sl_contributions(isos)
+
+        if (trim(bsl%method) .eq. "fastiso") then
+            bsl%bsl_now = bsl%bsl_now - isos%now%deltaV_bsl / bsl%A_ocean_now
+            ! minus sign because what goes into ice sheet goes out of ocean.
+        end if
+
+        if (trim(bsl%method) .eq. "mixed") then
+            isos%now%dbsl_total = isos%now%dbsl_total + isos%now%deltaV_bsl / bsl%A_ocean_now
+            bsl%bsl_now = bsl%bsl_now - isos%now%dbsl_total
+            ! minus sign because what goes into ice sheet goes out of ocean.
+        end if
+
+        isos%now%bsl = bsl%bsl_now
+        call calc_z_ss(isos%now%z_ss, isos%now%bsl, isos%ref%z_ss, isos%now%dz_ss)
+        
         ! Loop over iterations until maximum time is reached
         do n = 1, nstep
 
@@ -716,24 +735,6 @@ contains
             ! write (*,*) "time_prog, time_diag, update_diag: ", &
             !     isos%par%time_prognostics, isos%par%time_diagnostics, update_diagnostics
             ! call nan_check(isos,1)
-            
-            ! write(*,*) "isos_update:: Update 1"
-            call calc_Haf(isos%now, isos%par)
-            call calc_sl_contributions(isos)
-
-            if (trim(bsl%method) .eq. "fastiso") then
-                bsl%bsl_now = bsl%bsl_now - isos%now%deltaV_bsl / bsl%A_ocean_now
-                ! minus sign because what goes into ice sheet goes out of ocean.
-            end if
-
-            if (trim(bsl%method) .eq. "mixed") then
-                isos%now%dbsl_total = isos%now%dbsl_total + isos%now%deltaV_bsl / bsl%A_ocean_now
-                bsl%bsl_now = bsl%bsl_now - isos%now%dbsl_total
-                ! minus sign because what goes into ice sheet goes out of ocean.
-            end if
-
-            isos%now%bsl = bsl%bsl_now
-            call calc_z_ss(isos%now%z_ss, isos%now%bsl, isos%ref%z_ss, isos%now%dz_ss)
 
             ! write(*,*) "isos_update:: Update 2"
             call calc_masks(isos%now)
@@ -978,6 +979,7 @@ contains
             call nml_read(filename, group, "stddev_log10_viscosity_varname", &
                 par%stddev_log10_viscosity_varname)
             call nml_read(filename, group, "rheo_smoothing_radius", par%rheo_smoothing_radius)
+            call nml_read(filename, group, "litho_thickness_scaling", par%litho_thickness_scaling)
             par%rheo_smoothing_radius = par%rheo_smoothing_radius * 1e3_wp ! Convert to meters
         end if
 

@@ -25,6 +25,7 @@ module isostasy_defs
         character(len=56)       :: viscosity_scaling_method
         real(wp)                :: viscosity_scaling
         real(wp)                :: rheo_smoothing_radius ! [km] Smoothing radius for rheology
+        real(wp)                :: litho_thickness_scaling ! [1] scaling of lith thickness
         
         real(wp), allocatable   :: zl(:)            ! [km] Layer boundaries
         real(wp), allocatable   :: viscosities(:)   ! [Pa s] Layer viscosities
