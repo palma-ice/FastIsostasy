@@ -14,7 +14,7 @@ module fastisostasy
     use, intrinsic :: ieee_arithmetic, only : ieee_is_nan
     
     use isostasy_defs, only : sp, dp, wp, pi, isos_param_class, isos_state_class, &
-        isos_domain_class, isos_out_class, isos_class
+        isos_domain_class, isos_out_class, isos_class, ode_class
     use green_functions
     use kelvin_function
     use isos_utils
@@ -25,6 +25,7 @@ module fastisostasy
     use lv_elva
     use sealevel
     use barysealevel
+    use integrators
 
     implicit none
     include 'fftw3.f03'
@@ -33,6 +34,8 @@ module fastisostasy
     public :: isos_param_class
     public :: isos_state_class
     public :: isos_domain_class
+    public :: isos_out_class
+    public :: ode_class
     public :: isos_class
     public :: isos_init
     public :: isos_init_ref
@@ -51,6 +54,10 @@ module fastisostasy
     public :: bsl_restart_write
     public :: bsl_write_init
     public :: bsl_write_step
+    public :: step_euler
+    public :: step_rk4
+    public :: step_bs32
+    ! public :: step_tsit54
 
 contains
     
@@ -642,10 +649,16 @@ contains
         end if
 
         call isos_init_state_summary(isos)
+
+        ! Set initial state of the ODE solver
+        isos%ode%dt = isos%par%dt_init
+        isos%ode%t = time
+        isos%ode%x = isos%now%w
+
         return
 
     end subroutine isos_init_state
-
+    
     subroutine isos_init_state_summary(isos)
         implicit none
         type(isos_class), intent(IN) :: isos
@@ -659,6 +672,61 @@ contains
         write(*,*) "    range(z_bed):   ",  minval(isos%now%z_bed), maxval(isos%now%z_bed)
         write(*,*) "isos_init_state:: complete."
     end subroutine isos_init_state_summary
+
+
+    function get_dwdt(w, t, isos) result(dwdt)
+        real(wp), intent(IN), dimension(:, :) :: w
+        real(wp), intent(IN) :: t
+        real(wp), dimension(size(w,1), size(w,2)) :: dwdt
+        type(isos_class), intent(INOUT) :: isos
+    
+        ! write(*,*) "isos_update:: Update 7"
+        ! Step 1: diagnose equilibrium displacement and rate of bedrock uplift
+        select case(isos%par%method)
+
+        ! Case 0 turns off vertical displacement
+        case(0)
+
+            isos%now%w_equilibrium = 0.0
+            isos%now%dwdt = 0.0
+
+        ! LLRA
+        case(1)
+            call calc_llra_equilibrium(isos%now%w_equilibrium, &
+                isos%now%canom_load, isos%par%rho_uppermantle)
+            call calc_asthenosphere_relax(isos%now%dwdt, isos%now%w, &
+                isos%now%w_equilibrium, isos%domain%tau)
+
+        ! LV-ELRA (Coulon et al. 2021).
+        ! Gives ELRA (LeMeur and Huybrechts 1996) if tau = const.
+        case(2)
+
+            call precomputed_fftconvolution(isos%now%w_equilibrium, isos%domain%FGV, &
+                -isos%now%canom_load * isos%par%g * isos%domain%K ** 2.0, &
+                isos%domain%i1, isos%domain%i2, &
+                isos%domain%j1, isos%domain%j2, isos%domain%offset, &
+                isos%domain%nx, isos%domain%ny, &
+                isos%domain%forward_dftplan_r2c, isos%domain%backward_dftplan_c2r)
+
+            call apply_zerobc_at_corners(isos%now%w_equilibrium, isos%domain%nx, &
+                isos%domain%ny)
+            call calc_asthenosphere_relax(isos%now%dwdt, isos%now%w, &
+                isos%now%w_equilibrium, isos%domain%tau)
+
+        ! LV-ELVA (Swierczek-jereczek et al. 2024).
+        ! Gives ELVA (Bueler et al. 2007) if eta = const.
+        case(3)
+            call calc_columnanoms_full(isos)
+            call calc_lvelva(isos%now%dwdt, isos%now%w, isos%now%canom_full, &
+                isos%domain%maskactive, isos%par%g, isos%par%nu, isos%domain%D_lith, &
+                isos%domain%eta_eff, isos%domain%kappa, isos%domain%R, &
+                isos%domain%nx, isos%domain%ny, &
+                isos%domain%dx_matrix, isos%domain%dy_matrix, isos%par%sec_per_year, &
+                isos%domain%forward_fftplan_r2r, isos%domain%backward_fftplan_r2r)
+        end select
+
+        dwdt = isos%now%dwdt
+    end function get_dwdt
 
     subroutine isos_update(isos, H_ice, time, bsl, dwdt_corr) 
 
@@ -691,13 +759,6 @@ contains
         end if
         ! write(*,*) "Extrema of dwdt_corr: ", minval(dwdt_corr_ext), maxval(dwdt_corr_ext)
 
-        ! Step 0: determine current timestep and number of iterations
-        dt = time - isos%par%time_prognostics
-
-        ! Get maximum number of iterations needed to reach desired time
-        nstep = ceiling( dt / isos%par%dt_prognostics )
-        nstep = max(nstep, 1)
-
         ! write(*,*) "isos_update:: Update 1"
         call calc_Haf(isos%now, isos%par)
         call calc_sl_contributions(isos)
@@ -716,137 +777,86 @@ contains
         isos%now%bsl = bsl%bsl_now
         call calc_z_ss(isos%now%z_ss, isos%now%bsl, isos%ref%z_ss, isos%now%dz_ss)
         
-        ! Loop over iterations until maximum time is reached
-        do n = 1, nstep
+        ! write(*,*) "isos_update:: updating diagnostic bool..."
+        ! Only update diagnostics if enough time has passed (to save on computations)
+        if ( time - isos%par%time_diagnostics .ge. 1e-3) then
+            update_diagnostics = .TRUE.
+            isos%par%time_diagnostics = isos%par%time_diagnostics + isos%par%dt_diagnostics
+        else
+            update_diagnostics = .FALSE.
+        end if
 
-            ! Get current dt (either total time or maximum allowed timestep)
-            dt_now = min(dt, isos%par%dt_prognostics)
-            ! write(*,*) time
+        ! write(*,*) "isos_update:: Update 2"
+        call calc_masks(isos%now)
+        call calc_columnanoms_ice(isos)
+        call calc_columnanoms_seawater(isos)
+        call calc_columnanoms_load(isos)
 
-            ! write(*,*) "isos_update:: updating diagnostic bool..."
-            ! Only update diagnostics if enough time has passed (to save on computations)
-            if ( (isos%par%time_prognostics+dt_now) - isos%par%time_diagnostics .ge. 1e-3) then
-                update_diagnostics = .TRUE.
-                isos%par%time_diagnostics = isos%par%time_diagnostics + isos%par%dt_diagnostics
-            else
-                update_diagnostics = .FALSE.
-            end if
-
-            ! write (*,*) "time_prog, time_diag, update_diag: ", &
-            !     isos%par%time_prognostics, isos%par%time_diagnostics, update_diagnostics
-            ! call nan_check(isos,1)
-
-            ! write(*,*) "isos_update:: Update 2"
-            call calc_masks(isos%now)
-            call calc_columnanoms_ice(isos)
-            call calc_columnanoms_seawater(isos)
-            call calc_columnanoms_load(isos)
-
-            ! write(*,*) "isos_update:: Update 3"
-            if (update_diagnostics) then
-                if (isos%par%include_elastic) then
-                    call precomputed_fftconvolution(isos%now%we, isos%domain%FGE, &
-                        isos%now%canom_load * isos%par%g * isos%domain%K ** 2.0, &
-                        isos%domain%i1, isos%domain%i2, &
-                        isos%domain%j1, isos%domain%j2, isos%domain%offset, &
-                        isos%domain%nx, isos%domain%ny, &
-                        isos%domain%forward_dftplan_r2c, isos%domain%backward_dftplan_c2r)
-                else
-                    isos%now%we = 0.0_wp
-                end if
-                ! write(*,*) "Extrema of we: ", minval(isos%now%we), maxval(isos%now%we)
-            endif
-
-            ! write(*,*) "isos_update:: Update 4"
-            call calc_columnanoms_lithosphere(isos)
-            call calc_columnanoms_full(isos)
-            call calc_mass_anom(isos)
-            ! call nan_check(isos,2)
-
-            ! write(*,*) "isos_update:: Update 5"
-            if (update_diagnostics) then
-                if (isos%par%heterogeneous_ssh) then
-                    call precomputed_fftconvolution(isos%now%dz_ss, isos%domain%FGN, &
-                        isos%now%mass_anom, isos%domain%i1, isos%domain%i2, &
-                        isos%domain%j1, isos%domain%j2, isos%domain%offset, &
-                        isos%domain%nx, isos%domain%ny, &
-                        isos%domain%forward_dftplan_r2c, isos%domain%backward_dftplan_c2r)
-                else
-                    isos%now%dz_ss = 0.0_wp
-                end if
-            end if
-
-            ! write(*,*) "isos_update:: Update 6"
-            call calc_z_ss(isos%now%z_ss, isos%now%bsl, isos%ref%z_ss, isos%now%dz_ss)
-            call calc_masks(isos%now)
-            call calc_columnanoms_seawater(isos)
-            call calc_columnanoms_load(isos)
-
-            ! write(*,*) "isos_update:: Update 7"
-            ! Step 1: diagnose equilibrium displacement and rate of bedrock uplift
-            select case(isos%par%method)
-
-            ! Case 0 turns off vertical displacement
-            case(0)
-
-                isos%now%w_equilibrium = 0.0
-                isos%now%dwdt = 0.0
-
-            ! LLRA
-            case(1)
-                call calc_llra_equilibrium(isos%now%w_equilibrium, &
-                    isos%now%canom_load, isos%par%rho_uppermantle)
-                call calc_asthenosphere_relax(isos%now%dwdt, isos%now%w, &
-                    isos%now%w_equilibrium, isos%domain%tau)
-
-            ! LV-ELRA (Coulon et al. 2021).
-            ! Gives ELRA (LeMeur and Huybrechts 1996) if tau = const.
-            case(2)
-
-                call precomputed_fftconvolution(isos%now%w_equilibrium, isos%domain%FGV, &
-                    -isos%now%canom_load * isos%par%g * isos%domain%K ** 2.0, &
+        ! write(*,*) "isos_update:: Update 3"
+        if (update_diagnostics) then
+            if (isos%par%include_elastic) then
+                call precomputed_fftconvolution(isos%now%we, isos%domain%FGE, &
+                    isos%now%canom_load * isos%par%g * isos%domain%K ** 2.0, &
                     isos%domain%i1, isos%domain%i2, &
                     isos%domain%j1, isos%domain%j2, isos%domain%offset, &
                     isos%domain%nx, isos%domain%ny, &
                     isos%domain%forward_dftplan_r2c, isos%domain%backward_dftplan_c2r)
+            else
+                isos%now%we = 0.0_wp
+            end if
+            ! write(*,*) "Extrema of we: ", minval(isos%now%we), maxval(isos%now%we)
+        endif
 
-                call apply_zerobc_at_corners(isos%now%w_equilibrium, isos%domain%nx, &
-                    isos%domain%ny)
-                call calc_asthenosphere_relax(isos%now%dwdt, isos%now%w, &
-                    isos%now%w_equilibrium, isos%domain%tau)
+        ! write(*,*) "isos_update:: Update 4"
+        call calc_columnanoms_lithosphere(isos)
+        call calc_columnanoms_full(isos)
+        call calc_mass_anom(isos)
+        ! call nan_check(isos,2)
 
-            ! LV-ELVA (Swierczek-jereczek et al. 2024).
-            ! Gives ELVA (Bueler et al. 2007) if eta = const.
-            case(3)
-                call calc_columnanoms_full(isos)
-                call calc_lvelva(isos%now%dwdt, isos%now%w, isos%now%canom_full, &
-                    isos%domain%maskactive, isos%par%g, isos%par%nu, isos%domain%D_lith, &
-                    isos%domain%eta_eff, isos%domain%kappa, isos%domain%R, &
+        ! write(*,*) "isos_update:: Update 5"
+        if (update_diagnostics) then
+            if (isos%par%heterogeneous_ssh) then
+                call precomputed_fftconvolution(isos%now%dz_ss, isos%domain%FGN, &
+                    isos%now%mass_anom, isos%domain%i1, isos%domain%i2, &
+                    isos%domain%j1, isos%domain%j2, isos%domain%offset, &
                     isos%domain%nx, isos%domain%ny, &
-                    isos%domain%dx_matrix, isos%domain%dy_matrix, isos%par%sec_per_year, &
-                    isos%domain%forward_fftplan_r2r, isos%domain%backward_fftplan_r2r)
-            end select
-
-            if (dt_now .gt. 0.0) then
-
-                !# TODO: do we need this? If yes, lines below should be adapted adequatly
-                ! Additionally apply bedrock adjustment field (zero if dwdt_corr not provided as argument)
-                ! isos%now%z_bed = isos%now%z_bed + dwdt_corr_ext*dt_now
-                isos%now%w = isos%now%w + isos%now%dwdt*dt_now
-                call apply_zerobc_at_corners(isos%now%w, isos%domain%nx, isos%domain%ny)
-                call calc_columnanoms_mantle(isos)
-                isos%now%z_bed = isos%ref%z_bed + isos%now%w + isos%now%we
-                isos%par%time_prognostics = isos%par%time_prognostics + dt_now
-
+                    isos%domain%forward_dftplan_r2c, isos%domain%backward_dftplan_c2r)
+            else
+                isos%now%dz_ss = 0.0_wp
             end if
+        end if
 
-            if ( abs(time-isos%par%time_prognostics) .lt. 1e-5) then 
-                ! Final time has been reached, exit the loop 
-                isos%par%time_prognostics = time 
-                exit
-            end if
-        end do
+        ! write(*,*) "isos_update:: Update 6"
+        call calc_z_ss(isos%now%z_ss, isos%now%bsl, isos%ref%z_ss, isos%now%dz_ss)
+        call calc_masks(isos%now)
+        call calc_columnanoms_seawater(isos)
+        call calc_columnanoms_load(isos)
 
+        select case(trim(isos%par%dt_method))
+        case("euler")
+            call step_euler(get_dwdt, time, isos%ode, isos)
+
+        case("rk4")
+            call step_rk4(get_dwdt, time, isos%ode, isos)
+
+        case("bs32")
+            call step_bs32(get_dwdt, time, isos%ode, isos)
+
+        ! case("tsit54")
+        !     call step_tsit54(get_dwdt, time, isos%ode, isos)
+
+        case DEFAULT
+
+            write(error_unit,*) ""
+            write(error_unit,*) "step:: Error: method not recognized."
+            write(error_unit,*) "method = ", isos%par%dt_method
+            stop
+        end select
+        
+        call apply_zerobc_at_corners(isos%now%w, isos%domain%nx, isos%domain%ny)
+        call calc_columnanoms_mantle(isos)
+        isos%now%z_bed = isos%ref%z_bed + isos%now%w + isos%now%we
+        isos%par%time_prognostics = time
         call check_isos_instabilities(isos%now)
         call cropstate2out(isos%out, isos%now, isos%domain)
 
@@ -941,7 +951,6 @@ contains
         call nml_read(filename,group,"correct_compression", par%correct_compression)
         call nml_read(filename,group,"method",              par%method)
         call nml_read(filename,group,"dt_diagnostics",      par%dt_diagnostics)
-        call nml_read(filename,group,"dt_prognostics",      par%dt_prognostics)
         call nml_read(filename,group,"pad",                 par%min_pad)
 
         call nml_read(filename,group,"mantle",          par%mantle) 
@@ -994,6 +1003,13 @@ contains
             par%use_restart = .TRUE.
         end if
 
+        call nml_read(filename,group,"dt_method", par%dt_method)
+        call nml_read(filename,group,"atol",   par%atol)
+        call nml_read(filename,group,"rtol",   par%rtol)
+        call nml_read(filename,group,"dt_min", par%dt_min)
+        call nml_read(filename,group,"dt_max", par%dt_max)
+        call nml_read(filename,group,"dt_init", par%dt_init)
+
         return
     end subroutine isos_par_load
 
@@ -1012,6 +1028,7 @@ contains
         call allocate_isos_state(isos%now, isos%domain%nx, isos%domain%ny)
         call allocate_isos_state(isos%ref, isos%domain%nx, isos%domain%ny)
         call allocate_isos_out(isos%out, nx_out, ny_out)
+        call allocate_ode(isos%ode, isos%domain%nx, isos%domain%ny)
 
         return
     end subroutine allocate_isos
@@ -1223,6 +1240,42 @@ contains
         allocate(out%maskcontinent(nx, ny))
         return
     end subroutine allocate_isos_out
+
+    subroutine allocate_ode(ode, nx, ny)
+        implicit none
+        type(ode_class), intent(INOUT) :: ode
+        integer, intent(IN) :: nx, ny
+
+        allocate(ode%x(nx, ny))
+        allocate(ode%x1(nx, ny))
+        allocate(ode%x2(nx, ny))
+
+        allocate(ode%k1(nx, ny))
+        allocate(ode%k2(nx, ny))
+        allocate(ode%k3(nx, ny))
+        allocate(ode%k4(nx, ny))
+        allocate(ode%k5(nx, ny))
+        allocate(ode%k6(nx, ny))
+
+        return
+    end subroutine allocate_ode
+
+    subroutine deallocate_ode(ode)
+        implicit none
+        type(ode_class), intent(INOUT) :: ode
+
+        if (allocated(ode%x1)) deallocate(ode%x1)
+        if (allocated(ode%x2)) deallocate(ode%x2)
+
+        if (allocated(ode%k1)) deallocate(ode%k1)
+        if (allocated(ode%k2)) deallocate(ode%k2)
+        if (allocated(ode%k3)) deallocate(ode%k3)
+        if (allocated(ode%k4)) deallocate(ode%k4)
+        if (allocated(ode%k5)) deallocate(ode%k5)
+        if (allocated(ode%k6)) deallocate(ode%k6)
+
+        return
+    end subroutine deallocate_ode
 
     subroutine nc_read_and_scale_vec(fname, varname, vals)
 

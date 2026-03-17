@@ -7,6 +7,28 @@ module isostasy_defs
 
     real(wp), parameter :: pi = 3.14159265359
 
+
+    type ode_class
+        real(wp) :: t
+        real(wp) :: dt
+        real(wp), allocatable :: x(:, :)
+        real(wp), allocatable :: x1(:, :)
+        real(wp), allocatable :: x2(:, :)
+        real(wp), allocatable :: k1(:, :)
+        real(wp), allocatable :: k2(:, :)
+        real(wp), allocatable :: k3(:, :)
+        real(wp), allocatable :: k4(:, :)
+        real(wp), allocatable :: k5(:, :)
+        real(wp), allocatable :: k6(:, :)
+        real(wp), allocatable :: y1(:, :)
+        real(wp), allocatable :: y2(:, :)
+        real(wp), allocatable :: y3(:, :)
+        real(wp), allocatable :: y4(:, :)
+        real(wp), allocatable :: y5(:, :)
+        real(wp), allocatable :: y6(:, :)
+
+    end type
+
     type isos_param_class
         logical     :: heterogeneous_ssh    ! Sea level varies spatially?
         logical     :: interactive_sealevel ! Sea level interacts with solid Earth deformation?
@@ -14,7 +36,6 @@ module isostasy_defs
         logical     :: correct_compression  ! Account for compression effects on relaxation time?
         logical     :: correct_distortion   ! Account for distortion of projection?
         integer     :: method               ! Computation method for viscous displacement
-        real(wp)    :: dt_prognostics       ! [yr] Timestep to recalculate prognostics
         real(wp)    :: dt_diagnostics       ! [yr] Timestep to recalculate diagnostics
         real(wp)    :: min_pad              ! [km] Padding around domain
 
@@ -65,6 +86,13 @@ module isostasy_defs
 
         ! Internal parameter
         logical :: ref_was_set
+
+        character(len=56)   :: dt_method
+        real(wp) :: atol
+        real(wp) :: rtol
+        real(wp) :: dt_min
+        real(wp) :: dt_max
+        real(wp) :: dt_init
         
     end type
 
@@ -174,9 +202,12 @@ module isostasy_defs
         type(isos_state_class)  :: now
         type(isos_state_class)  :: ref
         type(isos_out_class)    :: out
+        type(ode_class)         :: ode
     end type
 
+
     public :: sp, dp, wp
+    public :: ode_class
     public :: isos_param_class
     public :: isos_domain_class
     public :: isos_state_class
