@@ -57,7 +57,7 @@ module fastisostasy
     public :: step_euler
     public :: step_rk4
     public :: step_bs32
-    ! public :: step_tsit54
+    public :: step_tsit54
 
 contains
     
@@ -842,8 +842,8 @@ contains
         case("bs32")
             call step_bs32(get_dwdt, time, isos%ode, isos)
 
-        ! case("tsit54")
-        !     call step_tsit54(get_dwdt, time, isos%ode, isos)
+        case("tsit54")
+            call step_tsit54(get_dwdt, time, isos%ode, isos)
 
         case DEFAULT
 
