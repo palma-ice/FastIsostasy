@@ -1023,6 +1023,7 @@ contains
         call deallocate_isos_state(isos%now)
         call deallocate_isos_state(isos%ref)
         call deallocate_isos_out(isos%out)
+        call deallocate_ode(isos%ode)
 
         call allocate_isos_domain(isos%domain, isos%domain%nx, isos%domain%ny, nl)
         call allocate_isos_state(isos%now, isos%domain%nx, isos%domain%ny)
@@ -1134,6 +1135,31 @@ contains
         if (allocated(out%maskcontinent))   deallocate(out%maskcontinent)
         return
     end subroutine deallocate_isos_out
+
+    subroutine deallocate_ode(ode)
+        implicit none
+        type(ode_class), intent(INOUT) :: ode
+
+        if (allocated(ode%x))  deallocate(ode%x)
+        if (allocated(ode%x1)) deallocate(ode%x1)
+        if (allocated(ode%x2)) deallocate(ode%x2)
+
+        if (allocated(ode%k1)) deallocate(ode%k1)
+        if (allocated(ode%k2)) deallocate(ode%k2)
+        if (allocated(ode%k3)) deallocate(ode%k3)
+        if (allocated(ode%k4)) deallocate(ode%k4)
+        if (allocated(ode%k5)) deallocate(ode%k5)
+        if (allocated(ode%k6)) deallocate(ode%k6)
+
+        if (allocated(ode%y1)) deallocate(ode%y1)
+        if (allocated(ode%y2)) deallocate(ode%y2)
+        if (allocated(ode%y3)) deallocate(ode%y3)
+        if (allocated(ode%y4)) deallocate(ode%y4)
+        if (allocated(ode%y5)) deallocate(ode%y5)
+        if (allocated(ode%y6)) deallocate(ode%y6)
+
+        return
+    end subroutine deallocate_ode
 
     subroutine allocate_isos_domain(domain, nx, ny, nl)
         implicit none
@@ -1257,25 +1283,15 @@ contains
         allocate(ode%k5(nx, ny))
         allocate(ode%k6(nx, ny))
 
+        allocate(ode%y1(nx, ny))
+        allocate(ode%y2(nx, ny))
+        allocate(ode%y3(nx, ny))
+        allocate(ode%y4(nx, ny))
+        allocate(ode%y5(nx, ny))
+        allocate(ode%y6(nx, ny))
+
         return
     end subroutine allocate_ode
-
-    subroutine deallocate_ode(ode)
-        implicit none
-        type(ode_class), intent(INOUT) :: ode
-
-        if (allocated(ode%x1)) deallocate(ode%x1)
-        if (allocated(ode%x2)) deallocate(ode%x2)
-
-        if (allocated(ode%k1)) deallocate(ode%k1)
-        if (allocated(ode%k2)) deallocate(ode%k2)
-        if (allocated(ode%k3)) deallocate(ode%k3)
-        if (allocated(ode%k4)) deallocate(ode%k4)
-        if (allocated(ode%k5)) deallocate(ode%k5)
-        if (allocated(ode%k6)) deallocate(ode%k6)
-
-        return
-    end subroutine deallocate_ode
 
     subroutine nc_read_and_scale_vec(fname, varname, vals)
 
