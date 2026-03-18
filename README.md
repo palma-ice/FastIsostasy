@@ -7,9 +7,11 @@ FastIsostasy is a model that regionally computes the glacial isostatic adjustmen
 3. Elastic lithosphere, relaxed astenosphere (ELVA; Cathles, 1975; Lingle and Clark, 1985; Bueler et al., 2007).
 4. Laterally-Variable ELVA (LV-ELVA; Swierczek-Jereczek et al., 2024).
 
+In the future, the laterally-variable ELRA (LV-ELRA; Coulon et al., 2021) and the Green's function approach (Adhikari et al., in rev.) will also be implemented.
+
 If you are interested in coupling FastIsostasy to your ice-sheet model, the remainder of the README.md is for you! It provides the initial steps to get started with FastIsostasy (stand-alone) and the few lines of fortran code needed for a correct interaction with an ice sheet model.
 
-If compatible with your research ecosystem, you should preferably use the [Julia implementation](https://github.com/JanJereczek/FastIsostasy.jl), which offers extend capabilities (GPU acceleration, higher-order time integration schemes, adaptive time stepping). 
+If compatible with your research ecosystem, you should preferably use the [Julia implementation](https://github.com/JanJereczek/FastIsostasy.jl), which offers extend capabilities (GPU acceleration, flexible interface, plotting routines). 
 
 ## Getting started (stand-alone)
 
@@ -56,18 +58,18 @@ That's it!
 
 ### Test 1
 
-Reproducing the idealised load experiment from Bueler et al. (2007) with `isos.include_elastic = .false.` and :
-1. `isostasy.method = 0`
-2. `isostasy.method = 1`
-3. `isostasy.method = 2`
-4. `isostasy.method = 3` one layer for mantle
-5. `isostasy.method = 3` two layers for mantle + `isostasy.lumping = "freqdomain`.
+Reproduce the idealised load experiment from Bueler et al. (2007) with `isos.include_elastic = .false.` and:
+1. `isostasy.method = 0`: no bedrock deformation.
+2. `isostasy.method = 1`: LLRA bedrock deformation.
+3. `isostasy.method = 2`: ELRA bedrock deformation.
+4. `isostasy.method = 3`: LV-ELVA bedrock deformation.
+5. `isostasy.method = 3`: LV-ELVA bedrock deformation with low-viscosity layer.
 
 ### Test 2
 
 Reproducing 1D GIA benchmark from Spada et al. (2011) with elastic displacement, viscous diplacement = ELVA, and:
 
-1. `isostasy.lumping = "max"`
+1. `isostasy.lumping = "logmean"`
 2. `isostasy.lumping = "min"`
 3. `isostasy.lumping = "freqdomain"`
 
@@ -91,7 +93,7 @@ Greenland simulation of ice thickening and:
 1. `isostasy.method = 2`
 2. `isostasy.method = 3` one layer for mantle
 3. `isostasy.method = 3` two layers for mantle + `isostasy.lumping = "freqdomain`.
-
+4. `isostasy.method = 3` with LV rheology (to-do).
 
 
 ## Coupling FastIsostasy to your favorite ice-sheet model
@@ -248,9 +250,17 @@ FastIsostasy relies on a 2D field of effective viscosity, which is obtained by p
 
 FastIsostasy automatically writes a restart file per domain and an additional one for the barystatic sea level. They can be used to initialize a simulation by setting `restart = "path_to_file.nc"`.
 
-### Choosing the right time step
+### Choosing the time stepping method
 
-FastIsostasy only offers adaptive time stepping in its [Julia implementation](https://github.com/JanJereczek/FastIsostasy.jl), which saves computational time when possible and reduces the time step to avoid instabilities when needed. The fortran version of the code only offers fixed time stepping and `dt_prognostics=1` (yr) is sufficient for most experiments. Because of the CFL condition, `dt_prognostics` can be large for low spatial resolution and needs to be small for high spatial resolutions. For a given resolution, high gradients of the lithospheric thickness, low viscosities of the mantle and abrupt changes of the load can require a lower time step.
+FastIsostasy offers a few options for the time stepping method `isos.dt_method`:
+- "euler" which is a first-order explicit method, with fixed time stepping.
+- "rk4" which is a fourth-order Runge-Kutta method, with fixed time stepping.
+- "bs32" which is a third-order, two-stage Bogacki-Shampine method, with adaptive time stepping.
+- "tsit54" which is a fifth-order, four-stage Tsitouras method, with adaptive time stepping.
+
+The default choice is "tsit54", which is a good compromise between accuracy and computational time. The user can however choose another method if desired. The main advantage of the adaptive time stepping methods is that they automatically adjust the time step to ensure stability and accuracy, which can save computational time when possible and reduce the time step to avoid instabilities when needed. 
+
+For high resolutions, low viscosities, abrupt changes of the load and/or high gradients of the lithospheric thickness, the time step can become very small and therefore increase the computational time. In this case, it might be desirable impose a minimum time step through `dt_min` or to switch to a fixed time stepping method.
 
 To save time, diagnostic variables (the sea-surface elevation and the elastic displacement) are only computed every `dt_diagnostics` which should be typically chosen as a multiple of `dt_prognostics`. For most simulation `dt_diagnostics = 10` (yr) is sufficient but it can be made much smaller since the convolution operations underlying the computation of the diagnostic variables are optimized.
 
