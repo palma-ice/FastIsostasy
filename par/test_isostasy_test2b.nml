@@ -30,7 +30,10 @@
                                     ! viscosity field is provided.
     ref_viscosity = 1.e21           ! [Pa s] Reference viscosity for scaling
     tau = 3000.0                    ! [yr] Relaxation time used for "method" = 2
-
+    rheo_smoothing_radius = 40.0    ! [km] Gaussian moothing radius for lithospheric thickness
+                                    ! and mantle viscosity
+    litho_thickness_scaling = 1.0   ! Scaling factor for lithospheric thickness. Only used if lithosphere = "rheology_file"
+    
     ! Physical constants
     E               = 128.0         ! [GPa] Young modulus
     nu              = 0.28          ! [-] Poisson ratio
@@ -41,13 +44,24 @@
     rho_litho       = 3000.0        ! [kg/m^3]  Optionally set to 0 ==> decouple the elastic
                                     ! displacement from the viscous one
     g               = 9.81          ! [m/s^2]
-    r_earth         = 6.378e3       ! [km]  Earth radius, Coulon et al. (2021)
+    r_earth         = 6.378e6       ! [m]  Earth radius, Coulon et al. (2021)
     m_earth         = 5.972e24      ! [kg] Earth mass,   Coulon et al. (2021)
     
     ! Files
     restart = "None"
     mask_file = "None"
     rheology_file = "None"
+
+    ! Time stepping
+    dt_method = "tsit54"    ! Time stepping method, options: "euler", "rk4", "bs32", "tsit54"
+    dt_init = 1.0           ! [yr] Initial time step for time stepping method. If dt_method
+                            ! is "euler" or "rk4", this value is used throughout the simulation.
+                            ! If dt_method is "bs32" or "tsit54", the time step is adapted
+                            ! during the simulation, and this value is only used as an initial guess.
+    dt_min = 1e-10          ! [yr] Minimum dt. Only used if dt_method is "bs32" or "tsit54".
+    dt_max = 10.0           ! [yr] Maximum dt. Only used if dt_method is "bs32" or "tsit54".
+    rtol = 1e-4             ! Relative tol. Only used if dt_method is "bs32" or "tsit54".
+    atol = 1e-2             ! Absolute tol. Only used if dt_method is "bs32" or "tsit54".
 /
 
 &barysealevel
