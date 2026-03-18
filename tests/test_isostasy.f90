@@ -56,7 +56,7 @@ program test_isostasy
 
     ! === Define experiment to be run ====
 
-    experiment = "test4a"
+    experiment = "test1d"
 
     ! Tests are defined in Swierczek-Jereczek et al. (2024), GMD.
     ! Additional: "test5" = Lucía's Greenland ice-sheet load (since 15 ka)
@@ -68,7 +68,7 @@ program test_isostasy
             case("test1a", "test1b", "test1c", "test1d", "test1e")
                 time_init = 0.
                 time_end  = 50.e3
-                dtt       = 1.0
+                dtt       = 10.0
                 dt_out    = 1.e3
                 dx        = 50.e3
                 dy = dx
@@ -92,7 +92,7 @@ program test_isostasy
             case("test3a","test3b","test3c","test3d")
                 time_init = 0.
                 time_end  = 50.e3
-                dtt       = 1.0
+                dtt       = 10.0
                 dt_out    = 1.e3
                 dx        = 50.e3
                 dy = dx
@@ -104,7 +104,7 @@ program test_isostasy
             case("test4a", "test4b")
                 time_init =  -122.5e3
                 time_end  =    0.25e3
-                dtt       = 1.0
+                dtt       = 10.0
                 dt_out    = 1.e3
                 dx = 32.e3
                 dy = dx
@@ -116,7 +116,7 @@ program test_isostasy
             case("test5a", "test5b")
                 time_init = 0.
                 time_end  = 15.e3
-                dtt       = 1.0
+                dtt       = 10.0
                 dt_out    = 1.e3
                 dx = 16.e3
                 dy = dx

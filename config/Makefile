@@ -52,6 +52,9 @@ $(objdir)/green_functions.o: $(srcdir)/green_functions.f90 $(objdir)/isostasy_de
 $(objdir)/kelvin_function.o: $(srcdir)/kelvin_function.f90 $(objdir)/isostasy_defs.o
 	$(FC) $(DFLAGS) $(FFLAGS) -c -o $@ $<
 
+$(objdir)/integrators.o: $(srcdir)/integrators.f90 $(objdir)/isostasy_defs.o
+	$(FC) $(DFLAGS) $(FFLAGS) -c -o $@ $<
+
 # 2 dependences
 $(objdir)/convolutions.o: $(srcdir)/convolutions.f90 $(objdir)/isostasy_defs.o $(objdir)/isos_utils.o
 	$(FC) $(DFLAGS) $(FFLAGS) -c -o $@ $<
@@ -75,7 +78,7 @@ $(objdir)/lv_elva.o: $(srcdir)/lv_elva.f90 $(objdir)/isostasy_defs.o $(objdir)/f
 $(objdir)/fastisostasy.o: $(srcdir)/fastisostasy.f90 $(objdir)/isostasy_defs.o $(objdir)/isos_utils.o \
 						$(objdir)/isostasy_io.o $(objdir)/lv_elva.o \
 						$(objdir)/green_functions.o $(objdir)/kelvin_function.o $(objdir)/sealevel.o \
-						$(objdir)/lv_xlra.o $(objdir)/barysealevel.o
+						$(objdir)/lv_xlra.o $(objdir)/barysealevel.o $(objdir)/integrators.o
 	$(FC) $(DFLAGS) $(FFLAGS) $(INC_FESMUTILS) $(INC_NC) -c -o $@ $<
 
 $(objdir)/isostasy_benchmarks.o: $(srcdir)/isostasy_benchmarks.f90 $(objdir)/isostasy_defs.o
