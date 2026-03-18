@@ -11,6 +11,7 @@ module isostasy_defs
     type ode_class
         real(wp) :: t
         real(wp) :: dt
+        
         real(wp), allocatable :: x(:, :)
         real(wp), allocatable :: x1(:, :)
         real(wp), allocatable :: x2(:, :)
@@ -20,6 +21,7 @@ module isostasy_defs
         real(wp), allocatable :: k4(:, :)
         real(wp), allocatable :: k5(:, :)
         real(wp), allocatable :: k6(:, :)
+
         real(wp), allocatable :: y1(:, :)
         real(wp), allocatable :: y2(:, :)
         real(wp), allocatable :: y3(:, :)
