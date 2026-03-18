@@ -331,6 +331,9 @@ module isostasy_io
         ! Update the time step
         call nc_write(filename,"time", time, dim1="time", start=[n], count=[1], ncid=ncid)
 
+        call nc_write(filename, "dt", isos%ode%dt, units="yr", long_name="Time step", &
+            dim1="time", start=[n], count=[1], ncid=ncid)
+
         ! Write variables
         call nc_write(filename, "H_ice", isos%out%Hice, units="m", long_name="Ice thickness", &
               dim1="xc", dim2="yc", dim3="time", start=[1, 1, n], ncid=ncid)
