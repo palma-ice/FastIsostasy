@@ -91,6 +91,7 @@ isostasy_libs = 	$(objdir)/precision.o \
 					$(objdir)/finite_differences.o \
 					$(objdir)/green_functions.o \
 					$(objdir)/kelvin_function.o \
+					$(objdir)/integrators.o \
 					$(objdir)/sealevel.o \
 					$(objdir)/lv_xlra.o \
 					$(objdir)/barysealevel.o \
