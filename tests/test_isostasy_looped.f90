@@ -57,7 +57,7 @@ program test_isostasy_looped
 
     ! === Define experiment to be run ====
 
-    n_xp = 16
+    n_xp = 15
     allocate(experiments(n_xp))
     experiments(1) = "test1a"
     experiments(2) = "test1b"
@@ -66,15 +66,15 @@ program test_isostasy_looped
     experiments(5) = "test1e"
     experiments(6) = "test2a"
     experiments(7) = "test2b"
-    experiments(8) = "test2c"
-    experiments(9) = "test3a"
-    experiments(10) = "test3b"
-    experiments(11) = "test3c"
-    experiments(12) = "test3d"
-    experiments(13) = "test4a"
-    experiments(14) = "test4b"
-    experiments(15) = "test5a"
-    experiments(16) = "test5b"
+    ! experiments(8) = "test2c"
+    experiments(8) = "test3a"
+    experiments(9) = "test3b"
+    experiments(10) = "test3c"
+    experiments(11) = "test3d"
+    experiments(12) = "test4a"
+    experiments(13) = "test4b"
+    experiments(14) = "test5a"
+    experiments(15) = "test5b"
 
     i_xp = 0
     do i_xp = 1, n_xp
