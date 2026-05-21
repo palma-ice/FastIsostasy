@@ -95,6 +95,7 @@ module isostasy_defs
         real(wp) :: dt_min
         real(wp) :: dt_max
         real(wp) :: dt_init
+        real(wp) :: q
         
     end type
 

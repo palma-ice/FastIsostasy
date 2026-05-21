@@ -15,16 +15,17 @@ contains
         type(ode_class), intent(inout) :: ode
         type(isos_class), intent(inout) :: isos
 
-        interface
-            function ode_rhs(x, t, isos) result(dxdt)
+        abstract interface
+            function ode_rhs_(x, t, isos) result(dxdt)
                 use isostasy_defs, only : wp, isos_class
                 implicit none
                 real(wp), intent(in) :: t
                 real(wp), intent(in) :: x(:, :)
                 type(isos_class), intent(inout) :: isos
                 real(wp), dimension(size(x, 1), size(x, 2)) :: dxdt
-            end function ode_rhs
+            end function ode_rhs_
         end interface
+        procedure(ode_rhs_) :: ode_rhs
 
         do while (ode%t < tf)
             ! handle last partial step cleanly
@@ -45,16 +46,17 @@ contains
         type(isos_class), intent(inout) :: isos
         real(wp) :: t, h
 
-        interface
-            function ode_rhs(x, t, isos) result(dxdt)
+        abstract interface
+            function ode_rhs_(x, t, isos) result(dxdt)
                 use isostasy_defs, only : wp, isos_class
                 implicit none
                 real(wp), intent(in) :: t
                 real(wp), intent(in) :: x(:, :)
                 type(isos_class), intent(inout) :: isos
                 real(wp), dimension(size(x, 1), size(x, 2)) :: dxdt
-            end function ode_rhs
+            end function ode_rhs_
         end interface
+        procedure(ode_rhs_) :: ode_rhs
 
         do while (ode%t < tf)
             ! handle last partial step cleanly
@@ -81,16 +83,17 @@ contains
         type(isos_class), intent(inout) :: isos
         real(wp) :: error, tol
 
-        interface
-            function ode_rhs(x, t, isos) result(dxdt)
+        abstract interface
+            function ode_rhs_(x, t, isos) result(dxdt)
                 use isostasy_defs, only : wp, isos_class
                 implicit none
                 real(wp), intent(in) :: t
                 real(wp), intent(in) :: x(:, :)
                 type(isos_class), intent(inout) :: isos
                 real(wp), dimension(size(x, 1), size(x, 2)) :: dxdt
-            end function ode_rhs
+            end function ode_rhs_
         end interface
+        procedure(ode_rhs_) :: ode_rhs
 
         do while (ode%t < tf)
             ! handle last partial step cleanly
@@ -116,7 +119,7 @@ contains
                 ode%x = ode%x2
                 isos%now%w = ode%x
                 ode%t = ode%t + ode%dt
-                ode%dt = min(ode%dt * 1/error, isos%par%dt_max)
+                ode%dt = min(ode%dt * (1/error) ** (1/isos%par%q), isos%par%dt_max)
                 write(*,*) "FastIso: t =", ode%t, " dt =", ode%dt, " error =", error
             else
                 ! Reject step and reduce time step
@@ -131,16 +134,17 @@ contains
         type(ode_class), intent(inout) :: ode
         type(isos_class), intent(inout) :: isos
 
-        interface
-            function ode_rhs(x, t, isos) result(dxdt)
+        abstract interface
+            function ode_rhs_(x, t, isos) result(dxdt)
                 use isostasy_defs, only : wp, isos_class
                 implicit none
                 real(wp), intent(in) :: t
                 real(wp), intent(in) :: x(:, :)
                 type(isos_class), intent(inout) :: isos
                 real(wp), dimension(size(x, 1), size(x, 2)) :: dxdt
-            end function ode_rhs
+            end function ode_rhs_
         end interface
+        procedure(ode_rhs_) :: ode_rhs
 
         real(wp) :: error, tol
         ! Coefficients for the Tsitouras 5(4) method
@@ -187,7 +191,7 @@ contains
                 ode%x = ode%x2
                 isos%now%w = ode%x
                 ode%t = ode%t + ode%dt
-                ode%dt = min(ode%dt * 1/error, isos%par%dt_max)
+                ode%dt = min(ode%dt * (1/error) ** (1/isos%par%q), isos%par%dt_max)
                 write(*,*) "FastIso: t =", ode%t, " dt =", ode%dt, " error =", error
             else
                 ! Reject step and reduce time step

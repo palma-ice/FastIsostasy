@@ -1009,6 +1009,7 @@ contains
         call nml_read(filename,group,"dt_min", par%dt_min)
         call nml_read(filename,group,"dt_max", par%dt_max)
         call nml_read(filename,group,"dt_init", par%dt_init)
+        call nml_read(filename,group,"q", par%q)
 
         return
     end subroutine isos_par_load
