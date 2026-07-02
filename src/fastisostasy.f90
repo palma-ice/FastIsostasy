@@ -641,6 +641,15 @@ contains
         isos%par%time_prognostics = time
         isos%par%time_diagnostics = time
 
+        ! Initialize the ODE solver state at the current time BEFORE the diagnostic
+        ! update below. The integrators advance `while (ode%t < tf)`, so with
+        ! ode%t == time the update rebuilds the diagnostics/output without stepping
+        ! the viscous displacement forward. This matters on a restart, where
+        ! isos%now%w is already the saved state and must not be advanced again.
+        isos%ode%dt = isos%par%dt_init
+        isos%ode%t = time
+        isos%ode%x = isos%now%w
+
         call isos_update(isos, H_ice, time, bsl)
 
         if ((minval(isos%domain%tau) .le. 0.0) .and. (isos%par%method .le. 2)) then
@@ -649,11 +658,6 @@ contains
         end if
 
         call isos_init_state_summary(isos)
-
-        ! Set initial state of the ODE solver
-        isos%ode%dt = isos%par%dt_init
-        isos%ode%t = time
-        isos%ode%x = isos%now%w
 
         return
 
