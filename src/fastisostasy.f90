@@ -52,6 +52,7 @@ module fastisostasy
     public :: bsl_init
     public :: bsl_update
     public :: bsl_restart_write
+    public :: bsl_restart_read
     public :: bsl_write_init
     public :: bsl_write_step
     public :: step_euler
@@ -612,7 +613,13 @@ contains
 
             ! Reference state has been set via the restart file
             isos%par%ref_was_set = .TRUE.
-            call extendice2isostasy(isos%now, z_bed, H_ice, isos%domain)
+
+            ! Refresh only the ice load from the (externally owned) H_ice; keep the
+            ! isostasy-owned z_bed exactly as restored. Round-tripping z_bed through
+            ! the ice grid (as extendice2isostasy does) is not identity and would
+            ! perturb Haf -> V_af -> deltaV_bsl, breaking bsl continuity.
+            isos%now%Hice = 0.0_wp
+            call out2in(isos%now%Hice, H_ice, isos%domain)
 
         else
             call out2in(isos%now%z_bed, z_bed, isos%domain)
@@ -650,6 +657,11 @@ contains
         isos%ode%t = time
         isos%ode%x = isos%now%w
 
+        ! Rebuild diagnostics/output from the (initial or restored) state. On a
+        ! restart this runs at time == time_prognostics with use_restart, so
+        ! isos_update leaves the prognostic bsl and the restored V_old baseline
+        ! untouched (see isos_update). On a cold start it seeds V_old from the
+        ! initial geometry (deltaV_bsl == 0, so bsl is unchanged anyway).
         call isos_update(isos, H_ice, time, bsl)
 
         if ((minval(isos%domain%tau) .le. 0.0) .and. (isos%par%method .le. 2)) then
@@ -732,11 +744,11 @@ contains
         dwdt = isos%now%dwdt
     end function get_dwdt
 
-    subroutine isos_update(isos, H_ice, time, bsl, dwdt_corr) 
+    subroutine isos_update(isos, H_ice, time, bsl, dwdt_corr)
 
         implicit none
 
-        type(isos_class), intent(INOUT) :: isos 
+        type(isos_class), intent(INOUT) :: isos
         real(wp), intent(IN)            :: H_ice(:, :)      ! [m] Current ice thickness
         real(wp), intent(IN)            :: time             ! [a] Current time
         type(bsl_class), intent(INOUT)  :: bsl
@@ -747,8 +759,22 @@ contains
         real(wp) :: dt, dt_now
         integer  :: n, nstep
         logical  :: update_diagnostics
+        logical  :: advance_bsl
 
         real(wp), allocatable :: dwdt_corr_ext(:,:)
+
+        ! Advance the prognostic barystatic sea level on a normal step, but
+        ! suppress it for the restart-time redo. On a restart the driver re-runs
+        ! the step at time_init (tstep_update leaves time == time_init when
+        ! ts%n == 0) and isos_init_state rebuilds diagnostics at that same time;
+        ! Yelmo is idempotent there (internal dt == 0), so isostasy must be too,
+        ! else bsl double-counts one coupling step. On a COLD start the ts%n == 0
+        ! iteration is a genuine first step (Yelmo integrates), so it must NOT be
+        ! suppressed -- hence the use_restart qualifier.
+        advance_bsl = .TRUE.
+        if (isos%par%use_restart .and. time <= isos%par%time_prognostics) then
+            advance_bsl = .FALSE.
+        end if
 
         ! write(*,*) "isos_update:: updating ice thickness..."
         isos%now%Hice = 0.0
@@ -765,17 +791,27 @@ contains
 
         ! write(*,*) "isos_update:: Update 1"
         call calc_Haf(isos%now, isos%par)
-        call calc_sl_contributions(isos)
 
-        if (trim(bsl%method) .eq. "fastiso") then
-            bsl%bsl_now = bsl%bsl_now - isos%now%deltaV_bsl / bsl%A_ocean_now
-            ! minus sign because what goes into ice sheet goes out of ocean.
-        end if
+        ! calc_sl_contributions recomputes the volume contributions AND rolls the
+        ! V_old baseline forward, so it must be gated together with the advance.
+        ! When suppressed (the restart redo / isos_init_state rebuild on a
+        ! restart) the restored V_af/V_den/V_pov are the correct V_old and must be
+        ! preserved: isostasy is coupled before the ice sheet, so the restart-time
+        ! ice is already one coupling step ahead of what the last real update saw.
+        ! Recomputing here would zero out the first real step's deltaV_bsl.
+        if (advance_bsl) then
+            call calc_sl_contributions(isos)
 
-        if (trim(bsl%method) .eq. "mixed") then
-            isos%now%dbsl_total = isos%now%dbsl_total + isos%now%deltaV_bsl / bsl%A_ocean_now
-            bsl%bsl_now = bsl%bsl_now - isos%now%dbsl_total
-            ! minus sign because what goes into ice sheet goes out of ocean.
+            if (trim(bsl%method) .eq. "fastiso") then
+                bsl%bsl_now = bsl%bsl_now - isos%now%deltaV_bsl / bsl%A_ocean_now
+                ! minus sign because what goes into ice sheet goes out of ocean.
+            end if
+
+            if (trim(bsl%method) .eq. "mixed") then
+                isos%now%dbsl_total = isos%now%dbsl_total + isos%now%deltaV_bsl / bsl%A_ocean_now
+                bsl%bsl_now = bsl%bsl_now - isos%now%dbsl_total
+                ! minus sign because what goes into ice sheet goes out of ocean.
+            end if
         end if
 
         isos%now%bsl = bsl%bsl_now

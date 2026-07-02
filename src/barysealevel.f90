@@ -32,6 +32,7 @@ module barysealevel
     public :: bsl_init
     public :: bsl_update
     public :: bsl_restart_write
+    public :: bsl_restart_read
     public :: bsl_write_init
     public :: bsl_write_step
 
@@ -449,6 +450,29 @@ contains
         call nc_close(ncid)
 
     end subroutine bsl_restart_write
+
+    subroutine bsl_restart_read(bsl, filename)
+        ! Restore the prognostic barystatic sea level from a restart file. Needed
+        ! for the "fastiso"/"mixed" methods, where bsl_now is a prognostic
+        ! accumulator that cannot be re-derived from time alone. Ocean surface area
+        ! (A_ocean_now) is left to be refreshed by the subsequent bsl_update.
+
+        implicit none
+        type(bsl_class),  intent(INOUT) :: bsl
+        character(len=*), intent(IN)    :: filename
+
+        if (nc_exists_var(filename, "bsl")) then
+            call nc_read(filename, "bsl", bsl%bsl_now, start=[1], count=[1])
+            bsl%bsl_init = bsl%bsl_now
+            write(*,*) "bsl_restart_read:: restored bsl_now = ", bsl%bsl_now, " m from "// &
+                trim(filename)
+        else
+            write(*,*) "bsl_restart_read:: WARNING: 'bsl' absent in "//trim(filename)// &
+                "; keeping bsl_init. Prognostic bsl will not be continuous."
+        end if
+
+        return
+    end subroutine bsl_restart_read
 
     subroutine bsl_write_init(bsl, filename, time_init)
 
