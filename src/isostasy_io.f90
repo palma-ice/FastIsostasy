@@ -124,6 +124,26 @@ module isostasy_io
         call nc_write(filename, "we_ref", isos%ref%we, units="m", dim1="xc", dim2="yc", &
             dim3="time", ncid=ncid, start=[1,1,n], count=[nx,ny,1])
 
+        ! Reference sea-surface height (recomputable from ref%bsl + ref%dz_ss, but
+        ! persisted directly so restarts trust the file rather than re-deriving).
+        call nc_write(filename, "z_ss_ref", isos%ref%z_ss, units="m", &
+            dim1="xc", dim2="yc", dim3="time", ncid=ncid, start=[1,1,n], count=[nx,ny,1])
+
+        ! Sea-level / volume scalars: required for bit-exact restart continuity of
+        ! the prognostic barystatic sea level (deltaV_bsl uses these as V_old).
+        call nc_write(filename, "ref_bsl", isos%ref%bsl, units="m", dim1="time", &
+            ncid=ncid, start=[n], count=[1])
+        call nc_write(filename, "now_bsl", isos%now%bsl, units="m", dim1="time", &
+            ncid=ncid, start=[n], count=[1])
+        call nc_write(filename, "V_af", isos%now%V_af, units="m3", dim1="time", &
+            ncid=ncid, start=[n], count=[1])
+        call nc_write(filename, "V_den", isos%now%V_den, units="m3", dim1="time", &
+            ncid=ncid, start=[n], count=[1])
+        call nc_write(filename, "V_pov", isos%now%V_pov, units="m3", dim1="time", &
+            ncid=ncid, start=[n], count=[1])
+        call nc_write(filename, "dbsl_total", isos%now%dbsl_total, units="m", dim1="time", &
+            ncid=ncid, start=[n], count=[1])
+
         call nc_write(filename, "He_lith", isos%domain%He_lith * 1e-3, units="km", dim1="xc", &
             dim2="yc", dim3="time", ncid=ncid, start=[1,1,n], count=[nx,ny,1])
         call nc_write(filename, "mask_active", isos%domain%maskactive, units="1", &
@@ -186,6 +206,38 @@ module isostasy_io
         call nc_read(filename, "we", isos%now%we, start=[1,1,1], &
             count=[isos%domain%nx, isos%domain%ny, 1])
         ! write(*,*) "Extrema we: ", minval(isos%now%we), maxval(isos%now%we)
+
+        ! --- Sea-level / volume state (soft: older restart files lack these) ---
+        ! Missing values are left at their zero-initialized defaults; ref%z_ss is
+        ! then re-derived from ref%bsl + ref%dz_ss in isos_init_state, reproducing
+        ! the legacy behaviour (with a warning) rather than failing hard.
+        if (nc_exists_var(filename, "ref_bsl")) then
+            call nc_read(filename, "ref_bsl", isos%ref%bsl, start=[1], count=[1])
+        else
+            write(*,*) "isos_restart_read:: WARNING: 'ref_bsl' absent; using default. "// &
+                "Regenerate restart for bit-exact bsl continuity."
+        end if
+
+        if (nc_exists_var(filename, "now_bsl")) &
+            call nc_read(filename, "now_bsl", isos%now%bsl, start=[1], count=[1])
+
+        if (nc_exists_var(filename, "z_ss_ref")) then
+            call nc_read(filename, "z_ss_ref", isos%ref%z_ss, start=[1,1,1], &
+                count=[isos%domain%nx, isos%domain%ny, 1])
+        end if
+
+        if (nc_exists_var(filename, "V_af")) then
+            call nc_read(filename, "V_af",  isos%now%V_af,  start=[1], count=[1])
+            call nc_read(filename, "V_den", isos%now%V_den, start=[1], count=[1])
+            call nc_read(filename, "V_pov", isos%now%V_pov, start=[1], count=[1])
+        else
+            write(*,*) "isos_restart_read:: WARNING: volume scalars (V_af/V_den/V_pov) "// &
+                "absent; deltaV_bsl baseline re-established on init. "// &
+                "Regenerate restart for bit-exact bsl continuity."
+        end if
+
+        if (nc_exists_var(filename, "dbsl_total")) &
+            call nc_read(filename, "dbsl_total", isos%now%dbsl_total, start=[1], count=[1])
 
         write(*,*) "isos_restart_read:: read in restart file: ", trim(filename)
 

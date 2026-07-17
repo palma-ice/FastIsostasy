@@ -1,5 +1,11 @@
 # FastIsostasy
 
+> **Compatibility (dev):** when used in the fesm ice-sheet stack, FastIsostasy must be
+> rebuilt against **fesm-utils dev at `3f415cc` (2026-06-26) or later** (the release that
+> folded `coordinates` into `utils/src/coords/` and split `constants` out of `precision`).
+> FastIsostasy itself needs **no source changes** — it only uses the stable `ncio`/`nml`
+> interfaces — but its `libisostasy.a` must be relinked against the new fesm-utils.
+
 FastIsostasy is a model that regionally computes the glacial isostatic adjustment (GIA), as described in [Swierczek-Jereczek et al. (2024)](https://gmd.copernicus.org/articles/17/5263/2024/). It approximates the gravitational response, accounts for the resulting heterogeneity of the sea-surface height and computes the evolution of masks (continent, ocean, floating ice, grounded ice), as well as the load anomalies applied upon the solid Earth. The resulting bedrock deformation can be computed with different models:
 
 1. Local lithosphere, relaxed asthenosphere (LLRA).
