@@ -885,6 +885,9 @@ contains
         case("tsit54")
             call step_tsit54(get_dwdt, time, isos%ode, isos)
 
+        case("rkc")
+            call step_rkc(get_dwdt, time, isos%ode, isos)
+
         case DEFAULT
 
             write(error_unit,*) ""
