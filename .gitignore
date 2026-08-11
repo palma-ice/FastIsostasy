@@ -12,3 +12,4 @@ output/*
 input/ice6gd/
 src/*.mod
 isostasy_data
+plot-tests/plots
