@@ -57,10 +57,13 @@ module isostasy_defs
         real(wp)                :: eta_ref          ! [Pa s] Reference viscosity for scaling
         real(wp)                :: tau              ! [yr] Asthenospheric relaxation time
 
-        ! Physical constants
-        real(wp) :: rho_water
-        real(wp) :: rho_ice
-        real(wp) :: rho_seawater
+        ! Physical constants. The four that phys_constants owns carry Earth
+        ! defaults, since isos_init takes them from a phys_const_class when one
+        ! is supplied and then isos_par_load does not read them from the
+        ! namelist. Standalone runs still set them in the &isos group.
+        real(wp) :: rho_water    = 1000.0_wp
+        real(wp) :: rho_ice      =  910.0_wp
+        real(wp) :: rho_seawater = 1028.0_wp
         real(wp) :: rho_uppermantle
         real(wp) :: rho_litho
         real(wp) :: Vden_factor
@@ -70,7 +73,7 @@ module isostasy_defs
         real(wp) :: compressibility_correction
 
         real(wp) :: sec_per_year
-        real(wp) :: g
+        real(wp) :: g            =    9.81_wp
         real(wp) :: r_earth
         real(wp) :: m_earth
 

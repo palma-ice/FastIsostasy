@@ -21,6 +21,7 @@ module fastisostasy
     use lv_xlra
     use convolutions
     use ncio
+    use phys_constants, only : phys_const_class, phys_const_require, phys_const_get
     use isostasy_io
     use lv_elva
     use sealevel
@@ -62,7 +63,7 @@ module fastisostasy
 
 contains
     
-    subroutine isos_init(isos, filename, group, nx_ice, ny_ice, dx, dy, rho_ice, K)
+    subroutine isos_init(isos, filename, group, nx_ice, ny_ice, dx, dy, cnst, K)
 
         implicit none
 
@@ -74,7 +75,7 @@ contains
         real(wp), intent(IN)  :: dx
         real(wp), intent(IN)  :: dy
 
-        real(wp), intent(IN), optional  :: rho_ice
+        type(phys_const_class), intent(IN), optional :: cnst
         real(wp), intent(IN), optional  :: K(:, :)
 
         ! Local variables
@@ -95,10 +96,21 @@ contains
         
         ! write(*,*) "Defining params..."
         write(*,*) "nx_ice, ny_ice: ", nx_ice, ny_ice
-        call isos_par_load(isos%par, filename, group)
+        call isos_par_load(isos%par, filename, group, skip_phys_const=present(cnst))
+
+        ! Physical constants: take them from the shared record when the caller
+        ! supplies one, so that a coupled program has a single definition site.
+        ! rho_uppermantle and rho_litho stay with the namelist; they have no
+        ! counterpart in phys_constants.
+        if (present(cnst)) then
+            call phys_const_require(cnst, "isos_init")
+            call phys_const_get(cnst, "rho_ice", isos%par%rho_ice)
+            call phys_const_get(cnst, "rho_w",   isos%par%rho_water)
+            call phys_const_get(cnst, "rho_sw",  isos%par%rho_seawater)
+            call phys_const_get(cnst, "g",       isos%par%g)
+        end if
 
         if (present(K))         isos%par%correct_distortion     = .true.
-        if (present(rho_ice))   isos%par%rho_ice                = rho_ice
         
         ! write(*,*) "Padding domain..."
         call init_domain_size(isos%domain, nx_ice, ny_ice, dx, dy, isos%par%min_pad)
@@ -962,7 +974,7 @@ contains
         return
     end subroutine isos_end
 
-    subroutine isos_par_load(par, filename, group)
+    subroutine isos_par_load(par, filename, group, skip_phys_const)
 
         use nml
 
@@ -971,16 +983,27 @@ contains
         type(isos_param_class), intent(OUT) :: par
         character(len=*),       intent(IN)  :: filename 
         character(len=*),       intent(IN)  :: group 
+        ! Do not read rho_water, rho_ice, rho_seawater and g: the caller takes
+        ! them from a phys_const_class instead, so the &isos group need not
+        ! (and should not) declare them.
+        logical,                intent(IN), optional :: skip_phys_const
+
+        logical :: read_phys_const
+
+        read_phys_const = .true.
+        if (present(skip_phys_const)) read_phys_const = .not. skip_phys_const
 
         ! Physical constants
         call nml_read(filename,group,"E",               par%E)
         call nml_read(filename,group,"nu",              par%nu)
-        call nml_read(filename,group,"rho_water",       par%rho_water)
-        call nml_read(filename,group,"rho_ice",         par%rho_ice)
-        call nml_read(filename,group,"rho_seawater",    par%rho_seawater)
+        if (read_phys_const) then
+            call nml_read(filename,group,"rho_water",    par%rho_water)
+            call nml_read(filename,group,"rho_ice",      par%rho_ice)
+            call nml_read(filename,group,"rho_seawater", par%rho_seawater)
+            call nml_read(filename,group,"g",            par%g)
+        end if
         call nml_read(filename,group,"rho_uppermantle", par%rho_uppermantle)
         call nml_read(filename,group,"rho_litho",       par%rho_litho)
-        call nml_read(filename,group,"g",               par%g)
         call nml_read(filename,group,"r_earth",         par%r_earth)
         call nml_read(filename,group,"m_earth",         par%m_earth)
 
