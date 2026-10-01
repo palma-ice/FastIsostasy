@@ -148,6 +148,8 @@ contains
         write(*,*) "Initializing FFT plans..."
         ! Plans are created on the FFTW work arrays of the domain. FFTW expects
         ! row-major dimensions, hence (ny, nx) for Fortran arrays of shape (nx, ny).
+        ! FFTW_ESTIMATE makes the plan choice, and hence the round-off, independent
+        ! of run-time measurements.
         isos%domain%forward_fftplan_r2r = fftw_plan_r2r_2d(isos%domain%ny, isos%domain%nx, &
             isos%domain%fft_dht, isos%domain%fft_dht, FFTW_DHT, FFTW_DHT, FFTW_ESTIMATE)
 
@@ -156,11 +158,11 @@ contains
 
         isos%domain%forward_dftplan_r2c = fftw_plan_dft_r2c_2d(2*isos%domain%ny-1, &
             2*isos%domain%nx-1, isos%domain%fft_r, isos%domain%fft_c, &
-            ior(FFTW_MEASURE, FFTW_DESTROY_INPUT))
+            ior(FFTW_ESTIMATE, FFTW_DESTROY_INPUT))
 
         isos%domain%backward_dftplan_c2r = fftw_plan_dft_c2r_2d(2*isos%domain%ny-1, &
             2*isos%domain%nx-1, isos%domain%fft_c, isos%domain%fft_r, &
-            ior(FFTW_MEASURE, FFTW_DESTROY_INPUT))
+            ior(FFTW_ESTIMATE, FFTW_DESTROY_INPUT))
 
         write(*,*) "Initializing distorted domain..."
         isos%domain%dx_matrix = isos%domain%dx * isos%domain%K
