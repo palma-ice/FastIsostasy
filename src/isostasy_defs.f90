@@ -134,19 +134,26 @@ module isostasy_defs
         real(wp), allocatable   :: eta_eff(:, :)    ! [Pa-s] Effective mantle viscosity
         real(wp), allocatable   :: tau(:, :)        ! [yr] Asthenospheric relaxation timescale field
 
-        type(c_ptr)             :: forward_fftplan_r2r
-        type(c_ptr)             :: backward_fftplan_r2r
-        type(c_ptr)             :: forward_dftplan_r2c
-        type(c_ptr)             :: backward_dftplan_c2r
+        type(c_ptr)             :: forward_fftplan_r2r  = c_null_ptr
+        type(c_ptr)             :: backward_fftplan_r2r = c_null_ptr
+        type(c_ptr)             :: forward_dftplan_r2c  = c_null_ptr
+        type(c_ptr)             :: backward_dftplan_c2r = c_null_ptr
+
+        ! FFTW work arrays (fftw_alloc_*). The plans are created on these arrays and
+        ! must only be executed on them. Being pointers, they can be used as work
+        ! space by routines that receive the domain with intent(IN).
+        real(dp),    pointer, contiguous :: fft_r(:, :)   => null() ! [2nx-1, 2ny-1] zero-padded field
+        complex(dp), pointer, contiguous :: fft_c(:, :)   => null() ! [nx, 2ny-1] half spectrum of fft_r
+        real(dp),    pointer, contiguous :: fft_dht(:, :) => null() ! [nx, ny] in-place DHT
 
         real(wp), allocatable   :: kei(:, :)   ! Kelvin function filter values
         real(wp), allocatable   :: GV(:, :)    ! Green's function values
         real(wp), allocatable   :: GE(:, :)    ! Green's function for elastic displacement (Farrell 1972)
         real(wp), allocatable   :: GN(:, :)    ! Green's function for dz_ss
 
-        complex(dp), allocatable :: FGV(:, :)    ! FFT of GV
-        complex(dp), allocatable :: FGE(:, :)    ! FFT of GE
-        complex(dp), allocatable :: FGN(:, :)    ! FFT of GN
+        complex(dp), allocatable :: FGV(:, :)    ! FFT of GV, shaped as fft_c
+        complex(dp), allocatable :: FGE(:, :)    ! FFT of GE, shaped as fft_c
+        complex(dp), allocatable :: FGN(:, :)    ! FFT of GN, shaped as fft_c
 
     end type isos_domain_class
 

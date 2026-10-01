@@ -140,35 +140,32 @@ module isos_utils
     ! most appropriate transform in its own right for certain applications, and we would be
     ! very interested to hear from anyone who finds it useful.
 
-    subroutine calc_fft_forward_r2r(plan, in, out)
+    ! The FFT wrappers must be called with the arrays their plan was created on
+    ! (FFTW new-array execute rules), i.e. the FFTW work arrays of isos_domain_class.
+
+    ! In-place DHT of x.
+    subroutine calc_fft_forward_r2r(plan, x)
 
         implicit none 
-        type(c_ptr), intent(IN)     :: plan
-        real(dp), intent(INOUT)     :: in(:, :)
-        real(dp), intent(INOUT)     :: out(:, :)
+        type(c_ptr), intent(IN)             :: plan
+        real(dp), contiguous, intent(INOUT) :: x(:, :)
 
-        out = (0.d0,0.d0)
-        call fftw_execute_r2r(plan, in, out)
+        call fftw_execute_r2r(plan, x, x)
 
         return
       
     end subroutine calc_fft_forward_r2r
 
-    subroutine calc_fft_backward_r2r(plan, in, out)
+    ! In-place normalized inverse DHT of x.
+    subroutine calc_fft_backward_r2r(plan, x)
 
         implicit none 
 
-        type(c_ptr), intent(IN)     :: plan
-        real(dp), intent(INOUT)     :: in(:, :)
-        real(dp), intent(INOUT)     :: out(:, :)
+        type(c_ptr), intent(IN)             :: plan
+        real(dp), contiguous, intent(INOUT) :: x(:, :)
 
-        integer(kind=4)            :: nx, ny
-        nx = size(in,1)
-        ny = size(in,2)
-
-        out = (0.d0,0.d0)
-        call fftw_execute_r2r(plan, in, out)
-        out = out / (nx * ny * 1.)
+        call fftw_execute_r2r(plan, x, x)
+        x = x / real(size(x), dp)
 
         return
     end subroutine calc_fft_backward_r2r
@@ -188,30 +185,25 @@ module isos_utils
 
         implicit none 
 
-        type(c_ptr), intent(IN)     :: plan
-        real(dp),    intent(INOUT)  :: in(:, :)
-        complex(dp), intent(INOUT)  :: out(:, :)
+        type(c_ptr), intent(IN)                :: plan
+        real(dp),    contiguous, intent(INOUT) :: in(:, :)
+        complex(dp), contiguous, intent(INOUT) :: out(:, :)
 
-        out = (0.d0,0.d0)
         call fftw_execute_dft_r2c(plan, in, out)
 
         return
     end subroutine calc_fft_forward_r2c
 
+    ! Normalized by the logical size of the transform, i.e. the size of the real array.
     subroutine calc_fft_backward_c2r(plan, in, out)
         implicit none
 
-        type(c_ptr), intent(IN)    :: plan
-        complex(dp), intent(INOUT) :: in(:, :)
-        real(dp),    intent(INOUT) :: out(:, :)
+        type(c_ptr), intent(IN)                :: plan
+        complex(dp), contiguous, intent(INOUT) :: in(:, :)
+        real(dp),    contiguous, intent(INOUT) :: out(:, :)
 
-        integer(kind=4)            :: nx, ny
-        nx = size(in,1)
-        ny = size(in,2)
-
-        out = (0.d0,0.d0)
         call fftw_execute_dft_c2r(plan, in, out)
-        out = out / (nx * ny * 1._wp)
+        out = out / real(size(out), dp)
 
         return
     end subroutine calc_fft_backward_c2r

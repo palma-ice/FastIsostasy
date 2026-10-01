@@ -29,7 +29,7 @@ module lv_elva
 
     ! Calculate vertical displacement rate (viscous part) on rectangular domain.
     subroutine calc_lvelva(dwdt, w, canom_full, maskactive, g, nu, D_lith, eta, R, &
-        kappa, nx, ny, dx_matrix, dy_matrix, sec_per_year, forward_plan, backward_plan)
+        kappa, nx, ny, dx_matrix, dy_matrix, sec_per_year, forward_plan, backward_plan, dht)
 
         implicit none
         
@@ -49,13 +49,9 @@ module lv_elva
         real(wp), intent(IN)    :: dy_matrix(:, :)
         type(c_ptr), intent(IN) :: forward_plan
         type(c_ptr), intent(IN) :: backward_plan
+        real(dp), contiguous, intent(INOUT) :: dht(:, :)   ! FFTW work array of the DHT plans
 
         real(wp), allocatable :: p(:, :)
-        real(dp), allocatable :: f(:, :)
-        real(dp), allocatable :: f_hat(:, :)
-        real(dp), allocatable :: dwdt_hat(:, :)
-
-        real(dp), allocatable :: dwdt_dp(:,:) 
 
         real(wp), allocatable :: w_x(:, :)
         real(wp), allocatable :: w_xy(:, :)
@@ -72,11 +68,6 @@ module lv_elva
         real(wp), allocatable :: My_yy(:, :)
 
         allocate(p(nx, ny))
-        allocate(f(nx, ny))
-        allocate(f_hat(nx, ny))
-        allocate(dwdt_hat(nx, ny))
-
-        allocate(dwdt_dp(nx, ny))
 
         allocate(w_x(nx, ny))
         allocate(w_xy(nx, ny))
@@ -110,14 +101,13 @@ module lv_elva
         call calc_derivative_yy(My_yy, Myy, dy_matrix, nx, ny)
 
         call maskfield(p, -g * canom_full, maskactive, nx, ny)
-        f = (p + Mx_xx + 2.0_wp * Mxy_xy + My_yy) / (2.0_wp * eta)
-        call calc_fft_forward_r2r(forward_plan, f, f_hat)
-        dwdt_hat = f_hat / (kappa * R)
+        dht = (p + Mx_xx + 2.0_wp * Mxy_xy + My_yy) / (2.0_wp * eta)
+        call calc_fft_forward_r2r(forward_plan, dht)
+        dht = dht / (kappa * R)
 
-        ! write(*,*) sum(dwdt_hat), sum(f_hat)
-        call calc_fft_backward_r2r(backward_plan, dwdt_hat, dwdt_dp)
-        call apply_zerobc_at_corners_dp(dwdt_dp, nx, ny)
-        dwdt = dwdt_dp
+        call calc_fft_backward_r2r(backward_plan, dht)
+        call apply_zerobc_at_corners_dp(dht, nx, ny)
+        dwdt = dht
         
         ! Rate of viscous asthenosphere uplift per unit time (seconds)
         dwdt = dwdt * sec_per_year  !  [m/s] x [s/a] = [m/a]

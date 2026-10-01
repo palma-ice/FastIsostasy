@@ -55,56 +55,50 @@ module convolutions
     end subroutine calc_convolution_indices
 
     ! Compute `out` as the (fft-based) convolution of a precomputed `kernel` and
-    ! input field `in`.
-    subroutine precomputed_fftconvolution(out, kernel, in, i1, i2, j1, j2, &
-        offset, nx, ny, forward_plan, backward_plan)
+    ! input field `in`, using the FFTW work arrays of `domain`.
+    subroutine precomputed_fftconvolution(out, kernel, in, domain)
 
         implicit none
 
-        real(wp),    intent(OUT)    :: out(:, :)
-        complex(dp), intent(IN)     :: kernel(:, :)
-        real(wp), intent(IN)        :: in(:, :)
-        integer, intent(IN)         :: i1, i2, j1, j2, nx, ny, offset
-        type(c_ptr), intent(IN)     :: forward_plan
-        type(c_ptr), intent(IN)     :: backward_plan
+        real(wp),    intent(OUT)            :: out(:, :)
+        complex(dp), intent(IN)             :: kernel(:, :)
+        real(wp),    intent(IN)             :: in(:, :)
+        type(isos_domain_class), intent(IN) :: domain
 
-        ! Local variables
-        real(dp),    allocatable    :: helper_real(:, :)
-        complex(dp), allocatable    :: helper_cplx(:, :)
-
-        ! Populate load on extended grid
-        allocate(helper_real(2*nx-1, 2*ny-1))
-        allocate(helper_cplx(2*nx-1, 2*ny-1))
+        associate(nx => domain%nx, ny => domain%ny, offset => domain%offset, &
+            i1 => domain%i1, i2 => domain%i2, j1 => domain%j1, j2 => domain%j2)
 
         ! Zero-padded FFT
-        helper_real = 0.
-        helper_real(1:nx, 1:ny) = in
-        call calc_fft_forward_r2c(forward_plan, helper_real, helper_cplx)
+        domain%fft_r = 0.0_dp
+        domain%fft_r(1:nx, 1:ny) = in
+        call calc_fft_forward_r2c(domain%forward_dftplan_r2c, domain%fft_r, domain%fft_c)
 
         ! Compute and invert product
-        helper_cplx =  kernel * helper_cplx
-        call calc_fft_backward_c2r(backward_plan, helper_cplx, helper_real)
+        domain%fft_c = kernel * domain%fft_c
+        call calc_fft_backward_c2r(domain%backward_dftplan_c2r, domain%fft_c, domain%fft_r)
 
-        call apply_zerobc_at_corners_dp(helper_real, 2*nx-1, 2*ny-1)
-        out(1:nx, 1:ny) = helper_real(i1+offset:i2+offset, j1-offset:j2-offset)
+        call apply_zerobc_at_corners_dp(domain%fft_r, 2*nx-1, 2*ny-1)
+        out(1:nx, 1:ny) = domain%fft_r(i1+offset:i2+offset, j1-offset:j2-offset)
+
+        end associate
         return
     end subroutine precomputed_fftconvolution
 
-    subroutine precompute_kernel(plan, kernel, fftkernel, nx, ny)
+    ! FFT of the zero-padded `kernel`, as needed by precomputed_fftconvolution.
+    function precompute_kernel(kernel, domain) result(fftkernel)
         implicit none
 
-        type(c_ptr), intent(IN)     :: plan
-        real(wp),    intent(IN)     :: kernel(:, :)
-        complex(dp), intent(INOUT)  :: fftkernel(:, :)
-        real(dp), allocatable       :: extended_kernel(:, :)
-        integer, intent(INOUT)      :: nx, ny
+        real(wp), intent(IN)                :: kernel(:, :)
+        type(isos_domain_class), intent(IN) :: domain
+        complex(dp)                         :: fftkernel(size(domain%fft_c, 1), &
+                                                         size(domain%fft_c, 2))
 
-        allocate(extended_kernel(2*nx-1, 2*ny-1))
-        extended_kernel = 0.0_dp
-        extended_kernel(1:nx, 1:ny) = kernel
-        call calc_fft_forward_r2c(plan, extended_kernel, fftkernel)
+        domain%fft_r = 0.0_dp
+        domain%fft_r(1:domain%nx, 1:domain%ny) = kernel
+        call calc_fft_forward_r2c(domain%forward_dftplan_r2c, domain%fft_r, domain%fft_c)
+        fftkernel = domain%fft_c
 
         return
-    end subroutine precompute_kernel
+    end function precompute_kernel
 
 end module convolutions

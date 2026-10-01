@@ -87,7 +87,7 @@ contains
         logical                 :: correct_distortion
         integer                 :: nbsl, i, j, l
         integer                 :: icrop1, icrop2, jcrop1, jcrop2
-        real(dp), allocatable   :: buffer_n(:, :), buffer_2n(:, :), buffer_eta(:, :, :)
+        real(dp), allocatable   :: buffer_eta(:, :, :)
         real(wp)                :: D_lith_const
         integer                 :: nx_mask, ny_mask
         real(wp), allocatable   :: xc_mask(:), yc_mask(:)
@@ -146,22 +146,21 @@ contains
         if (present(K))         isos%domain%K                   = K
 
         write(*,*) "Initializing FFT plans..."
-        allocate(buffer_2n(2*isos%domain%nx-1, 2*isos%domain%ny-1))
-        buffer_2n = 0.0
-        allocate(buffer_n(isos%domain%nx, isos%domain%ny))
-        buffer_n = 0.0
+        ! Plans are created on the FFTW work arrays of the domain. FFTW expects
+        ! row-major dimensions, hence (ny, nx) for Fortran arrays of shape (nx, ny).
+        isos%domain%forward_fftplan_r2r = fftw_plan_r2r_2d(isos%domain%ny, isos%domain%nx, &
+            isos%domain%fft_dht, isos%domain%fft_dht, FFTW_DHT, FFTW_DHT, FFTW_ESTIMATE)
 
-        isos%domain%forward_fftplan_r2r = fftw_plan_r2r_2d(isos%domain%nx, isos%domain%ny, &
-            buffer_n, buffer_n, FFTW_DHT, FFTW_DHT, FFTW_ESTIMATE)
+        isos%domain%backward_fftplan_r2r = fftw_plan_r2r_2d(isos%domain%ny, isos%domain%nx, &
+            isos%domain%fft_dht, isos%domain%fft_dht, FFTW_DHT, FFTW_DHT, FFTW_ESTIMATE)
 
-        isos%domain%backward_fftplan_r2r = fftw_plan_r2r_2d(isos%domain%nx, isos%domain%ny, &
-            buffer_n, buffer_n, FFTW_DHT, FFTW_DHT, FFTW_ESTIMATE)
+        isos%domain%forward_dftplan_r2c = fftw_plan_dft_r2c_2d(2*isos%domain%ny-1, &
+            2*isos%domain%nx-1, isos%domain%fft_r, isos%domain%fft_c, &
+            ior(FFTW_MEASURE, FFTW_DESTROY_INPUT))
 
-        isos%domain%forward_dftplan_r2c = fftw_plan_dft_r2c_2d(2*isos%domain%nx-1, &
-            2*isos%domain%ny-1, buffer_2n, isos%domain%FGE, 1)
-
-        isos%domain%backward_dftplan_c2r = fftw_plan_dft_c2r_2d(2*isos%domain%nx-1, &
-            2*isos%domain%ny-1, isos%domain%FGE, buffer_2n, 1)
+        isos%domain%backward_dftplan_c2r = fftw_plan_dft_c2r_2d(2*isos%domain%ny-1, &
+            2*isos%domain%nx-1, isos%domain%fft_c, isos%domain%fft_r, &
+            ior(FFTW_MEASURE, FFTW_DESTROY_INPUT))
 
         write(*,*) "Initializing distorted domain..."
         isos%domain%dx_matrix = isos%domain%dx * isos%domain%K
@@ -187,14 +186,12 @@ contains
 
         write(*,*) "Initializing elastic Green's function..."
         call calc_elastic_green(isos%domain%GE, dx=isos%domain%dx, dy=isos%domain%dx)
-        call precompute_kernel(isos%domain%forward_dftplan_r2c, isos%domain%GE, &
-            isos%domain%FGE, isos%domain%nx, isos%domain%ny)
+        isos%domain%FGE = precompute_kernel(isos%domain%GE, isos%domain)
 
         write(*,*) "Initializing gravitational Green's function..."
         call calc_z_ss_green(isos%domain%GN, isos%par%m_earth, &
             isos%par%r_earth, dx=isos%domain%dx, dy=isos%domain%dx)
-        call precompute_kernel(isos%domain%forward_dftplan_r2c, isos%domain%GN, &
-            isos%domain%FGN, isos%domain%nx, isos%domain%ny)
+        isos%domain%FGN = precompute_kernel(isos%domain%GN, isos%domain)
 
         write(*,*) "Initializing maskactive with the help of buffer..."
         isos%domain%maskactive(:, :) = .false.
@@ -243,8 +240,7 @@ contains
                 isos%par%L_w, D_lith_const, dx=isos%domain%dx, dy=isos%domain%dx)
 
             ! write(*,*) "Initialising viscous Green kernel..."
-            call precompute_kernel(isos%domain%forward_dftplan_r2c, isos%domain%GV, &
-                isos%domain%FGV, isos%domain%nx, isos%domain%ny)
+            isos%domain%FGV = precompute_kernel(isos%domain%GV, isos%domain)
 
             !# TODO: allow heterogeneous tau
             isos%domain%tau        = isos%par%tau          ! [yr]
@@ -731,11 +727,7 @@ contains
         case(2)
 
             call precomputed_fftconvolution(isos%now%w_equilibrium, isos%domain%FGV, &
-                -isos%now%canom_load * isos%par%g * isos%domain%K ** 2.0, &
-                isos%domain%i1, isos%domain%i2, &
-                isos%domain%j1, isos%domain%j2, isos%domain%offset, &
-                isos%domain%nx, isos%domain%ny, &
-                isos%domain%forward_dftplan_r2c, isos%domain%backward_dftplan_c2r)
+                -isos%now%canom_load * isos%par%g * isos%domain%K ** 2.0, isos%domain)
 
             call apply_zerobc_at_corners(isos%now%w_equilibrium, isos%domain%nx, &
                 isos%domain%ny)
@@ -751,7 +743,8 @@ contains
                 isos%domain%eta_eff, isos%domain%kappa, isos%domain%R, &
                 isos%domain%nx, isos%domain%ny, &
                 isos%domain%dx_matrix, isos%domain%dy_matrix, isos%par%sec_per_year, &
-                isos%domain%forward_fftplan_r2r, isos%domain%backward_fftplan_r2r)
+                isos%domain%forward_fftplan_r2r, isos%domain%backward_fftplan_r2r, &
+                isos%domain%fft_dht)
         end select
 
         dwdt = isos%now%dwdt
@@ -849,11 +842,7 @@ contains
         if (update_diagnostics) then
             if (isos%par%include_elastic) then
                 call precomputed_fftconvolution(isos%now%we, isos%domain%FGE, &
-                    isos%now%canom_load * isos%par%g * isos%domain%K ** 2.0, &
-                    isos%domain%i1, isos%domain%i2, &
-                    isos%domain%j1, isos%domain%j2, isos%domain%offset, &
-                    isos%domain%nx, isos%domain%ny, &
-                    isos%domain%forward_dftplan_r2c, isos%domain%backward_dftplan_c2r)
+                    isos%now%canom_load * isos%par%g * isos%domain%K ** 2.0, isos%domain)
             else
                 isos%now%we = 0.0_wp
             end if
@@ -870,10 +859,7 @@ contains
         if (update_diagnostics) then
             if (isos%par%heterogeneous_ssh) then
                 call precomputed_fftconvolution(isos%now%dz_ss, isos%domain%FGN, &
-                    isos%now%mass_anom, isos%domain%i1, isos%domain%i2, &
-                    isos%domain%j1, isos%domain%j2, isos%domain%offset, &
-                    isos%domain%nx, isos%domain%ny, &
-                    isos%domain%forward_dftplan_r2c, isos%domain%backward_dftplan_c2r)
+                    isos%now%mass_anom, isos%domain)
             else
                 isos%now%dz_ss = 0.0_wp
             end if
@@ -1146,8 +1132,27 @@ contains
         if (allocated(domain%FGV))          deallocate(domain%FGV)
         if (allocated(domain%FGE))          deallocate(domain%FGE)
         if (allocated(domain%FGN))          deallocate(domain%FGN)
+
+        call destroy_fftw_plan(domain%forward_fftplan_r2r)
+        call destroy_fftw_plan(domain%backward_fftplan_r2r)
+        call destroy_fftw_plan(domain%forward_dftplan_r2c)
+        call destroy_fftw_plan(domain%backward_dftplan_c2r)
+
+        if (associated(domain%fft_r))   call fftw_free(c_loc(domain%fft_r))
+        if (associated(domain%fft_c))   call fftw_free(c_loc(domain%fft_c))
+        if (associated(domain%fft_dht)) call fftw_free(c_loc(domain%fft_dht))
+        nullify(domain%fft_r, domain%fft_c, domain%fft_dht)
         return
     end subroutine deallocate_isos_domain
+
+    subroutine destroy_fftw_plan(plan)
+        implicit none
+        type(c_ptr), intent(INOUT) :: plan
+
+        if (c_associated(plan)) call fftw_destroy_plan(plan)
+        plan = c_null_ptr
+        return
+    end subroutine destroy_fftw_plan
 
     subroutine deallocate_isos_state(state)
         implicit none 
@@ -1261,9 +1266,17 @@ contains
         allocate(domain%GE(nx, ny))
         allocate(domain%GN(nx, ny))
 
-        allocate(domain%FGV(2*nx-1, 2*ny-1))
-        allocate(domain%FGE(2*nx-1, 2*ny-1))
-        allocate(domain%FGN(2*nx-1, 2*ny-1))
+        ! FFTW work arrays, see isos_domain_class. The half spectrum of the
+        ! (2nx-1, 2ny-1) real array has shape (nx, 2ny-1).
+        call c_f_pointer(fftw_alloc_real(int((2*nx-1)*(2*ny-1), c_size_t)), &
+            domain%fft_r, [2*nx-1, 2*ny-1])
+        call c_f_pointer(fftw_alloc_complex(int(nx*(2*ny-1), c_size_t)), &
+            domain%fft_c, [nx, 2*ny-1])
+        call c_f_pointer(fftw_alloc_real(int(nx*ny, c_size_t)), domain%fft_dht, [nx, ny])
+
+        allocate(domain%FGV(nx, 2*ny-1))
+        allocate(domain%FGE(nx, 2*ny-1))
+        allocate(domain%FGN(nx, 2*ny-1))
 
         ! Set some values to zero for safety
 
@@ -1271,6 +1284,10 @@ contains
         domain%GV  = 0.0
         domain%GE  = 0.0
         domain%GN  = 0.0
+
+        domain%fft_r   = 0.0_dp
+        domain%fft_c   = (0.0_dp, 0.0_dp)
+        domain%fft_dht = 0.0_dp
         
         domain%tau = 0.0 
 
