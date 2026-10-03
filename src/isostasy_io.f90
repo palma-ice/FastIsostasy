@@ -144,6 +144,11 @@ module isostasy_io
         call nc_write(filename, "dbsl_total", isos%now%dbsl_total, units="m", dim1="time", &
             ncid=ncid, start=[n], count=[1])
 
+        ! Time step of the viscous ODE solver: adapted during the run, so needed for
+        ! bit-exact continuity (a restart from dt_init takes different substeps).
+        call nc_write(filename, "ode_dt", isos%ode%dt, units="years", dim1="time", &
+            ncid=ncid, start=[n], count=[1])
+
         call nc_write(filename, "He_lith", isos%domain%He_lith * 1e-3, units="km", dim1="xc", &
             dim2="yc", dim3="time", ncid=ncid, start=[1,1,n], count=[nx,ny,1])
         call nc_write(filename, "mask_active", isos%domain%maskactive, units="1", &
@@ -238,6 +243,14 @@ module isostasy_io
 
         if (nc_exists_var(filename, "dbsl_total")) &
             call nc_read(filename, "dbsl_total", isos%now%dbsl_total, start=[1], count=[1])
+
+        if (nc_exists_var(filename, "ode_dt")) then
+            call nc_read(filename, "ode_dt", isos%ode%dt, start=[1], count=[1])
+        else
+            isos%ode%dt = isos%par%dt_init
+            write(*,*) "isos_restart_read:: WARNING: 'ode_dt' absent; the ODE solver "// &
+                "restarts from dt_init. Regenerate restart for bit-exact continuity."
+        end if
 
         write(*,*) "isos_restart_read:: read in restart file: ", trim(filename)
 

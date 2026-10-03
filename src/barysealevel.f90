@@ -454,8 +454,8 @@ contains
     subroutine bsl_restart_read(bsl, filename)
         ! Restore the prognostic barystatic sea level from a restart file. Needed
         ! for the "fastiso"/"mixed" methods, where bsl_now is a prognostic
-        ! accumulator that cannot be re-derived from time alone. Ocean surface area
-        ! (A_ocean_now) is left to be refreshed by the subsequent bsl_update.
+        ! accumulator that cannot be re-derived from time alone. The ocean surface
+        ! area (A_ocean_now) is restored too, so the state continues exactly.
 
         implicit none
         type(bsl_class),  intent(INOUT) :: bsl
@@ -466,6 +466,8 @@ contains
             bsl%bsl_init = bsl%bsl_now
             write(*,*) "bsl_restart_read:: restored bsl_now = ", bsl%bsl_now, " m from "// &
                 trim(filename)
+            if (nc_exists_var(filename, "A_ocean")) &
+                call nc_read(filename, "A_ocean", bsl%A_ocean_now, start=[1], count=[1])
         else
             write(*,*) "bsl_restart_read:: WARNING: 'bsl' absent in "//trim(filename)// &
                 "; keeping bsl_init. Prognostic bsl will not be continuous."

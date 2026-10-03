@@ -636,6 +636,9 @@ contains
             call out2in(isos%now%z_bed, z_bed, isos%domain)
             call out2in(isos%now%Hice,  H_ice, isos%domain)
 
+            ! The ODE solver starts from dt_init (a restart restores its adapted dt).
+            isos%ode%dt = isos%par%dt_init
+
             if (.not. isos%par%ref_was_set) then
                 call isos_init_ref(isos, z_bed, H_ice, isos%now%bsl, isos%now%dz_ss)
                 write(*,*) "isos_init_state:: reference state was set to initial state."
@@ -664,7 +667,7 @@ contains
         ! ode%t == time the update rebuilds the diagnostics/output without stepping
         ! the viscous displacement forward. This matters on a restart, where
         ! isos%now%w is already the saved state and must not be advanced again.
-        isos%ode%dt = isos%par%dt_init
+        ! (ode%dt was set above: dt_init on a cold start, restored on a restart.)
         isos%ode%t = time
         isos%ode%x = isos%now%w
 
