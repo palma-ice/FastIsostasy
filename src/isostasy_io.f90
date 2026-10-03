@@ -148,6 +148,10 @@ module isostasy_io
         ! bit-exact continuity (a restart from dt_init takes different substeps).
         call nc_write(filename, "ode_dt", isos%ode%dt, units="years", dim1="time", &
             ncid=ncid, start=[n], count=[1])
+        ! The solver state: w is shifted by the corner condition, so the solver
+        ! continues from its own (unshifted) state.
+        call nc_write(filename, "ode_x", isos%ode%x, units="m", dim1="xc", dim2="yc", &
+            dim3="time", ncid=ncid, start=[1,1,n], count=[nx,ny,1])
 
         call nc_write(filename, "He_lith", isos%domain%He_lith * 1e-3, units="km", dim1="xc", &
             dim2="yc", dim3="time", ncid=ncid, start=[1,1,n], count=[nx,ny,1])
@@ -250,6 +254,14 @@ module isostasy_io
             isos%ode%dt = isos%par%dt_init
             write(*,*) "isos_restart_read:: WARNING: 'ode_dt' absent; the ODE solver "// &
                 "restarts from dt_init. Regenerate restart for bit-exact continuity."
+        end if
+        if (nc_exists_var(filename, "ode_x")) then
+            call nc_read(filename, "ode_x", isos%ode%x, start=[1,1,1], &
+                count=[isos%domain%nx, isos%domain%ny, 1])
+        else
+            isos%ode%x = isos%now%w
+            write(*,*) "isos_restart_read:: WARNING: 'ode_x' absent; the ODE solver "// &
+                "restarts from w. Regenerate restart for bit-exact continuity."
         end if
 
         write(*,*) "isos_restart_read:: read in restart file: ", trim(filename)

@@ -636,8 +636,10 @@ contains
             call out2in(isos%now%z_bed, z_bed, isos%domain)
             call out2in(isos%now%Hice,  H_ice, isos%domain)
 
-            ! The ODE solver starts from dt_init (a restart restores its adapted dt).
+            ! The ODE solver starts from dt_init and w (a restart restores its
+            ! adapted dt and its state).
             isos%ode%dt = isos%par%dt_init
+            isos%ode%x  = isos%now%w
 
             if (.not. isos%par%ref_was_set) then
                 call isos_init_ref(isos, z_bed, H_ice, isos%now%bsl, isos%now%dz_ss)
@@ -667,9 +669,9 @@ contains
         ! ode%t == time the update rebuilds the diagnostics/output without stepping
         ! the viscous displacement forward. This matters on a restart, where
         ! isos%now%w is already the saved state and must not be advanced again.
-        ! (ode%dt was set above: dt_init on a cold start, restored on a restart.)
+        ! (ode%dt and ode%x were set above: dt_init and w on a cold start, restored
+        ! on a restart.)
         isos%ode%t = time
-        isos%ode%x = isos%now%w
 
         ! Rebuild diagnostics/output from the (initial or restored) state. On a
         ! restart this runs at time == time_prognostics with use_restart, so
@@ -768,6 +770,7 @@ contains
 
         ! Local variables
         real(wp) :: dt, dt_now
+        real(wp) :: t_ode0
         integer  :: n, nstep
         logical  :: update_diagnostics
         logical  :: advance_bsl
@@ -876,6 +879,7 @@ contains
         call calc_columnanoms_seawater(isos)
         call calc_columnanoms_load(isos)
 
+        t_ode0 = isos%ode%t
         select case(trim(isos%par%dt_method))
         case("euler")
             call step_euler(get_dwdt, time, isos%ode, isos)
@@ -897,7 +901,11 @@ contains
             stop
         end select
         
-        call apply_zerobc_at_corners(isos%now%w, isos%domain%nx, isos%domain%ny)
+        ! The corner condition belongs to a step's output: when the solver did not
+        ! step (initialization or restart redo at time_prognostics), w is already
+        ! the stepped state and must not be shifted again.
+        if (isos%ode%t > t_ode0) &
+            call apply_zerobc_at_corners(isos%now%w, isos%domain%nx, isos%domain%ny)
         call calc_columnanoms_mantle(isos)
         isos%now%z_bed = isos%ref%z_bed + isos%now%w + isos%now%we
         isos%par%time_prognostics = time
