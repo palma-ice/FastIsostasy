@@ -115,6 +115,10 @@ isostasy_libs = 	$(objdir)/precision.o \
 ##
 ###############################################
 
+# FastIsostasy objects embed fesm-utils types: rebuild them when libfesmutils.a
+# changes, or objects keep a stale type layout (fesmc/FastHydrology#10).
+$(isostasy_libs): $(FESMUTILSLIBDIR)/libfesmutils.a
+
 # Static library compilation. The archive is a file target, so its mtime only
 # changes when an object does (hosts such as yelmox depend on it to rebuild
 # after a type change).

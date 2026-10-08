@@ -6,8 +6,9 @@
 
 # Dependency paths (serial build by default).
 FESMUTILSROOT = fesm-utils
-INC_FESMUTILS = -I${FESMUTILSROOT}/include-serial
-LIB_FESMUTILS = -L${FESMUTILSROOT}/include-serial -lfesmutils
+FESMUTILSLIBDIR = ${FESMUTILSROOT}/include-serial
+INC_FESMUTILS = -I${FESMUTILSLIBDIR}
+LIB_FESMUTILS = -L${FESMUTILSLIBDIR} -lfesmutils
 
 FFTWROOT = fesm-utils/fftw/fftw-serial
 INC_FFTW = -I${FFTWROOT}/include
@@ -16,8 +17,7 @@ LIB_FFTW = -L${FFTWROOT}/lib -lfftw3 -lm
 # OpenMP build (make openmp=1): swap the serial deps for OpenMP variants and
 # append the compiler's OpenMP flag (FFLAGS_OPENMP, set in the compiler fragment).
 ifeq ($(openmp), 1)
-    INC_FESMUTILS = -I${FESMUTILSROOT}/include-omp
-    LIB_FESMUTILS = -L${FESMUTILSROOT}/include-omp -lfesmutils
+    FESMUTILSLIBDIR = ${FESMUTILSROOT}/include-omp
 
     FFTWROOT = fesm-utils/fftw/fftw-omp
     INC_FFTW = -I${FFTWROOT}/include
