@@ -9,8 +9,8 @@ module isostasy_defs
 
 
     type ode_class
-        real(wp) :: t
-        real(wp) :: dt
+        real(dp) :: t                   ! [yr] solver time
+        real(dp) :: dt                  ! [yr] solver step
         
         real(wp), allocatable :: x(:, :)
         real(wp), allocatable :: x1(:, :)
@@ -86,8 +86,8 @@ module isostasy_defs
         logical                  :: use_restart
 
         real(wp) :: L_w                         ! [m] Lithosphere flexural length scale (for method=2)
-        real(wp) :: time_diagnostics            ! [yr] Current model time of last diagnostic update
-        real(wp) :: time_prognostics            ! [yr] Current model time of last prognostic update
+        real(dp) :: time_diagnostics            ! [yr] Current model time of last diagnostic update
+        real(dp) :: time_prognostics            ! [yr] Current model time of last prognostic update
 
         ! Internal parameter
         logical :: ref_was_set
@@ -158,7 +158,7 @@ module isostasy_defs
     end type isos_domain_class
 
     type isos_state_class
-        real(wp)              :: t              ! [yr] Time
+        real(dp)              :: t              ! [yr] Time
         real(wp)              :: bsl            ! [m] BSL
         real(wp)              :: V_af           ! [m^3] Volume contribution of ice above floatation
         real(wp)              :: V_pov          ! [m^3] Potential ocean volume contribution

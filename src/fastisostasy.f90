@@ -612,7 +612,7 @@ contains
         type(isos_class), intent(INOUT) :: isos
         real(wp), intent(IN) :: z_bed(:, :)                 ! [m] Current bedrock elevation
         real(wp), intent(IN) :: H_ice(:, :)                 ! [m] Current ice thickness
-        real(wp), intent(IN) :: time                        ! [a] Initial time
+        real(dp), intent(IN) :: time                        ! [a] Initial time
         type(bsl_class), intent(INOUT) :: bsl
 
         isos%now%bsl = bsl%bsl_now
@@ -708,7 +708,7 @@ contains
 
     function get_dwdt(w, t, isos) result(dwdt)
         real(wp), intent(IN), dimension(:, :) :: w
-        real(wp), intent(IN) :: t
+        real(dp), intent(IN) :: t
         real(wp), dimension(size(w,1), size(w,2)) :: dwdt
         type(isos_class), intent(INOUT) :: isos
     
@@ -763,14 +763,14 @@ contains
 
         type(isos_class), intent(INOUT) :: isos
         real(wp), intent(IN)            :: H_ice(:, :)      ! [m] Current ice thickness
-        real(wp), intent(IN)            :: time             ! [a] Current time
+        real(dp), intent(IN)            :: time             ! [a] Current time
         type(bsl_class), intent(INOUT)  :: bsl
 
         real(wp), intent(IN), optional  :: dwdt_corr(:, :) ! [m/yr] Basal topography displacement rate (ie, to relax from low resolution to high resolution)
 
         ! Local variables
         real(wp) :: dt, dt_now
-        real(wp) :: t_ode0
+        real(dp) :: t_ode0
         integer  :: n, nstep
         logical  :: update_diagnostics
         logical  :: advance_bsl

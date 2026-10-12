@@ -1,6 +1,6 @@
 module isostasy_io
 
-    use isostasy_defs, only : wp, isos_class, isos_domain_class
+    use isostasy_defs, only : dp, wp, isos_class, isos_domain_class
     use nml
     use ncio
 
@@ -59,7 +59,7 @@ module isostasy_io
 
         type(isos_class),  intent(IN) :: isos
         character(len=*),  intent(IN) :: filename
-        real(wp),          intent(IN) :: time
+        real(dp),          intent(IN) :: time
         logical, optional, intent(IN) :: init
 
         ! Local variables
@@ -79,7 +79,7 @@ module isostasy_io
         if (initialize_file) then
             ! Initialize file by writing grid info
             call isos_grid_write(isos%domain, filename, create=.TRUE.)
-            call nc_write_dim(filename,"time",     x=time,dx=1.0_wp, nx=1, units="years")
+            call nc_write_dim(filename,"time",     x=time,dx=1.0_dp, nx=1, units="years")
             call nc_write_dim(filename,"ref_now",  x=1.0_wp, dx=1.0_wp, nx=2, units="1")
             call nc_write_attr(filename,xnm,"standard_name","projection_x_coordinate")
             call nc_write_attr(filename,ynm,"standard_name","projection_y_coordinate")
@@ -173,7 +173,7 @@ module isostasy_io
 
         type(isos_class),  intent(INOUT) :: isos
         character(len=*),  intent(IN)    :: filename
-        real(wp),          intent(IN)    :: time
+        real(dp),          intent(IN)    :: time
 
         call nc_read(filename, "z_bed_ref", isos%ref%z_bed, start=[1,1,1], &
             count=[isos%domain%nx, isos%domain%ny, 1])
@@ -279,7 +279,7 @@ module isostasy_io
         real(wp),         intent(IN) :: xc(:)
         real(wp),         intent(IN) :: yc(:)
         character(len=*), intent(IN) :: filename
-        real(wp),         intent(IN) :: time_init
+        real(dp),         intent(IN) :: time_init
         
         ! Local variables
         integer :: nf
@@ -290,7 +290,7 @@ module isostasy_io
         ! Add grid axis variables to netcdf file
         call nc_write_dim(filename, "xc", x=xc*1e-3, units="km")
         call nc_write_dim(filename, "yc", x=yc*1e-3, units="km")
-        call nc_write_dim(filename, "time", x=time_init, dx=1.0_wp, nx=1, &
+        call nc_write_dim(filename, "time", x=time_init, dx=1.0_dp, nx=1, &
             units="year", unlimited=.TRUE.)
 
         return
@@ -303,7 +303,7 @@ module isostasy_io
 
         type(isos_class), intent(IN) :: isos
         character(len=*), intent(IN) :: filename
-        real(wp),         intent(IN) :: time_init
+        real(dp),         intent(IN) :: time_init
         
         ! Local variables
         integer :: nf, l
@@ -315,7 +315,7 @@ module isostasy_io
         ! Add grid axis variables to netcdf file
         call nc_write_dim(filename, "xc", x=isos%domain%xc*1e-3, units="km")
         call nc_write_dim(filename, "yc", x=isos%domain%yc*1e-3, units="km")
-        call nc_write_dim(filename, "time", x=time_init, dx=1.0_wp, nx=1, &
+        call nc_write_dim(filename, "time", x=time_init, dx=1.0_dp, nx=1, &
             units="year", unlimited=.TRUE.)
 
         ! Write constant fields
@@ -392,7 +392,7 @@ module isostasy_io
         
         type(isos_class), intent(IN) :: isos
         character(len=*), intent(IN) :: filename
-        real(wp),         intent(IN) :: time
+        real(dp),         intent(IN) :: time
         real(wp),         intent(IN) :: H_ice(:, :)
         real(wp),         intent(IN), optional :: z_bed_bench(:, :)
 
@@ -478,7 +478,7 @@ module isostasy_io
         
         type(isos_class), intent(IN) :: isos
         character(len=*), intent(IN) :: filename
-        real(wp),         intent(IN) :: time
+        real(dp),         intent(IN) :: time
 
         ! Local variables
         integer  :: ncid, n

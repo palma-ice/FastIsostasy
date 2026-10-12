@@ -10,7 +10,8 @@ module barysealevel
 
     type series_type
         character(len=512) :: filename
-        real(wp), allocatable :: time(:), var(:), sigma(:)
+        real(dp), allocatable :: time(:)
+        real(wp), allocatable :: var(:), sigma(:)
     end type
 
     type bsl_class
@@ -19,7 +20,7 @@ module barysealevel
         logical  :: use_restart             ! True if restart file is used
         logical  :: constant_ocean_surface  ! True if ocean surface area is constant
         real(wp) :: bsl_init                ! [m] Initial bsl
-        real(wp) :: time                    ! [yr] Current time
+        real(dp) :: time                    ! [yr] Current time
         real(wp) :: bsl_now                 ! [m] Current bsl
         real(wp) :: A_ocean_now             ! [m^2] Current ocean surface area
         type(series_type) :: series         ! BSL time series from file
@@ -44,7 +45,7 @@ contains
 
         type(bsl_class),  intent(INOUT) :: bsl
         character(len=*), intent(IN)    :: filename
-        real(wp),         intent(IN)    :: year_bp
+        real(dp),         intent(IN)    :: year_bp
 
         ! Local variables
         character(len=56) :: varname
@@ -111,7 +112,7 @@ contains
         implicit none
         type(bsl_class),  intent(INOUT) :: bsl
         character(len=*), intent(IN)    :: filename
-        real(wp),         intent(IN)    :: year_bp
+        real(dp),         intent(IN)    :: year_bp
         character(len=56) :: varname
         logical           :: use_nc
         integer           :: n
@@ -198,7 +199,7 @@ contains
         implicit none
 
         type(bsl_class), intent(INOUT)  :: bsl
-        real(wp), intent(IN)            :: year_bp
+        real(dp), intent(IN)            :: year_bp
 
         select case(trim(bsl%method))
         case("const")
@@ -231,7 +232,7 @@ contains
     subroutine bsl_update_file(bsl, year_bp)
         implicit none
         type(bsl_class), intent(INOUT)  :: bsl
-        real(wp), intent(IN)            :: year_bp
+        real(dp), intent(IN)            :: year_bp
         
         bsl%time  = year_bp
         bsl%bsl_now  = series_interp(bsl%series, year_bp)
@@ -241,7 +242,7 @@ contains
     subroutine bsl_update_fastiso(bsl, year_bp)
         implicit none
         type(bsl_class), intent(INOUT)  :: bsl
-        real(wp), intent(IN)            :: year_bp
+        real(dp), intent(IN)            :: year_bp
         bsl%time  = year_bp
         if (bsl%constant_ocean_surface) then
             bsl%A_ocean_now = bsl%A_ocean_pd
@@ -266,7 +267,8 @@ contains
 
         integer :: i, stat, n 
         character(len=256) :: str, str1 
-        real(wp) :: x(nmax), y(nmax) 
+        real(dp) :: x(nmax)
+        real(wp) :: y(nmax) 
 
         ! Open file for reading 
         open(f,file=filename,status="old")
@@ -353,7 +355,7 @@ contains
         implicit none 
 
         type(series_type) :: series 
-        real(wp) :: year_bp 
+        real(dp) :: year_bp 
         real(wp) :: var 
         integer  :: nt, i 
 
@@ -369,8 +371,9 @@ contains
 
         implicit none 
  
-        real(wp), dimension(:), intent(IN) :: x, y
-        real(wp), intent(IN) :: xout
+        real(dp), dimension(:), intent(IN) :: x
+        real(wp), dimension(:), intent(IN) :: y
+        real(dp), intent(IN) :: xout
         real(wp) :: yout 
         integer  :: i, j, n, nout 
         real(wp) :: alph
@@ -429,14 +432,14 @@ contains
         implicit none 
         type(bsl_class),  intent(IN)  :: bsl
         character(len=*),  intent(IN) :: filename
-        real(wp),          intent(IN) :: time
+        real(dp),          intent(IN) :: time
         logical, optional, intent(IN) :: init
 
         ! Local variables
         integer  :: ncid
 
         call nc_create(filename)
-        call nc_write_dim(filename, "time", x=time, dx=1.0_wp, nx=1, &
+        call nc_write_dim(filename, "time", x=time, dx=1.0_dp, nx=1, &
             units="year", unlimited=.TRUE.)
     
         call nc_open(filename, ncid, writable=.TRUE.)
@@ -481,11 +484,11 @@ contains
         implicit none
         type(bsl_class), intent(IN) :: bsl
         character(len=*), intent(IN) :: filename
-        real(wp),         intent(IN) :: time_init
+        real(dp),         intent(IN) :: time_init
         
         ! Create the empty netcdf file
         call nc_create(filename)
-        call nc_write_dim(filename, "time", x=time_init, dx=1.0_wp, nx=1, &
+        call nc_write_dim(filename, "time", x=time_init, dx=1.0_dp, nx=1, &
             units="year", unlimited=.TRUE.)
         return
     end subroutine bsl_write_init
@@ -497,7 +500,7 @@ contains
         
         type(bsl_class), intent(IN) :: bsl
         character(len=*), intent(IN) :: filename
-        real(wp),         intent(IN) :: time
+        real(dp),         intent(IN) :: time
 
         ! Local variables
         integer  :: ncid, n

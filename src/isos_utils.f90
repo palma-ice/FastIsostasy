@@ -453,9 +453,9 @@ module isos_utils
 
         implicit none
 
-        real(wp), dimension(:), intent(IN) :: x 
+        real(dp), dimension(:), intent(IN) :: x        ! time axis
         real(wp), dimension(:, : ,:), intent(IN) :: y
-        real(wp), intent(IN) :: xout
+        real(dp), intent(IN) :: xout                   ! time
         real(wp), dimension(:, :),intent(OUT) :: yout
         integer  :: j, n
         real(wp) :: alpha
