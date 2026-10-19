@@ -813,6 +813,12 @@ contains
         ! preserved: isostasy is coupled before the ice sheet, so the restart-time
         ! ice is already one coupling step ahead of what the last real update saw.
         ! Recomputing here would zero out the first real step's deltaV_bsl.
+        ! The domain's bsl follows the shared one on a normal step. In the
+        ! suppressed rebuild it keeps the restored value (isos_restart_read):
+        ! with several domains sharing one bsl, each domain's last update saw
+        ! the bsl as it stood when that domain ran, not the final shared value
+        ! the restart bundle holds, so taking the shared value here would move
+        ! z_ss of all but the last-updated domain at a restart.
         if (advance_bsl) then
             call calc_sl_contributions(isos)
 
@@ -826,9 +832,9 @@ contains
                 bsl%bsl_now = bsl%bsl_now - isos%now%dbsl_total
                 ! minus sign because what goes into ice sheet goes out of ocean.
             end if
-        end if
 
-        isos%now%bsl = bsl%bsl_now
+            isos%now%bsl = bsl%bsl_now
+        end if
         call calc_z_ss(isos%now%z_ss, isos%now%bsl, isos%ref%z_ss, isos%now%dz_ss)
         
         ! write(*,*) "isos_update:: updating diagnostic bool..."
