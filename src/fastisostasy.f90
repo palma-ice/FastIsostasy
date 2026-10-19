@@ -21,6 +21,7 @@ module fastisostasy
     use lv_xlra
     use convolutions
     use ncio
+    use nml,            only : nml_replace
     use phys_constants, only : phys_const_class, phys_const_require, phys_const_get
     use isostasy_io
     use lv_elva
@@ -63,7 +64,7 @@ module fastisostasy
 
 contains
     
-    subroutine isos_init(isos, filename, group, nx_ice, ny_ice, dx, dy, cnst, K)
+    subroutine isos_init(isos, filename, group, nx_ice, ny_ice, dx, dy, cnst, K, domain, grid_name)
 
         implicit none
 
@@ -77,6 +78,10 @@ contains
 
         type(phys_const_class), intent(IN), optional :: cnst
         real(wp), intent(IN), optional  :: K(:, :)
+        ! The {domain} and {grid_name} keywords of rheology_file and mask_file
+        ! (e.g. "{grid_name}_GIA_HR24.nc", grid_name the isostasy grid).
+        character(len=*), intent(IN), optional :: domain
+        character(len=*), intent(IN), optional :: grid_name
 
         ! Local variables
         integer                 :: nx_rheo, ny_rheo, nz_rheo
@@ -97,6 +102,14 @@ contains
         ! write(*,*) "Defining params..."
         write(*,*) "nx_ice, ny_ice: ", nx_ice, ny_ice
         call isos_par_load(isos%par, filename, group, skip_phys_const=present(cnst))
+        if (present(domain)) then
+            call nml_replace(isos%par%rheology_file, "{domain}", trim(domain))
+            call nml_replace(isos%par%mask_file,     "{domain}", trim(domain))
+        end if
+        if (present(grid_name)) then
+            call nml_replace(isos%par%rheology_file, "{grid_name}", trim(grid_name))
+            call nml_replace(isos%par%mask_file,     "{grid_name}", trim(grid_name))
+        end if
 
         ! Physical constants: take them from the shared record when the caller
         ! supplies one, so that a coupled program has a single definition site.
