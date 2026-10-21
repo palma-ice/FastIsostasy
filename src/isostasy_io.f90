@@ -413,34 +413,42 @@ module isostasy_io
 
         ! Write variables
         call nc_write(filename, "H_ice", isos%out%Hice, units="m", long_name="Ice thickness", &
-              dim1="xc", dim2="yc", dim3="time", start=[1, 1, n], ncid=ncid)
+              dim1="xc", dim2="yc", dim3="time", start=[1, 1, n], ncid=ncid, &
+              prec_abs=1e-3_wp)
 
         call nc_write(filename, "z_ss", isos%out%z_ss, units="m", long_name="Sea-surface height", &
-              dim1="xc", dim2="yc", dim3="time", start=[1, 1, n], ncid=ncid)
+              dim1="xc", dim2="yc", dim3="time", start=[1, 1, n], ncid=ncid, &
+              prec_abs=1e-3_wp)
 
         call nc_write(filename,"z_bed", isos%out%z_bed, units="m", &
             long_name="Bedrock elevation", dim1="xc", dim2="yc", dim3="time", &
-            start=[1, 1, n], ncid=ncid)
+            start=[1, 1, n], ncid=ncid, &
+            prec_abs=1e-3_wp)
 
         call nc_write(filename, "dwdt", isos%out%dwdt, units="m/yr", &
             long_name="Bedrock elevation change", &
-            dim1="xc", dim2="yc", dim3="time", start=[1, 1, n], ncid=ncid)
+            dim1="xc", dim2="yc", dim3="time", start=[1, 1, n], ncid=ncid, &
+            prec_rel=1e-4_wp)
 
         call nc_write(filename, "w_viscous", isos%out%w, units="m", &
             long_name="Displacement (viscous)", &
-            dim1="xc", dim2="yc", dim3="time", start=[1, 1, n], ncid=ncid)
+            dim1="xc", dim2="yc", dim3="time", start=[1, 1, n], ncid=ncid, &
+            prec_abs=1e-3_wp)
 
         call nc_write(filename, "w_elastic", isos%out%we, units="m", &
             long_name="Displacement (elastic)", &
-            dim1="xc", dim2="yc", dim3="time", start=[1, 1, n], ncid=ncid)
+            dim1="xc", dim2="yc", dim3="time", start=[1, 1, n], ncid=ncid, &
+            prec_abs=1e-3_wp)
 
         call nc_write(filename, "z_ss_perturbation", isos%out%dz_ss, units="m", &
             long_name="Geoid displacement", dim1="xc", dim2="yc", dim3="time", &
-            start=[1, 1, n], ncid=ncid)
+            start=[1, 1, n], ncid=ncid, &
+            prec_abs=1e-3_wp)
 
         call nc_write(filename, "column_anomaly", isos%out%canom_full, units="N m^-2", &
             long_name = "Anomaly in column pressure", &
-            dim1="xc", dim2="yc", dim3="time", start=[1, 1, n], ncid=ncid)
+            dim1="xc", dim2="yc", dim3="time", start=[1, 1, n], ncid=ncid, &
+            prec_rel=1e-4_wp)
 
         call nc_write(filename, "ocean_mask", isos%out%maskocean, units="1", &
             long_name = "Ocean mask", &
@@ -494,34 +502,42 @@ module isostasy_io
         
         ! Write variables
         call nc_write(filename, "H_ice", isos%now%Hice, units="m", long_name="Ice thickness", &
-              dim1="xc", dim2="yc", dim3="time", start=[1, 1, n], ncid=ncid)
+              dim1="xc", dim2="yc", dim3="time", start=[1, 1, n], ncid=ncid, &
+              prec_abs=1e-3_wp)
 
         call nc_write(filename, "z_ss", isos%now%z_ss, units="m", long_name="Sea-surface height", &
-              dim1="xc", dim2="yc", dim3="time", start=[1, 1, n], ncid=ncid)
+              dim1="xc", dim2="yc", dim3="time", start=[1, 1, n], ncid=ncid, &
+              prec_abs=1e-3_wp)
 
         call nc_write(filename, "dz_ss", isos%now%dz_ss, units="m", &
             long_name="Sea-surface height change", dim1="xc", dim2="yc", dim3="time", &
-            start=[1, 1, n], ncid=ncid)
+            start=[1, 1, n], ncid=ncid, &
+            prec_abs=1e-3_wp)
 
         call nc_write(filename,"z_bed", isos%now%z_bed, units="m", &
             long_name="Bedrock elevation", dim1="xc", dim2="yc", dim3="time", &
-            start=[1, 1, n], ncid=ncid)
+            start=[1, 1, n], ncid=ncid, &
+            prec_abs=1e-3_wp)
 
         call nc_write(filename, "dwdt", isos%now%dwdt, units="m/yr", &
             long_name="Bedrock elevation change", &
-            dim1="xc", dim2="yc", dim3="time", start=[1, 1, n], ncid=ncid)
+            dim1="xc", dim2="yc", dim3="time", start=[1, 1, n], ncid=ncid, &
+            prec_rel=1e-4_wp)
 
         call nc_write(filename, "w_viscous", isos%now%w, units="m", &
             long_name="Displacement (viscous)", &
-            dim1="xc", dim2="yc", dim3="time", start=[1, 1, n], ncid=ncid)
+            dim1="xc", dim2="yc", dim3="time", start=[1, 1, n], ncid=ncid, &
+            prec_abs=1e-3_wp)
 
         call nc_write(filename, "w_elastic", isos%now%we, units="m", &
             long_name="Displacement (elastic)", &
-            dim1="xc", dim2="yc", dim3="time", start=[1, 1, n], ncid=ncid)
+            dim1="xc", dim2="yc", dim3="time", start=[1, 1, n], ncid=ncid, &
+            prec_abs=1e-3_wp)
 
         call nc_write(filename, "column_anomaly", isos%now%canom_full, units="N m^-2", &
             long_name = "Anomaly in column pressure", &
-            dim1="xc", dim2="yc", dim3="time", start=[1, 1, n], ncid=ncid)
+            dim1="xc", dim2="yc", dim3="time", start=[1, 1, n], ncid=ncid, &
+            prec_rel=1e-4_wp)
 
         call nc_write(filename, "ocean_mask", isos%now%maskocean, units="1", &
             long_name = "Ocean mask", &
