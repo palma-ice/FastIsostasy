@@ -18,7 +18,7 @@ program test_rkc
     !   3. 2nd-order convergence: halving a fixed step size should reduce
     !      RKC's error by ~4x.
 
-    use isostasy_defs, only : wp, isos_class, ode_class
+    use isostasy_defs, only : dp, wp, isos_class, ode_class
     use integrators, only : step_rkc, step_euler
 
     implicit none
@@ -61,7 +61,7 @@ program test_rkc
         call init_ode(ode, nx, ny, x0, t0, dt0=1.0e-3_wp)
         isos%now%w = ode%x
 
-        call step_rkc(decay_rhs, tf1, ode, isos)
+        call step_rkc(decay_rhs, real(tf1, dp), ode, isos)
 
         err_rkc = sqrt(sum((ode%x - xan)**2) / size(xan)) / sqrt(sum(xan**2) / size(xan))
         write(*, '(a,es12.4)') "RKC relative RMS error vs analytic solution: ", err_rkc
@@ -93,7 +93,7 @@ program test_rkc
             dt_max=dt_big, q=2.0_wp)
         call init_ode(ode, nx, ny, x0, t0, dt0=dt_big)
         isos%now%w = ode%x
-        call step_euler(decay_rhs, tf2, ode, isos)
+        call step_euler(decay_rhs, real(tf2, dp), ode, isos)
 
         if (any(.not. is_finite_arr(ode%x)) .or. maxval(abs(ode%x)) > 1.0e3_wp) then
             write(*, *) "PASS: fixed-step Euler at large dt diverges as expected (unstable)."
@@ -110,7 +110,7 @@ program test_rkc
             dt_max=dt_big, q=2.0_wp)
         call init_ode(ode, nx, ny, x0, t0, dt0=dt_big)
         isos%now%w = ode%x
-        call step_rkc(decay_rhs, tf2, ode, isos)
+        call step_rkc(decay_rhs, real(tf2, dp), ode, isos)
 
         if (all(is_finite_arr(ode%x)) .and. maxval(abs(ode%x)) < 1.0e-2_wp) then
             write(*, '(a,es12.4)') "PASS: RKC stays bounded and decays correctly, max|x| = ", maxval(abs(ode%x))
@@ -142,14 +142,14 @@ program test_rkc
             dt_max=dt1, q=2.0_wp)   ! huge tol => controller always accepts => fixed step
         call init_ode(ode, nx, ny, x0, t0, dt0=dt1)
         isos%now%w = ode%x
-        call step_rkc(decay_rhs, tf3, ode, isos)
+        call step_rkc(decay_rhs, real(tf3, dp), ode, isos)
         e1 = sqrt(sum((ode%x - xan)**2) / size(xan))
 
         call init_minimal_isos(isos, nx, ny, atol=1.0e30_wp, rtol=1.0e30_wp, &
             dt_max=dt2, q=2.0_wp)
         call init_ode(ode, nx, ny, x0, t0, dt0=dt2)
         isos%now%w = ode%x
-        call step_rkc(decay_rhs, tf3, ode, isos)
+        call step_rkc(decay_rhs, real(tf3, dp), ode, isos)
         e2 = sqrt(sum((ode%x - xan)**2) / size(xan))
 
         e_ratio = e1 / max(e2, tiny(1.0_wp))
@@ -175,9 +175,9 @@ program test_rkc
 contains
 
     function decay_rhs(x, t, isos) result(dxdt)
-        use isostasy_defs, only : wp, isos_class
+        use isostasy_defs, only : dp, wp, isos_class
         implicit none
-        real(wp), intent(in) :: t
+        real(dp), intent(in) :: t
         real(wp), intent(in) :: x(:, :)
         type(isos_class), intent(inout) :: isos
         real(wp), dimension(size(x, 1), size(x, 2)) :: dxdt

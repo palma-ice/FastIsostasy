@@ -226,15 +226,15 @@ contains
 
     subroutine step_rkc(ode_rhs, tf, ode, isos)
         implicit none
-        real(wp), intent(in) :: tf
+        real(dp), intent(in) :: tf
         type(ode_class), intent(inout) :: ode
         type(isos_class), intent(inout) :: isos
 
         abstract interface
             function ode_rhs_(x, t, isos) result(dxdt)
-                use isostasy_defs, only : wp, isos_class
+                use isostasy_defs, only : dp, wp, isos_class
                 implicit none
-                real(wp), intent(in) :: t
+                real(dp), intent(in) :: t
                 real(wp), intent(in) :: x(:, :)
                 type(isos_class), intent(inout) :: isos
                 real(wp), dimension(size(x, 1), size(x, 2)) :: dxdt
@@ -249,6 +249,7 @@ contains
         integer,  parameter :: smax    = 200
 
         real(wp) :: lambda_max, error, tol
+        real(wp) :: h       ! the step, for the field arithmetic
         integer  :: s, j
         real(wp), allocatable :: mu(:), nu(:), mutilde(:), gammatilde(:), c(:)
 
@@ -260,9 +261,10 @@ contains
         do while (ode%t < tf)
             ! handle last partial step cleanly
             ode%dt = min(ode%dt, tf - ode%t)
-            ode%dt = min(ode%dt, isos%par%dt_max)
+            ode%dt = min(ode%dt, real(isos%par%dt_max, dp))
+            h = real(ode%dt, wp)
 
-            s = rkc_choose_stages(ode%dt, lambda_max, damping, smax, safety)
+            s = rkc_choose_stages(h, lambda_max, damping, smax, safety)
             if (allocated(mu)) deallocate(mu, nu, mutilde, gammatilde, c)
             allocate(mu(s), nu(s), mutilde(s), gammatilde(s), c(s))
             call rkc_coeffs(s, damping, mu, nu, mutilde, gammatilde, c)
@@ -272,14 +274,14 @@ contains
             ! through the step), k2 = F(Y_{j-1}) (refreshed every stage),
             ! y1/y2 = rolling Y_{j-1}/Y_{j-2}, x1 = stage scratch, x2 = error est.
             ode%k1 = ode_rhs(ode%x, ode%t, isos)
-            ode%y1 = ode%x + mutilde(1) * ode%dt * ode%k1    ! Y_1
+            ode%y1 = ode%x + mutilde(1) * h * ode%k1         ! Y_1
             ode%y2 = ode%x                                   ! Y_0, rolled as "Y_{-1}"
 
             do j = 2, s
                 ode%k2 = ode_rhs(ode%y1, ode%t + c(j-1) * ode%dt, isos)
                 ode%x1 = mu(j) * ode%y1 + nu(j) * ode%y2 + &
                     (1.0_wp - mu(j) - nu(j)) * ode%x + &
-                    mutilde(j) * ode%dt * ode%k2 + gammatilde(j) * ode%dt * ode%k1
+                    mutilde(j) * h * ode%k2 + gammatilde(j) * h * ode%k1
                 ode%y2 = ode%y1
                 ode%y1 = ode%x1
             end do
@@ -290,7 +292,7 @@ contains
             ! z -> -inf (unlike a naive Euler-predictor difference), so it does
             ! not defeat the method's extended stability by over-rejecting.
             ode%k2 = ode_rhs(ode%y1, ode%t + ode%dt, isos)
-            ode%x2 = 0.8_wp * (ode%x - ode%y1) + 0.4_wp * ode%dt * (ode%k1 + ode%k2)
+            ode%x2 = 0.8_wp * (ode%x - ode%y1) + 0.4_wp * h * (ode%k1 + ode%k2)
 
             tol = isos%par%atol + isos%par%rtol * max(maxval(abs(ode%x)), maxval(abs(ode%y1)))
             error = sqrt(sum((ode%x2 / tol)**2) / size(ode%x))
@@ -300,7 +302,7 @@ contains
                 ode%x = ode%y1
                 isos%now%w = ode%x
                 ode%t = ode%t + ode%dt
-                ode%dt = min(ode%dt * (1/error) ** (1/isos%par%q), isos%par%dt_max)
+                ode%dt = min(ode%dt * (1/error) ** (1/isos%par%q), real(isos%par%dt_max, dp))
                 write(*,*) "FastIso: t =", ode%t, " dt =", ode%dt, " error =", error, " s =", s
             else
                 ! Reject step and reduce time step
@@ -321,7 +323,7 @@ contains
     function spectral_radius_estimate(ode_rhs, x0, t, isos, maxiter, tol) result(lambda_max)
         implicit none
         real(wp), intent(in) :: x0(:, :)
-        real(wp), intent(in) :: t
+        real(dp), intent(in) :: t
         type(isos_class), intent(inout) :: isos
         integer,  intent(in), optional :: maxiter
         real(wp), intent(in), optional :: tol
@@ -329,9 +331,9 @@ contains
 
         abstract interface
             function ode_rhs_(x, t, isos) result(dxdt)
-                use isostasy_defs, only : wp, isos_class
+                use isostasy_defs, only : dp, wp, isos_class
                 implicit none
-                real(wp), intent(in) :: t
+                real(dp), intent(in) :: t
                 real(wp), intent(in) :: x(:, :)
                 type(isos_class), intent(inout) :: isos
                 real(wp), dimension(size(x, 1), size(x, 2)) :: dxdt
