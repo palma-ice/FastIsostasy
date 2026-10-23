@@ -115,12 +115,20 @@ isostasy_libs = 	$(objdir)/precision.o \
 ##
 ###############################################
 
-# Static library compilation
-isostasy-static: $(isostasy_libs)
-	ar rc $(objdir)/libisostasy.a $(isostasy_libs)
-	ranlib $(objdir)/libisostasy.a
+# FastIsostasy objects embed fesm-utils types: rebuild them when libfesmutils.a
+# changes, or objects keep a stale type layout (fesmc/FastHydrology#10).
+$(isostasy_libs): $(FESMUTILSLIBDIR)/libfesmutils.a
+
+# Static library compilation. The archive is a file target, so its mtime only
+# changes when an object does (hosts such as yelmox depend on it to rebuild
+# after a type change).
+isostasy-static: $(objdir)/libisostasy.a
+
+$(objdir)/libisostasy.a: $(isostasy_libs)
+	ar rc $@ $(isostasy_libs)
+	ranlib $@
 	@echo " "
-	@echo "    $(objdir)/libisostasy.a is ready."
+	@echo "    $@ is ready."
 	@echo " "
 
 test_isostasy : isostasy-static $(objdir)/isostasy_benchmarks.o

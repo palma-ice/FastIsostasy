@@ -9,8 +9,8 @@ module isostasy_defs
 
 
     type ode_class
-        real(wp) :: t
-        real(wp) :: dt
+        real(dp) :: t                   ! [yr] solver time
+        real(dp) :: dt                  ! [yr] solver step
         
         real(wp), allocatable :: x(:, :)
         real(wp), allocatable :: x1(:, :)
@@ -57,11 +57,14 @@ module isostasy_defs
         real(wp)                :: eta_ref          ! [Pa s] Reference viscosity for scaling
         real(wp)                :: tau              ! [yr] Asthenospheric relaxation time
 
-        ! Physical constants
-        real(wp) :: rho_water
-        real(wp) :: rho_ice
-        real(wp) :: rho_seawater
-        real(wp) :: rho_uppermantle
+        ! Physical constants. The five that phys_constants owns carry Earth
+        ! defaults, since isos_init takes them from a phys_const_class when one
+        ! is supplied and then isos_par_load does not read them from the
+        ! namelist. Standalone runs still set them in the &isos group.
+        real(wp) :: rho_water       = 1000.0_wp
+        real(wp) :: rho_ice         =  910.0_wp
+        real(wp) :: rho_seawater    = 1028.0_wp
+        real(wp) :: rho_uppermantle = 3300.0_wp   ! phys_constants rho_asth
         real(wp) :: rho_litho
         real(wp) :: Vden_factor
         
@@ -70,7 +73,7 @@ module isostasy_defs
         real(wp) :: compressibility_correction
 
         real(wp) :: sec_per_year
-        real(wp) :: g
+        real(wp) :: g            =    9.81_wp
         real(wp) :: r_earth
         real(wp) :: m_earth
 
@@ -83,8 +86,8 @@ module isostasy_defs
         logical                  :: use_restart
 
         real(wp) :: L_w                         ! [m] Lithosphere flexural length scale (for method=2)
-        real(wp) :: time_diagnostics            ! [yr] Current model time of last diagnostic update
-        real(wp) :: time_prognostics            ! [yr] Current model time of last prognostic update
+        real(dp) :: time_diagnostics            ! [yr] Current model time of last diagnostic update
+        real(dp) :: time_prognostics            ! [yr] Current model time of last prognostic update
 
         ! Internal parameter
         logical :: ref_was_set
@@ -131,24 +134,31 @@ module isostasy_defs
         real(wp), allocatable   :: eta_eff(:, :)    ! [Pa-s] Effective mantle viscosity
         real(wp), allocatable   :: tau(:, :)        ! [yr] Asthenospheric relaxation timescale field
 
-        type(c_ptr)             :: forward_fftplan_r2r
-        type(c_ptr)             :: backward_fftplan_r2r
-        type(c_ptr)             :: forward_dftplan_r2c
-        type(c_ptr)             :: backward_dftplan_c2r
+        type(c_ptr)             :: forward_fftplan_r2r  = c_null_ptr
+        type(c_ptr)             :: backward_fftplan_r2r = c_null_ptr
+        type(c_ptr)             :: forward_dftplan_r2c  = c_null_ptr
+        type(c_ptr)             :: backward_dftplan_c2r = c_null_ptr
+
+        ! FFTW work arrays (fftw_alloc_*). The plans are created on these arrays and
+        ! must only be executed on them. Being pointers, they can be used as work
+        ! space by routines that receive the domain with intent(IN).
+        real(dp),    pointer, contiguous :: fft_r(:, :)   => null() ! [2nx-1, 2ny-1] zero-padded field
+        complex(dp), pointer, contiguous :: fft_c(:, :)   => null() ! [nx, 2ny-1] half spectrum of fft_r
+        real(dp),    pointer, contiguous :: fft_dht(:, :) => null() ! [nx, ny] in-place DHT
 
         real(wp), allocatable   :: kei(:, :)   ! Kelvin function filter values
         real(wp), allocatable   :: GV(:, :)    ! Green's function values
         real(wp), allocatable   :: GE(:, :)    ! Green's function for elastic displacement (Farrell 1972)
         real(wp), allocatable   :: GN(:, :)    ! Green's function for dz_ss
 
-        complex(dp), allocatable :: FGV(:, :)    ! FFT of GV
-        complex(dp), allocatable :: FGE(:, :)    ! FFT of GE
-        complex(dp), allocatable :: FGN(:, :)    ! FFT of GN
+        complex(dp), allocatable :: FGV(:, :)    ! FFT of GV, shaped as fft_c
+        complex(dp), allocatable :: FGE(:, :)    ! FFT of GE, shaped as fft_c
+        complex(dp), allocatable :: FGN(:, :)    ! FFT of GN, shaped as fft_c
 
     end type isos_domain_class
 
     type isos_state_class
-        real(wp)              :: t              ! [yr] Time
+        real(dp)              :: t              ! [yr] Time
         real(wp)              :: bsl            ! [m] BSL
         real(wp)              :: V_af           ! [m^3] Volume contribution of ice above floatation
         real(wp)              :: V_pov          ! [m^3] Potential ocean volume contribution

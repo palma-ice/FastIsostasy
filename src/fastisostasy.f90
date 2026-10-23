@@ -21,6 +21,8 @@ module fastisostasy
     use lv_xlra
     use convolutions
     use ncio
+    use nml,            only : nml_replace
+    use phys_constants, only : phys_const_class, phys_const_require, phys_const_get
     use isostasy_io
     use lv_elva
     use sealevel
@@ -62,7 +64,7 @@ module fastisostasy
 
 contains
     
-    subroutine isos_init(isos, filename, group, nx_ice, ny_ice, dx, dy, rho_ice, K)
+    subroutine isos_init(isos, filename, group, nx_ice, ny_ice, dx, dy, cnst, K, domain, grid_name)
 
         implicit none
 
@@ -74,8 +76,12 @@ contains
         real(wp), intent(IN)  :: dx
         real(wp), intent(IN)  :: dy
 
-        real(wp), intent(IN), optional  :: rho_ice
+        type(phys_const_class), intent(IN), optional :: cnst
         real(wp), intent(IN), optional  :: K(:, :)
+        ! The {domain} and {grid_name} keywords of rheology_file and mask_file
+        ! (e.g. "{grid_name}_GIA_HR24.nc", grid_name the isostasy grid).
+        character(len=*), intent(IN), optional :: domain
+        character(len=*), intent(IN), optional :: grid_name
 
         ! Local variables
         integer                 :: nx_rheo, ny_rheo, nz_rheo
@@ -86,7 +92,7 @@ contains
         logical                 :: correct_distortion
         integer                 :: nbsl, i, j, l
         integer                 :: icrop1, icrop2, jcrop1, jcrop2
-        real(dp), allocatable   :: buffer_n(:, :), buffer_2n(:, :), buffer_eta(:, :, :)
+        real(dp), allocatable   :: buffer_eta(:, :, :)
         real(wp)                :: D_lith_const
         integer                 :: nx_mask, ny_mask
         real(wp), allocatable   :: xc_mask(:), yc_mask(:)
@@ -95,10 +101,30 @@ contains
         
         ! write(*,*) "Defining params..."
         write(*,*) "nx_ice, ny_ice: ", nx_ice, ny_ice
-        call isos_par_load(isos%par, filename, group)
+        call isos_par_load(isos%par, filename, group, skip_phys_const=present(cnst))
+        if (present(domain)) then
+            call nml_replace(isos%par%rheology_file, "{domain}", trim(domain))
+            call nml_replace(isos%par%mask_file,     "{domain}", trim(domain))
+        end if
+        if (present(grid_name)) then
+            call nml_replace(isos%par%rheology_file, "{grid_name}", trim(grid_name))
+            call nml_replace(isos%par%mask_file,     "{grid_name}", trim(grid_name))
+        end if
+
+        ! Physical constants: take them from the shared record when the caller
+        ! supplies one, so that a coupled program has a single definition site.
+        ! rho_litho stays with the namelist; it has no counterpart in
+        ! phys_constants.
+        if (present(cnst)) then
+            call phys_const_require(cnst, "isos_init")
+            call phys_const_get(cnst, "rho_ice",  isos%par%rho_ice)
+            call phys_const_get(cnst, "rho_w",    isos%par%rho_water)
+            call phys_const_get(cnst, "rho_sw",   isos%par%rho_seawater)
+            call phys_const_get(cnst, "rho_asth", isos%par%rho_uppermantle)
+            call phys_const_get(cnst, "g",        isos%par%g)
+        end if
 
         if (present(K))         isos%par%correct_distortion     = .true.
-        if (present(rho_ice))   isos%par%rho_ice                = rho_ice
         
         ! write(*,*) "Padding domain..."
         call init_domain_size(isos%domain, nx_ice, ny_ice, dx, dy, isos%par%min_pad)
@@ -133,22 +159,23 @@ contains
         if (present(K))         isos%domain%K                   = K
 
         write(*,*) "Initializing FFT plans..."
-        allocate(buffer_2n(2*isos%domain%nx-1, 2*isos%domain%ny-1))
-        buffer_2n = 0.0
-        allocate(buffer_n(isos%domain%nx, isos%domain%ny))
-        buffer_n = 0.0
+        ! Plans are created on the FFTW work arrays of the domain. FFTW expects
+        ! row-major dimensions, hence (ny, nx) for Fortran arrays of shape (nx, ny).
+        ! FFTW_ESTIMATE makes the plan choice, and hence the round-off, independent
+        ! of run-time measurements.
+        isos%domain%forward_fftplan_r2r = fftw_plan_r2r_2d(isos%domain%ny, isos%domain%nx, &
+            isos%domain%fft_dht, isos%domain%fft_dht, FFTW_DHT, FFTW_DHT, FFTW_ESTIMATE)
 
-        isos%domain%forward_fftplan_r2r = fftw_plan_r2r_2d(isos%domain%nx, isos%domain%ny, &
-            buffer_n, buffer_n, FFTW_DHT, FFTW_DHT, FFTW_ESTIMATE)
+        isos%domain%backward_fftplan_r2r = fftw_plan_r2r_2d(isos%domain%ny, isos%domain%nx, &
+            isos%domain%fft_dht, isos%domain%fft_dht, FFTW_DHT, FFTW_DHT, FFTW_ESTIMATE)
 
-        isos%domain%backward_fftplan_r2r = fftw_plan_r2r_2d(isos%domain%nx, isos%domain%ny, &
-            buffer_n, buffer_n, FFTW_DHT, FFTW_DHT, FFTW_ESTIMATE)
+        isos%domain%forward_dftplan_r2c = fftw_plan_dft_r2c_2d(2*isos%domain%ny-1, &
+            2*isos%domain%nx-1, isos%domain%fft_r, isos%domain%fft_c, &
+            ior(FFTW_ESTIMATE, FFTW_DESTROY_INPUT))
 
-        isos%domain%forward_dftplan_r2c = fftw_plan_dft_r2c_2d(2*isos%domain%nx-1, &
-            2*isos%domain%ny-1, buffer_2n, isos%domain%FGE, 1)
-
-        isos%domain%backward_dftplan_c2r = fftw_plan_dft_c2r_2d(2*isos%domain%nx-1, &
-            2*isos%domain%ny-1, isos%domain%FGE, buffer_2n, 1)
+        isos%domain%backward_dftplan_c2r = fftw_plan_dft_c2r_2d(2*isos%domain%ny-1, &
+            2*isos%domain%nx-1, isos%domain%fft_c, isos%domain%fft_r, &
+            ior(FFTW_ESTIMATE, FFTW_DESTROY_INPUT))
 
         write(*,*) "Initializing distorted domain..."
         isos%domain%dx_matrix = isos%domain%dx * isos%domain%K
@@ -174,14 +201,12 @@ contains
 
         write(*,*) "Initializing elastic Green's function..."
         call calc_elastic_green(isos%domain%GE, dx=isos%domain%dx, dy=isos%domain%dx)
-        call precompute_kernel(isos%domain%forward_dftplan_r2c, isos%domain%GE, &
-            isos%domain%FGE, isos%domain%nx, isos%domain%ny)
+        isos%domain%FGE = precompute_kernel(isos%domain%GE, isos%domain)
 
         write(*,*) "Initializing gravitational Green's function..."
         call calc_z_ss_green(isos%domain%GN, isos%par%m_earth, &
             isos%par%r_earth, dx=isos%domain%dx, dy=isos%domain%dx)
-        call precompute_kernel(isos%domain%forward_dftplan_r2c, isos%domain%GN, &
-            isos%domain%FGN, isos%domain%nx, isos%domain%ny)
+        isos%domain%FGN = precompute_kernel(isos%domain%GN, isos%domain)
 
         write(*,*) "Initializing maskactive with the help of buffer..."
         isos%domain%maskactive(:, :) = .false.
@@ -230,8 +255,7 @@ contains
                 isos%par%L_w, D_lith_const, dx=isos%domain%dx, dy=isos%domain%dx)
 
             ! write(*,*) "Initialising viscous Green kernel..."
-            call precompute_kernel(isos%domain%forward_dftplan_r2c, isos%domain%GV, &
-                isos%domain%FGV, isos%domain%nx, isos%domain%ny)
+            isos%domain%FGV = precompute_kernel(isos%domain%GV, isos%domain)
 
             !# TODO: allow heterogeneous tau
             isos%domain%tau        = isos%par%tau          ! [yr]
@@ -601,7 +625,7 @@ contains
         type(isos_class), intent(INOUT) :: isos
         real(wp), intent(IN) :: z_bed(:, :)                 ! [m] Current bedrock elevation
         real(wp), intent(IN) :: H_ice(:, :)                 ! [m] Current ice thickness
-        real(wp), intent(IN) :: time                        ! [a] Initial time
+        real(dp), intent(IN) :: time                        ! [a] Initial time
         type(bsl_class), intent(INOUT) :: bsl
 
         isos%now%bsl = bsl%bsl_now
@@ -624,6 +648,11 @@ contains
         else
             call out2in(isos%now%z_bed, z_bed, isos%domain)
             call out2in(isos%now%Hice,  H_ice, isos%domain)
+
+            ! The ODE solver starts from dt_init and w (a restart restores its
+            ! adapted dt and its state).
+            isos%ode%dt = isos%par%dt_init
+            isos%ode%x  = isos%now%w
 
             if (.not. isos%par%ref_was_set) then
                 call isos_init_ref(isos, z_bed, H_ice, isos%now%bsl, isos%now%dz_ss)
@@ -653,9 +682,9 @@ contains
         ! ode%t == time the update rebuilds the diagnostics/output without stepping
         ! the viscous displacement forward. This matters on a restart, where
         ! isos%now%w is already the saved state and must not be advanced again.
-        isos%ode%dt = isos%par%dt_init
+        ! (ode%dt and ode%x were set above: dt_init and w on a cold start, restored
+        ! on a restart.)
         isos%ode%t = time
-        isos%ode%x = isos%now%w
 
         ! Rebuild diagnostics/output from the (initial or restored) state. On a
         ! restart this runs at time == time_prognostics with use_restart, so
@@ -692,7 +721,7 @@ contains
 
     function get_dwdt(w, t, isos) result(dwdt)
         real(wp), intent(IN), dimension(:, :) :: w
-        real(wp), intent(IN) :: t
+        real(dp), intent(IN) :: t
         real(wp), dimension(size(w,1), size(w,2)) :: dwdt
         type(isos_class), intent(INOUT) :: isos
     
@@ -718,11 +747,7 @@ contains
         case(2)
 
             call precomputed_fftconvolution(isos%now%w_equilibrium, isos%domain%FGV, &
-                -isos%now%canom_load * isos%par%g * isos%domain%K ** 2.0, &
-                isos%domain%i1, isos%domain%i2, &
-                isos%domain%j1, isos%domain%j2, isos%domain%offset, &
-                isos%domain%nx, isos%domain%ny, &
-                isos%domain%forward_dftplan_r2c, isos%domain%backward_dftplan_c2r)
+                -isos%now%canom_load * isos%par%g * isos%domain%K ** 2.0, isos%domain)
 
             call apply_zerobc_at_corners(isos%now%w_equilibrium, isos%domain%nx, &
                 isos%domain%ny)
@@ -738,7 +763,8 @@ contains
                 isos%domain%eta_eff, isos%domain%kappa, isos%domain%R, &
                 isos%domain%nx, isos%domain%ny, &
                 isos%domain%dx_matrix, isos%domain%dy_matrix, isos%par%sec_per_year, &
-                isos%domain%forward_fftplan_r2r, isos%domain%backward_fftplan_r2r)
+                isos%domain%forward_fftplan_r2r, isos%domain%backward_fftplan_r2r, &
+                isos%domain%fft_dht)
         end select
 
         dwdt = isos%now%dwdt
@@ -750,13 +776,14 @@ contains
 
         type(isos_class), intent(INOUT) :: isos
         real(wp), intent(IN)            :: H_ice(:, :)      ! [m] Current ice thickness
-        real(wp), intent(IN)            :: time             ! [a] Current time
+        real(dp), intent(IN)            :: time             ! [a] Current time
         type(bsl_class), intent(INOUT)  :: bsl
 
         real(wp), intent(IN), optional  :: dwdt_corr(:, :) ! [m/yr] Basal topography displacement rate (ie, to relax from low resolution to high resolution)
 
         ! Local variables
         real(wp) :: dt, dt_now
+        real(dp) :: t_ode0
         integer  :: n, nstep
         logical  :: update_diagnostics
         logical  :: advance_bsl
@@ -799,6 +826,12 @@ contains
         ! preserved: isostasy is coupled before the ice sheet, so the restart-time
         ! ice is already one coupling step ahead of what the last real update saw.
         ! Recomputing here would zero out the first real step's deltaV_bsl.
+        ! The domain's bsl follows the shared one on a normal step. In the
+        ! suppressed rebuild it keeps the restored value (isos_restart_read):
+        ! with several domains sharing one bsl, each domain's last update saw
+        ! the bsl as it stood when that domain ran, not the final shared value
+        ! the restart bundle holds, so taking the shared value here would move
+        ! z_ss of all but the last-updated domain at a restart.
         if (advance_bsl) then
             call calc_sl_contributions(isos)
 
@@ -812,9 +845,9 @@ contains
                 bsl%bsl_now = bsl%bsl_now - isos%now%dbsl_total
                 ! minus sign because what goes into ice sheet goes out of ocean.
             end if
-        end if
 
-        isos%now%bsl = bsl%bsl_now
+            isos%now%bsl = bsl%bsl_now
+        end if
         call calc_z_ss(isos%now%z_ss, isos%now%bsl, isos%ref%z_ss, isos%now%dz_ss)
         
         ! write(*,*) "isos_update:: updating diagnostic bool..."
@@ -836,11 +869,7 @@ contains
         if (update_diagnostics) then
             if (isos%par%include_elastic) then
                 call precomputed_fftconvolution(isos%now%we, isos%domain%FGE, &
-                    isos%now%canom_load * isos%par%g * isos%domain%K ** 2.0, &
-                    isos%domain%i1, isos%domain%i2, &
-                    isos%domain%j1, isos%domain%j2, isos%domain%offset, &
-                    isos%domain%nx, isos%domain%ny, &
-                    isos%domain%forward_dftplan_r2c, isos%domain%backward_dftplan_c2r)
+                    isos%now%canom_load * isos%par%g * isos%domain%K ** 2.0, isos%domain)
             else
                 isos%now%we = 0.0_wp
             end if
@@ -857,10 +886,7 @@ contains
         if (update_diagnostics) then
             if (isos%par%heterogeneous_ssh) then
                 call precomputed_fftconvolution(isos%now%dz_ss, isos%domain%FGN, &
-                    isos%now%mass_anom, isos%domain%i1, isos%domain%i2, &
-                    isos%domain%j1, isos%domain%j2, isos%domain%offset, &
-                    isos%domain%nx, isos%domain%ny, &
-                    isos%domain%forward_dftplan_r2c, isos%domain%backward_dftplan_c2r)
+                    isos%now%mass_anom, isos%domain)
             else
                 isos%now%dz_ss = 0.0_wp
             end if
@@ -872,6 +898,7 @@ contains
         call calc_columnanoms_seawater(isos)
         call calc_columnanoms_load(isos)
 
+        t_ode0 = isos%ode%t
         select case(trim(isos%par%dt_method))
         case("euler")
             call step_euler(get_dwdt, time, isos%ode, isos)
@@ -896,7 +923,11 @@ contains
             stop
         end select
         
-        call apply_zerobc_at_corners(isos%now%w, isos%domain%nx, isos%domain%ny)
+        ! The corner condition belongs to a step's output: when the solver did not
+        ! step (initialization or restart redo at time_prognostics), w is already
+        ! the stepped state and must not be shifted again.
+        if (isos%ode%t > t_ode0) &
+            call apply_zerobc_at_corners(isos%now%w, isos%domain%nx, isos%domain%ny)
         call calc_columnanoms_mantle(isos)
         isos%now%z_bed = isos%ref%z_bed + isos%now%w + isos%now%we
         isos%par%time_prognostics = time
@@ -965,7 +996,7 @@ contains
         return
     end subroutine isos_end
 
-    subroutine isos_par_load(par, filename, group)
+    subroutine isos_par_load(par, filename, group, skip_phys_const)
 
         use nml
 
@@ -974,16 +1005,27 @@ contains
         type(isos_param_class), intent(OUT) :: par
         character(len=*),       intent(IN)  :: filename 
         character(len=*),       intent(IN)  :: group 
+        ! Do not read rho_water, rho_ice, rho_seawater, rho_uppermantle and g:
+        ! the caller takes them from a phys_const_class instead, so the &isos
+        ! group need not (and should not) declare them.
+        logical,                intent(IN), optional :: skip_phys_const
+
+        logical :: read_phys_const
+
+        read_phys_const = .true.
+        if (present(skip_phys_const)) read_phys_const = .not. skip_phys_const
 
         ! Physical constants
         call nml_read(filename,group,"E",               par%E)
         call nml_read(filename,group,"nu",              par%nu)
-        call nml_read(filename,group,"rho_water",       par%rho_water)
-        call nml_read(filename,group,"rho_ice",         par%rho_ice)
-        call nml_read(filename,group,"rho_seawater",    par%rho_seawater)
-        call nml_read(filename,group,"rho_uppermantle", par%rho_uppermantle)
+        if (read_phys_const) then
+            call nml_read(filename,group,"rho_water",       par%rho_water)
+            call nml_read(filename,group,"rho_ice",         par%rho_ice)
+            call nml_read(filename,group,"rho_seawater",    par%rho_seawater)
+            call nml_read(filename,group,"rho_uppermantle", par%rho_uppermantle)
+            call nml_read(filename,group,"g",               par%g)
+        end if
         call nml_read(filename,group,"rho_litho",       par%rho_litho)
-        call nml_read(filename,group,"g",               par%g)
         call nml_read(filename,group,"r_earth",         par%r_earth)
         call nml_read(filename,group,"m_earth",         par%m_earth)
 
@@ -1125,8 +1167,27 @@ contains
         if (allocated(domain%FGV))          deallocate(domain%FGV)
         if (allocated(domain%FGE))          deallocate(domain%FGE)
         if (allocated(domain%FGN))          deallocate(domain%FGN)
+
+        call destroy_fftw_plan(domain%forward_fftplan_r2r)
+        call destroy_fftw_plan(domain%backward_fftplan_r2r)
+        call destroy_fftw_plan(domain%forward_dftplan_r2c)
+        call destroy_fftw_plan(domain%backward_dftplan_c2r)
+
+        if (associated(domain%fft_r))   call fftw_free(c_loc(domain%fft_r))
+        if (associated(domain%fft_c))   call fftw_free(c_loc(domain%fft_c))
+        if (associated(domain%fft_dht)) call fftw_free(c_loc(domain%fft_dht))
+        nullify(domain%fft_r, domain%fft_c, domain%fft_dht)
         return
     end subroutine deallocate_isos_domain
+
+    subroutine destroy_fftw_plan(plan)
+        implicit none
+        type(c_ptr), intent(INOUT) :: plan
+
+        if (c_associated(plan)) call fftw_destroy_plan(plan)
+        plan = c_null_ptr
+        return
+    end subroutine destroy_fftw_plan
 
     subroutine deallocate_isos_state(state)
         implicit none 
@@ -1240,9 +1301,17 @@ contains
         allocate(domain%GE(nx, ny))
         allocate(domain%GN(nx, ny))
 
-        allocate(domain%FGV(2*nx-1, 2*ny-1))
-        allocate(domain%FGE(2*nx-1, 2*ny-1))
-        allocate(domain%FGN(2*nx-1, 2*ny-1))
+        ! FFTW work arrays, see isos_domain_class. The half spectrum of the
+        ! (2nx-1, 2ny-1) real array has shape (nx, 2ny-1).
+        call c_f_pointer(fftw_alloc_real(int((2*nx-1)*(2*ny-1), c_size_t)), &
+            domain%fft_r, [2*nx-1, 2*ny-1])
+        call c_f_pointer(fftw_alloc_complex(int(nx*(2*ny-1), c_size_t)), &
+            domain%fft_c, [nx, 2*ny-1])
+        call c_f_pointer(fftw_alloc_real(int(nx*ny, c_size_t)), domain%fft_dht, [nx, ny])
+
+        allocate(domain%FGV(nx, 2*ny-1))
+        allocate(domain%FGE(nx, 2*ny-1))
+        allocate(domain%FGN(nx, 2*ny-1))
 
         ! Set some values to zero for safety
 
@@ -1250,6 +1319,10 @@ contains
         domain%GV  = 0.0
         domain%GE  = 0.0
         domain%GN  = 0.0
+
+        domain%fft_r   = 0.0_dp
+        domain%fft_c   = (0.0_dp, 0.0_dp)
+        domain%fft_dht = 0.0_dp
         
         domain%tau = 0.0 
 

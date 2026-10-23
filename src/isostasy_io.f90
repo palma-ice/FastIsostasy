@@ -1,6 +1,6 @@
 module isostasy_io
 
-    use isostasy_defs, only : wp, isos_class, isos_domain_class
+    use isostasy_defs, only : dp, wp, isos_class, isos_domain_class
     use nml
     use ncio
 
@@ -59,7 +59,7 @@ module isostasy_io
 
         type(isos_class),  intent(IN) :: isos
         character(len=*),  intent(IN) :: filename
-        real(wp),          intent(IN) :: time
+        real(dp),          intent(IN) :: time
         logical, optional, intent(IN) :: init
 
         ! Local variables
@@ -79,7 +79,7 @@ module isostasy_io
         if (initialize_file) then
             ! Initialize file by writing grid info
             call isos_grid_write(isos%domain, filename, create=.TRUE.)
-            call nc_write_dim(filename,"time",     x=time,dx=1.0_wp, nx=1, units="years")
+            call nc_write_dim(filename,"time",     x=time,dx=1.0_dp, nx=1, units="years")
             call nc_write_dim(filename,"ref_now",  x=1.0_wp, dx=1.0_wp, nx=2, units="1")
             call nc_write_attr(filename,xnm,"standard_name","projection_x_coordinate")
             call nc_write_attr(filename,ynm,"standard_name","projection_y_coordinate")
@@ -144,6 +144,15 @@ module isostasy_io
         call nc_write(filename, "dbsl_total", isos%now%dbsl_total, units="m", dim1="time", &
             ncid=ncid, start=[n], count=[1])
 
+        ! Time step of the viscous ODE solver: adapted during the run, so needed for
+        ! bit-exact continuity (a restart from dt_init takes different substeps).
+        call nc_write(filename, "ode_dt", isos%ode%dt, units="years", dim1="time", &
+            ncid=ncid, start=[n], count=[1])
+        ! The solver state: w is shifted by the corner condition, so the solver
+        ! continues from its own (unshifted) state.
+        call nc_write(filename, "ode_x", isos%ode%x, units="m", dim1="xc", dim2="yc", &
+            dim3="time", ncid=ncid, start=[1,1,n], count=[nx,ny,1])
+
         call nc_write(filename, "He_lith", isos%domain%He_lith * 1e-3, units="km", dim1="xc", &
             dim2="yc", dim3="time", ncid=ncid, start=[1,1,n], count=[nx,ny,1])
         call nc_write(filename, "mask_active", isos%domain%maskactive, units="1", &
@@ -164,7 +173,7 @@ module isostasy_io
 
         type(isos_class),  intent(INOUT) :: isos
         character(len=*),  intent(IN)    :: filename
-        real(wp),          intent(IN)    :: time
+        real(dp),          intent(IN)    :: time
 
         call nc_read(filename, "z_bed_ref", isos%ref%z_bed, start=[1,1,1], &
             count=[isos%domain%nx, isos%domain%ny, 1])
@@ -239,6 +248,22 @@ module isostasy_io
         if (nc_exists_var(filename, "dbsl_total")) &
             call nc_read(filename, "dbsl_total", isos%now%dbsl_total, start=[1], count=[1])
 
+        if (nc_exists_var(filename, "ode_dt")) then
+            call nc_read(filename, "ode_dt", isos%ode%dt, start=[1], count=[1])
+        else
+            isos%ode%dt = isos%par%dt_init
+            write(*,*) "isos_restart_read:: WARNING: 'ode_dt' absent; the ODE solver "// &
+                "restarts from dt_init. Regenerate restart for bit-exact continuity."
+        end if
+        if (nc_exists_var(filename, "ode_x")) then
+            call nc_read(filename, "ode_x", isos%ode%x, start=[1,1,1], &
+                count=[isos%domain%nx, isos%domain%ny, 1])
+        else
+            isos%ode%x = isos%now%w
+            write(*,*) "isos_restart_read:: WARNING: 'ode_x' absent; the ODE solver "// &
+                "restarts from w. Regenerate restart for bit-exact continuity."
+        end if
+
         write(*,*) "isos_restart_read:: read in restart file: ", trim(filename)
 
         return
@@ -254,7 +279,7 @@ module isostasy_io
         real(wp),         intent(IN) :: xc(:)
         real(wp),         intent(IN) :: yc(:)
         character(len=*), intent(IN) :: filename
-        real(wp),         intent(IN) :: time_init
+        real(dp),         intent(IN) :: time_init
         
         ! Local variables
         integer :: nf
@@ -265,7 +290,7 @@ module isostasy_io
         ! Add grid axis variables to netcdf file
         call nc_write_dim(filename, "xc", x=xc*1e-3, units="km")
         call nc_write_dim(filename, "yc", x=yc*1e-3, units="km")
-        call nc_write_dim(filename, "time", x=time_init, dx=1.0_wp, nx=1, &
+        call nc_write_dim(filename, "time", x=time_init, dx=1.0_dp, nx=1, &
             units="year", unlimited=.TRUE.)
 
         return
@@ -278,7 +303,7 @@ module isostasy_io
 
         type(isos_class), intent(IN) :: isos
         character(len=*), intent(IN) :: filename
-        real(wp),         intent(IN) :: time_init
+        real(dp),         intent(IN) :: time_init
         
         ! Local variables
         integer :: nf, l
@@ -290,7 +315,7 @@ module isostasy_io
         ! Add grid axis variables to netcdf file
         call nc_write_dim(filename, "xc", x=isos%domain%xc*1e-3, units="km")
         call nc_write_dim(filename, "yc", x=isos%domain%yc*1e-3, units="km")
-        call nc_write_dim(filename, "time", x=time_init, dx=1.0_wp, nx=1, &
+        call nc_write_dim(filename, "time", x=time_init, dx=1.0_dp, nx=1, &
             units="year", unlimited=.TRUE.)
 
         ! Write constant fields
@@ -367,7 +392,7 @@ module isostasy_io
         
         type(isos_class), intent(IN) :: isos
         character(len=*), intent(IN) :: filename
-        real(wp),         intent(IN) :: time
+        real(dp),         intent(IN) :: time
         real(wp),         intent(IN) :: H_ice(:, :)
         real(wp),         intent(IN), optional :: z_bed_bench(:, :)
 
@@ -388,34 +413,42 @@ module isostasy_io
 
         ! Write variables
         call nc_write(filename, "H_ice", isos%out%Hice, units="m", long_name="Ice thickness", &
-              dim1="xc", dim2="yc", dim3="time", start=[1, 1, n], ncid=ncid)
+              dim1="xc", dim2="yc", dim3="time", start=[1, 1, n], ncid=ncid, &
+              prec_abs=1e-3_wp)
 
         call nc_write(filename, "z_ss", isos%out%z_ss, units="m", long_name="Sea-surface height", &
-              dim1="xc", dim2="yc", dim3="time", start=[1, 1, n], ncid=ncid)
+              dim1="xc", dim2="yc", dim3="time", start=[1, 1, n], ncid=ncid, &
+              prec_abs=1e-3_wp)
 
         call nc_write(filename,"z_bed", isos%out%z_bed, units="m", &
             long_name="Bedrock elevation", dim1="xc", dim2="yc", dim3="time", &
-            start=[1, 1, n], ncid=ncid)
+            start=[1, 1, n], ncid=ncid, &
+            prec_abs=1e-3_wp)
 
         call nc_write(filename, "dwdt", isos%out%dwdt, units="m/yr", &
             long_name="Bedrock elevation change", &
-            dim1="xc", dim2="yc", dim3="time", start=[1, 1, n], ncid=ncid)
+            dim1="xc", dim2="yc", dim3="time", start=[1, 1, n], ncid=ncid, &
+            prec_rel=1e-4_wp)
 
         call nc_write(filename, "w_viscous", isos%out%w, units="m", &
             long_name="Displacement (viscous)", &
-            dim1="xc", dim2="yc", dim3="time", start=[1, 1, n], ncid=ncid)
+            dim1="xc", dim2="yc", dim3="time", start=[1, 1, n], ncid=ncid, &
+            prec_abs=1e-3_wp)
 
         call nc_write(filename, "w_elastic", isos%out%we, units="m", &
             long_name="Displacement (elastic)", &
-            dim1="xc", dim2="yc", dim3="time", start=[1, 1, n], ncid=ncid)
+            dim1="xc", dim2="yc", dim3="time", start=[1, 1, n], ncid=ncid, &
+            prec_abs=1e-3_wp)
 
         call nc_write(filename, "z_ss_perturbation", isos%out%dz_ss, units="m", &
             long_name="Geoid displacement", dim1="xc", dim2="yc", dim3="time", &
-            start=[1, 1, n], ncid=ncid)
+            start=[1, 1, n], ncid=ncid, &
+            prec_abs=1e-3_wp)
 
         call nc_write(filename, "column_anomaly", isos%out%canom_full, units="N m^-2", &
             long_name = "Anomaly in column pressure", &
-            dim1="xc", dim2="yc", dim3="time", start=[1, 1, n], ncid=ncid)
+            dim1="xc", dim2="yc", dim3="time", start=[1, 1, n], ncid=ncid, &
+            prec_rel=1e-4_wp)
 
         call nc_write(filename, "ocean_mask", isos%out%maskocean, units="1", &
             long_name = "Ocean mask", &
@@ -453,7 +486,7 @@ module isostasy_io
         
         type(isos_class), intent(IN) :: isos
         character(len=*), intent(IN) :: filename
-        real(wp),         intent(IN) :: time
+        real(dp),         intent(IN) :: time
 
         ! Local variables
         integer  :: ncid, n
@@ -469,34 +502,42 @@ module isostasy_io
         
         ! Write variables
         call nc_write(filename, "H_ice", isos%now%Hice, units="m", long_name="Ice thickness", &
-              dim1="xc", dim2="yc", dim3="time", start=[1, 1, n], ncid=ncid)
+              dim1="xc", dim2="yc", dim3="time", start=[1, 1, n], ncid=ncid, &
+              prec_abs=1e-3_wp)
 
         call nc_write(filename, "z_ss", isos%now%z_ss, units="m", long_name="Sea-surface height", &
-              dim1="xc", dim2="yc", dim3="time", start=[1, 1, n], ncid=ncid)
+              dim1="xc", dim2="yc", dim3="time", start=[1, 1, n], ncid=ncid, &
+              prec_abs=1e-3_wp)
 
         call nc_write(filename, "dz_ss", isos%now%dz_ss, units="m", &
             long_name="Sea-surface height change", dim1="xc", dim2="yc", dim3="time", &
-            start=[1, 1, n], ncid=ncid)
+            start=[1, 1, n], ncid=ncid, &
+            prec_abs=1e-3_wp)
 
         call nc_write(filename,"z_bed", isos%now%z_bed, units="m", &
             long_name="Bedrock elevation", dim1="xc", dim2="yc", dim3="time", &
-            start=[1, 1, n], ncid=ncid)
+            start=[1, 1, n], ncid=ncid, &
+            prec_abs=1e-3_wp)
 
         call nc_write(filename, "dwdt", isos%now%dwdt, units="m/yr", &
             long_name="Bedrock elevation change", &
-            dim1="xc", dim2="yc", dim3="time", start=[1, 1, n], ncid=ncid)
+            dim1="xc", dim2="yc", dim3="time", start=[1, 1, n], ncid=ncid, &
+            prec_rel=1e-4_wp)
 
         call nc_write(filename, "w_viscous", isos%now%w, units="m", &
             long_name="Displacement (viscous)", &
-            dim1="xc", dim2="yc", dim3="time", start=[1, 1, n], ncid=ncid)
+            dim1="xc", dim2="yc", dim3="time", start=[1, 1, n], ncid=ncid, &
+            prec_abs=1e-3_wp)
 
         call nc_write(filename, "w_elastic", isos%now%we, units="m", &
             long_name="Displacement (elastic)", &
-            dim1="xc", dim2="yc", dim3="time", start=[1, 1, n], ncid=ncid)
+            dim1="xc", dim2="yc", dim3="time", start=[1, 1, n], ncid=ncid, &
+            prec_abs=1e-3_wp)
 
         call nc_write(filename, "column_anomaly", isos%now%canom_full, units="N m^-2", &
             long_name = "Anomaly in column pressure", &
-            dim1="xc", dim2="yc", dim3="time", start=[1, 1, n], ncid=ncid)
+            dim1="xc", dim2="yc", dim3="time", start=[1, 1, n], ncid=ncid, &
+            prec_rel=1e-4_wp)
 
         call nc_write(filename, "ocean_mask", isos%now%maskocean, units="1", &
             long_name = "Ocean mask", &

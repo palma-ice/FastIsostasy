@@ -26,15 +26,15 @@ program test_isostasy_looped
     character(len=56)  :: mantle
     character(len=56)  :: lithosphere
 
-    real(wp) :: time, time_bp, time_init, time_end 
-    real(wp) :: dtt, dt_out
+    real(dp) :: time, time_bp, time_init, time_end 
+    real(dp) :: dtt, dt_out
     integer  :: n, nt
     integer  :: ncx, ncy, nct
 
     real(wp) :: r0, h0, eta
 
     integer  :: i, j, nx, ny, nz, slice_time, i_xp, n_xp
-    real(wp) :: time_now
+    real(dp) :: time_now
     real(wp) :: xmin, xmax, dx
     real(wp) :: ymin, ymax, dy
     real(wp) :: xcntr, ycntr
@@ -43,7 +43,8 @@ program test_isostasy_looped
 
     real(wp), allocatable :: z_bed(:, :) 
     real(wp), allocatable :: H_ice(:, :), T_ice(:, : ,:), z_bed_ice(:, : ,:)
-    real(wp), allocatable :: time_ice(:), xc_ice(:), yc_ice(:)
+    real(dp), allocatable :: time_ice(:)
+    real(wp), allocatable :: xc_ice(:), yc_ice(:)
     real(wp), allocatable :: z_ss(:, :) 
     
     real(wp), allocatable :: mask(:, :)
@@ -418,7 +419,7 @@ program test_isostasy_looped
 
                     call isosbench_elva_disk(z_bed_bench, r0, h0, eta, isos1%domain%dx, &
                         isos1%domain%D_lith(1,1), isos1%par%rho_ice, isos1%par%rho_uppermantle, &
-                        isos1%par%g,time)
+                        isos1%par%g,real(time,wp))
 
                     call isos_write_step(isos1, file_out, time, H_ice, z_bed_bench)
 
