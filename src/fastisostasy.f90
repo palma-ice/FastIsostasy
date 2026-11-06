@@ -173,7 +173,8 @@ contains
         isos%domain%D_lith = D_lith_const
 
         write(*,*) "Initializing elastic Green's function..."
-        call calc_elastic_green(isos%domain%GE, dx=isos%domain%dx, dy=isos%domain%dx)
+        call calc_elastic_green(isos%domain%GE, dx=isos%domain%dx, dy=isos%domain%dx, &
+            g=isos%par%g)
         call precompute_kernel(isos%domain%forward_dftplan_r2c, isos%domain%GE, &
             isos%domain%FGE, isos%domain%nx, isos%domain%ny)
 
