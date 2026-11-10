@@ -11,7 +11,17 @@ module isostasy_defs
     type ode_class
         real(wp) :: t
         real(wp) :: dt
-        
+
+        ! Cached spectral-radius estimate used by step_rkc (integrators.f90).
+        ! Refreshed at most every dt_max of simulated time (negative
+        ! lambda_max = "not yet computed", reset in isos_init_state) rather
+        ! than on every call to step_rkc -- the power iteration that computes
+        ! it costs ~100 extra RHS evaluations, which is fine once per dt_max
+        ! but ruinous if repeated on every one of the many isos_update calls
+        ! in a typical run.
+        real(wp) :: lambda_max
+        real(wp) :: t_lambda_max   ! simulation time of the last estimate
+
         real(wp), allocatable :: x(:, :)
         real(wp), allocatable :: x1(:, :)
         real(wp), allocatable :: x2(:, :)

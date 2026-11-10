@@ -70,6 +70,7 @@ Reproduce the idealised load experiment from Bueler et al. (2007) with `isos.inc
 3. `isostasy.method = 2`: ELRA bedrock deformation.
 4. `isostasy.method = 3`: LV-ELVA bedrock deformation.
 5. `isostasy.method = 3`: LV-ELVA bedrock deformation with low-viscosity layer.
+6. `isostasy.method = 3`: stiff variant of 4. for testing the time integrators (`test1f`): 20 km grid, 250 km thick lithosphere, 2 kyr with a 10 yr coupling step. The flexural term is then far beyond the forward-Euler stability limit, so an integrator that is not stable in this regime aborts within ~100 yr (`large_check` on `w`), whereas a stable one reproduces the analytical solution (RMS error of ~2 m at 2 kyr, as in 4.).
 
 ### Test 2
 
@@ -263,10 +264,13 @@ FastIsostasy offers a few options for the time stepping method `isos.dt_method`:
 - "rk4" which is a fourth-order Runge-Kutta method, with fixed time stepping.
 - "bs32" which is a third-order, two-stage Bogacki-Shampine method, with adaptive time stepping.
 - "tsit54" which is a fifth-order, four-stage Tsitouras method, with adaptive time stepping.
+- "rkc" which is a second-order, damped Runge-Kutta-Chebyshev method (Sommeijer, Shampine & Verwer, 1997), with adaptive time stepping and an adaptive stage count.
 
-The default choice is "tsit54", which is a good compromise between accuracy and computational time. The user can however choose another method if desired. The main advantage of the adaptive time stepping methods is that they automatically adjust the time step to ensure stability and accuracy, which can save computational time when possible and reduce the time step to avoid instabilities when needed. 
+The default choice is "rkc". Its accuracy order is lower than "bs32"/"tsit54", but its real-axis stability interval grows with the *square* of its stage count, so on the mildly stiff relaxation ODEs that dominate isostasy computations (fine grids, low mantle viscosities, sharp lithospheric thickness gradients) it can take much larger, stable steps by adding a few cheap extra stages rather than shrinking the time step -- exactly the regime where "bs32"/"tsit54" get forced into tiny steps despite their higher order. Internally, "rkc" estimates the spectral radius of the right-hand side (a nonlinear power iteration; no Jacobian is ever formed) and picks the smallest stage count whose stability boundary covers the proposed step, so it only pays for as many stages as the problem's local stiffness actually demands.
 
-For high resolutions, low viscosities, abrupt changes of the load and/or high gradients of the lithospheric thickness, the time step can become very small and therefore increase the computational time. In this case, it might be desirable impose a minimum time step through `dt_min` or to switch to a fixed time stepping method.
+The user can however choose another method if desired: "tsit54" can still win for smooth, non-stiff regimes, since its higher order lets fewer, larger steps suffice; "euler"/"rk4" remain useful when a fixed time step is required, e.g. for reproducibility or coupling to another fixed-step model component. The main advantage of the adaptive time stepping methods ("bs32", "tsit54", "rkc") is that they automatically adjust the time step (and, for "rkc", the stage count) to ensure stability and accuracy, which can save computational time when possible and reduce the time step to avoid instabilities when needed.
+
+For high resolutions, low viscosities, abrupt changes of the load and/or high gradients of the lithospheric thickness, the time step can become very small and therefore increase the computational time -- this is the situation "rkc" was adopted as the default to handle better than "bs32"/"tsit54". In this case, it might still be desirable to impose a minimum time step through `dt_min` or to switch to a fixed time stepping method.
 
 To save time, diagnostic variables (the sea-surface elevation and the elastic displacement) are only computed every `dt_diagnostics` which should be typically chosen as a multiple of `dt_prognostics`. For most simulation `dt_diagnostics = 10` (yr) is sufficient but it can be made much smaller since the convolution operations underlying the computation of the diagnostic variables are optimized.
 

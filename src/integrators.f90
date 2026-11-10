@@ -239,23 +239,32 @@ contains
         real(wp), parameter :: safety  = 1.2_wp
         integer,  parameter :: smax    = 200
 
-        real(wp) :: lambda_max, error, tol
+        real(wp) :: error, tol
         integer  :: s, j
         real(wp), allocatable :: mu(:), nu(:), mutilde(:), gammatilde(:), c(:)
-
-        ! Seed the spectral-radius estimate once per call (cf. init_integrator
-        ! in FastIsostasy.jl); re-estimating every accepted step is unnecessary
-        ! since the mantle relaxation operator's stiffness varies slowly.
-        ! The probe overwrites isos%now%w and dwdt, so only run it when a step is taken
-        lambda_max = 0.0_wp
-        if (ode%t < tf) lambda_max = spectral_radius_estimate(ode_rhs, ode%x, ode%t, isos)
 
         do while (ode%t < tf)
             ! handle last partial step cleanly
             ode%dt = min(ode%dt, tf - ode%t)
             ode%dt = min(ode%dt, isos%par%dt_max)
 
-            s = rkc_choose_stages(ode%dt, lambda_max, damping, smax, safety)
+            ! Refresh the spectral-radius estimate at most every dt_max of
+            ! simulated time, not on every call: step_rkc is typically called
+            ! many times (once per outer isos_update, e.g. every
+            ! dt_diagnostics), and the power iteration behind
+            ! spectral_radius_estimate costs ~100 extra RHS evaluations --
+            ! fine once per dt_max, but ruinous if paid on every call.
+            ! isos_init_state resets ode%lambda_max to a negative sentinel at
+            ! the start of each simulation/restart, forcing the first
+            ! estimate here; cf. FastIsostasy.jl's RKCIntegratorState, whose
+            ! `reestimate_every` (in accepted steps, default 0 = never) plays
+            ! the analogous role.
+            if (ode%lambda_max < 0.0_wp .or. ode%t - ode%t_lambda_max >= isos%par%dt_max) then
+                ode%lambda_max = spectral_radius_estimate(ode_rhs, ode%x, ode%t, isos)
+                ode%t_lambda_max = ode%t
+            end if
+
+            s = rkc_choose_stages(ode%dt, ode%lambda_max, damping, smax, safety)
             if (allocated(mu)) deallocate(mu, nu, mutilde, gammatilde, c)
             allocate(mu(s), nu(s), mutilde(s), gammatilde(s), c(s))
             call rkc_coeffs(s, damping, mu, nu, mutilde, gammatilde, c)

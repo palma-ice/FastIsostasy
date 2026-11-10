@@ -657,6 +657,8 @@ contains
         isos%ode%dt = isos%par%dt_init
         isos%ode%t = time
         isos%ode%x = isos%now%w
+        isos%ode%lambda_max = -1.0_wp   ! sentinel: step_rkc (re)computes it on the first call
+        isos%ode%t_lambda_max = time
 
         ! Rebuild diagnostics/output from the (initial or restored) state. On a
         ! restart this runs at time == time_prognostics with use_restart, so

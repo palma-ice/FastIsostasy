@@ -77,6 +77,25 @@ program test_isostasy
                 ymin = xmin
                 ymax = abs(ymin)
 
+            case("test1f")
+                ! Stiff variant of test1d for testing the time integrators:
+                ! 20 km grid + 250 km lithosphere (see par file) gives a
+                ! flexural spectral radius well beyond the forward-Euler
+                ! stability limit for the 10 yr coupling step used here.
+                ! A method that is not stable in this regime blows up within
+                ! ~100 yr (large_check on w); a stable one matches the
+                ! analytical solution as in test1d.
+                time_init = 0.
+                time_end  = 2.e3
+                dtt       = 10.0
+                dt_out    = 1.e3
+                dx        = 20.e3
+                dy = dx
+                xmin = -3000.e3
+                xmax = abs(xmin)
+                ymin = xmin
+                ymax = abs(ymin)
+
             case("test2a", "test2b", "test2c")
                 time_init = 0.
                 time_end  = 50.e3
@@ -213,7 +232,7 @@ program test_isostasy
             H_ice = 0.0 
             H_ice(int((nx-1)/2),int((ny-1)/2)) = 1000.0 
 
-        case("test1a", "test1b", "test1c", "test1d", "test1e", "test3a", "test3b", &
+        case("test1a", "test1b", "test1c", "test1d", "test1e", "test1f", "test3a", "test3b", &
             "test3c", "test3d") ! ice disk of R=1000 km and H=1000 m
 
             r0  = 1000.0e3 ! [m]
@@ -378,7 +397,7 @@ program test_isostasy
             ! Calculate benchmark solutions when available and write to file
             select case(trim(experiment))
 
-                case("test1d")   ! Calculate analytical solution to elva_disk
+                case("test1d", "test1f")   ! Calculate analytical solution to elva_disk
 
                     call isosbench_elva_disk(z_bed_bench, r0, h0, eta, isos1%domain%dx, &
                         isos1%domain%D_lith(1,1), isos1%par%rho_ice, isos1%par%rho_uppermantle, &
