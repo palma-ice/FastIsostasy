@@ -40,7 +40,7 @@ module green_functions
         return
     end subroutine calc_viscous_green
 
-    subroutine calc_elastic_green(filt, dx, dy)
+    subroutine calc_elastic_green(filt, dx, dy, g)
         ! Calculate 2D Green Function
 
         implicit none 
@@ -48,6 +48,7 @@ module green_functions
         real(wp), intent(OUT) :: filt(:, :) 
         real(wp), intent(IN)  :: dx
         real(wp), intent(IN)  :: dy
+        real(wp), intent(IN)  :: g
 
         ! Local variables 
         integer  :: i, j, i1, j1, nx, ny, mx, my
@@ -83,7 +84,7 @@ module green_functions
 
             ! Get correct GE value for this point
             filt(i, j) = get_ge_value(r, rn_vals, ge_vals) * 1.e-12 * (dx*dy) / &
-                (9.81*max(r, dx))
+                (g*max(r, dx))
         end do
         end do
 
