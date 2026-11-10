@@ -173,7 +173,8 @@ contains
         isos%domain%D_lith = D_lith_const
 
         write(*,*) "Initializing elastic Green's function..."
-        call calc_elastic_green(isos%domain%GE, dx=isos%domain%dx, dy=isos%domain%dx)
+        call calc_elastic_green(isos%domain%GE, dx=isos%domain%dx, dy=isos%domain%dx, &
+            g=isos%par%g)
         call precompute_kernel(isos%domain%forward_dftplan_r2c, isos%domain%GE, &
             isos%domain%FGE, isos%domain%nx, isos%domain%ny)
 
@@ -656,6 +657,8 @@ contains
         isos%ode%dt = isos%par%dt_init
         isos%ode%t = time
         isos%ode%x = isos%now%w
+        isos%ode%lambda_max = -1.0_wp   ! sentinel: step_rkc (re)computes it on the first call
+        isos%ode%t_lambda_max = time
 
         ! Rebuild diagnostics/output from the (initial or restored) state. On a
         ! restart this runs at time == time_prognostics with use_restart, so
@@ -696,6 +699,10 @@ contains
         real(wp), dimension(size(w,1), size(w,2)) :: dwdt
         type(isos_class), intent(INOUT) :: isos
     
+        ! Evaluate at the stage state `w`, not the start-of-step state
+        isos%now%w = w
+        call calc_columnanoms_mantle(isos)
+
         ! write(*,*) "isos_update:: Update 7"
         ! Step 1: diagnose equilibrium displacement and rate of bedrock uplift
         select case(isos%par%method)

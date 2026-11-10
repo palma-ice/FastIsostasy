@@ -215,6 +215,8 @@ contains
         ode%x = x0
         ode%t = t0
         ode%dt = dt0
+        ode%lambda_max = -1.0_wp   ! sentinel: step_rkc (re)computes it on the first call
+        ode%t_lambda_max = t0
     end subroutine init_ode
 
 end program test_rkc
