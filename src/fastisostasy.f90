@@ -696,6 +696,10 @@ contains
         real(wp), dimension(size(w,1), size(w,2)) :: dwdt
         type(isos_class), intent(INOUT) :: isos
     
+        ! Evaluate at the stage state `w`, not the start-of-step state
+        isos%now%w = w
+        call calc_columnanoms_mantle(isos)
+
         ! write(*,*) "isos_update:: Update 7"
         ! Step 1: diagnose equilibrium displacement and rate of bedrock uplift
         select case(isos%par%method)

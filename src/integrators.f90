@@ -246,7 +246,9 @@ contains
         ! Seed the spectral-radius estimate once per call (cf. init_integrator
         ! in FastIsostasy.jl); re-estimating every accepted step is unnecessary
         ! since the mantle relaxation operator's stiffness varies slowly.
-        lambda_max = spectral_radius_estimate(ode_rhs, ode%x, ode%t, isos)
+        ! The probe overwrites isos%now%w and dwdt, so only run it when a step is taken
+        lambda_max = 0.0_wp
+        if (ode%t < tf) lambda_max = spectral_radius_estimate(ode_rhs, ode%x, ode%t, isos)
 
         do while (ode%t < tf)
             ! handle last partial step cleanly
